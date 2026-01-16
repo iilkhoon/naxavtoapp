@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "Naxçıvan Avto",
+    "slug": "naxcivan-avto",
+    "version": "1.0.1",
+    "orientation": "portrait",
+    "scheme": "naxcivan-avto",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": false,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.naxcivan.avto"
+    },
+    "android": {
+      "package": "com.naxcivan.avto",
+      "softwareKeyboardLayoutMode": "pan",
+      "versionCode": 3
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0",
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "enableProguardInReleaseBuilds": true
+          },
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
