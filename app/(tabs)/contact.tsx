@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { 
+import {
   View, Text, StyleSheet, ScrollView, Linking, Dimensions,
   ActivityIndicator, TouchableOpacity, Platform
 } from 'react-native';
-import { 
+import {
   Phone, Mail, MapPin, MessageCircle, Instagram, Video,
   Globe, ChevronRight, Shield, FileText, ExternalLink
 } from 'lucide-react-native';
@@ -20,7 +20,7 @@ const { width, height } = Dimensions.get('window');
 export default function ContactScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { colors, isDark } = useTheme(); 
+  const { colors, isDark } = useTheme();
   const [settings, setSettings] = useState<any>({});
   const [phones, setPhones] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,19 +28,19 @@ export default function ContactScreen() {
   const fetchSettings = async () => {
     const { data } = await supabase.from('app_settings').select('*').order('key');
     if (data) {
-        const settingsMap: any = {};
-        const phoneList: string[] = [];
-        data.forEach(item => {
-            settingsMap[item.key] = item.value;
-            if (item.key.startsWith('phone_') && item.value && item.value.trim() !== '') {
-                phoneList.push(item.value);
-            }
-        });
-        if (phoneList.length === 0 && settingsMap.phone) {
-            phoneList.push(settingsMap.phone);
+      const settingsMap: any = {};
+      const phoneList: string[] = [];
+      data.forEach(item => {
+        settingsMap[item.key] = item.value;
+        if (item.key.startsWith('phone_') && item.value && item.value.trim() !== '') {
+          phoneList.push(item.value);
         }
-        setSettings(settingsMap);
-        setPhones(phoneList);
+      });
+      if (phoneList.length === 0 && settingsMap.phone) {
+        phoneList.push(settingsMap.phone);
+      }
+      setSettings(settingsMap);
+      setPhones(phoneList);
     }
     setLoading(false);
   };
@@ -58,7 +58,7 @@ export default function ContactScreen() {
   const handleTiktok = () => Linking.openURL(settings.tiktok || 'https://tiktok.com');
   const handleWeb = () => Linking.openURL(settings.website || 'https://naxcivanavto.com');
   const handleMap = () => Linking.openURL(`https://maps.google.com/?q=${settings.address || 'Naxçıvan'}`);
-  
+
   // Updated to navigate to the dedicated Privacy Page
   const handlePrivacyPolicy = () => router.push('/privacy');
 
@@ -69,12 +69,12 @@ export default function ContactScreen() {
       transition={{ delay, type: 'timing', duration: 500 }}
       style={{ width: '100%', marginBottom: 12 }}
     >
-      <AnimatedPressable 
+      <AnimatedPressable
         style={[
-            styles.card, 
-            { backgroundColor: colors.card, borderColor: colors.border },
-            isLarge && styles.largeCard
-        ]} 
+          styles.card,
+          { backgroundColor: colors.card, borderColor: colors.border },
+          isLarge && styles.largeCard
+        ]}
         onPress={onPress}
       >
         <View style={styles.cardContent}>
@@ -87,7 +87,7 @@ export default function ContactScreen() {
           </View>
         </View>
         <View style={[styles.arrowCircle, { backgroundColor: isDark ? '#333' : '#F3F4F6' }]}>
-            <ChevronRight size={18} color={colors.textSecondary} />
+          <ChevronRight size={18} color={colors.textSecondary} />
         </View>
       </AnimatedPressable>
     </MotiView>
@@ -95,9 +95,9 @@ export default function ContactScreen() {
 
   if (loading) {
     return (
-        <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
-            <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
     );
   }
 
@@ -112,9 +112,9 @@ export default function ContactScreen() {
         />
       </View>
 
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={[
-          styles.scrollContent, 
+          styles.scrollContent,
           { paddingTop: insets.top + 20 }
         ]}
         showsVerticalScrollIndicator={false}
@@ -135,47 +135,47 @@ export default function ContactScreen() {
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Bizimlə Əlaqə</Text>
           {phones.length > 0 ? (
             phones.map((phone, index) => (
-              <ContactCard 
+              <ContactCard
                 key={index}
-                icon={Phone} 
+                icon={Phone}
                 title={index === 0 ? "Qaynar Xətt" : `Operator ${index + 1}`}
-                subtitle={phone} 
+                subtitle={phone}
                 onPress={() => handleCall(phone)}
                 delay={100 + (index * 50)}
                 color={colors.primary}
               />
             ))
           ) : (
-            <ContactCard 
-                icon={Phone} 
-                title="Qaynar Xətt" 
-                subtitle="+994 50 123 45 67" 
-                onPress={() => handleCall("+994501234567")}
-                delay={100}
-                color={colors.primary}
+            <ContactCard
+              icon={Phone}
+              title="Qaynar Xətt"
+              subtitle="+994 50 123 45 67"
+              onPress={() => handleCall("+994501234567")}
+              delay={100}
+              color={colors.primary}
             />
           )}
-          
-          <ContactCard 
-            icon={MessageCircle} 
-            title="WhatsApp" 
-            subtitle="Yazışma üçün toxunun" 
+
+          <ContactCard
+            icon={MessageCircle}
+            title="WhatsApp"
+            subtitle="Yazışma üçün toxunun"
             onPress={handleWhatsapp}
             color="#25D366"
             delay={200}
           />
 
-          <ContactCard 
-            icon={Mail} 
-            title="Email" 
-            subtitle={settings.email || 'info@naxcivanavto.com'} 
+          <ContactCard
+            icon={Mail}
+            title="Email"
+            subtitle={settings.email || 'info@naxcivanavto.com'}
             onPress={handleEmail}
             color="#007AFF"
             delay={250}
           />
         </View>
 
-        <MotiView 
+        <MotiView
           from={{ opacity: 0, translateY: 20 }}
           animate={{ opacity: 1, translateY: 0 }}
           transition={{ delay: 300 }}
@@ -206,15 +206,15 @@ export default function ContactScreen() {
           </View>
         </MotiView>
 
-        <MotiView 
+        <MotiView
           from={{ opacity: 0, translateY: 20 }}
           animate={{ opacity: 1, translateY: 0 }}
           transition={{ delay: 400 }}
           style={styles.mapSection}
         >
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Ünvan</Text>
-          <AnimatedPressable 
-            style={[styles.card, styles.largeCard, { backgroundColor: colors.card, borderColor: colors.border }]} 
+          <AnimatedPressable
+            style={[styles.card, styles.largeCard, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={handleMap}
           >
             <View style={styles.cardContent}>
@@ -227,20 +227,20 @@ export default function ContactScreen() {
               </View>
             </View>
             <View style={[styles.arrowCircle, { backgroundColor: isDark ? '#333' : '#F3F4F6' }]}>
-                <ExternalLink size={18} color={colors.textSecondary} />
+              <ExternalLink size={18} color={colors.textSecondary} />
             </View>
           </AnimatedPressable>
         </MotiView>
 
-        <MotiView 
+        <MotiView
           from={{ opacity: 0, translateY: 20 }}
           animate={{ opacity: 1, translateY: 0 }}
           transition={{ delay: 500 }}
           style={styles.legalSection}
         >
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Hüquqi</Text>
-          <AnimatedPressable 
-            style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} 
+          <AnimatedPressable
+            style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={handlePrivacyPolicy}
           >
             <View style={styles.cardContent}>
@@ -253,15 +253,16 @@ export default function ContactScreen() {
               </View>
             </View>
             <View style={[styles.arrowCircle, { backgroundColor: isDark ? '#333' : '#F3F4F6' }]}>
-                <FileText size={18} color={colors.textSecondary} />
+              <FileText size={18} color={colors.textSecondary} />
             </View>
           </AnimatedPressable>
         </MotiView>
 
         <View style={styles.footer}>
-          <TouchableOpacity onPress={() => router.push('/menu')} activeOpacity={0.7}>
+          <TouchableOpacity onPress={() => router.push('/menu')} activeOpacity={0.7} style={{ alignItems: 'center' }}>
             <Text style={[styles.copyright, { color: colors.textSecondary }]}>© 2025 Naxçıvan Avto</Text>
             <Text style={[styles.version, { color: colors.textSecondary }]}>Versiya 1.0.1</Text>
+            <Text style={[styles.version, { color: colors.textSecondary, marginTop: 4 }]}>Created by İlkin Rzayev / +994 55 466 66 63</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -295,6 +296,6 @@ const styles = StyleSheet.create({
   mapSection: { marginBottom: 32 },
   legalSection: { marginBottom: 32 },
   footer: { alignItems: 'center', marginTop: 10 },
-  copyright: { fontSize: 14, fontFamily: 'RethinkSans_600SemiBold', marginBottom: 4 },
+  copyright: { fontSize: 14, fontFamily: 'RethinkSans_600SemiBold', marginBottom: 4, textAlign: 'center' },
   version: { fontSize: 12, textAlign: 'center', opacity: 0.6, fontFamily: 'RethinkSans_400Regular' },
 });

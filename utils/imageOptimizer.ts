@@ -1,20 +1,20 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 
 /**
- * Şəkli SÜRƏTLİ açılması üçün aqressiv optimizasiya:
- * 1. Genişlik: 800px (Mobil üçün tam yetərlidir, 1024px-dən daha yüngüldür)
- * 2. Keyfiyyət: 0.4 (40%) - Gözlə görünən ciddi fərq yoxdur, amma fayl ölçüsü çox kiçikdir.
+ * Şəkli SÜRƏTLİ açılması üçün optimal optimizasiya:
+ * 1. Genişlik: 1024px (Daha keyfiyyətli görünüş üçün artırıldı)
+ * 2. Keyfiyyət: 0.7 (70%) - Balanslı keyfiyyət və ölçü.
  * 3. Format: JPEG
  */
 export const compressImage = async (uri: string) => {
   try {
     const result = await ImageManipulator.manipulateAsync(
       uri,
-      [{ resize: { width: 800 } }], 
-      { 
-        compress: 0.4, 
-        format: ImageManipulator.SaveFormat.JPEG, 
-        base64: true 
+      [{ resize: { width: 1024 } }],
+      {
+        compress: 0.7,
+        format: ImageManipulator.SaveFormat.JPEG,
+        base64: true
       }
     );
     return result;

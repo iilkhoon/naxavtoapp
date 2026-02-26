@@ -7,108 +7,123 @@ import { useTheme } from '../contexts/ThemeContext';
 import { MotiView } from 'moti';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+const SCREEN_WIDTH = Dimensions.get('window').width;
+
 export const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
-  // Calculate bottom position
-  const bottomMargin = Platform.OS === 'ios' && insets.bottom > 0 ? insets.bottom : 20;
+  // Floating bottom margin
+  const bottomMargin = Platform.OS === 'ios' && insets.bottom > 0 ? insets.bottom : 24;
 
   return (
-    <View style={[
-        styles.container, 
-        { bottom: bottomMargin }
-    ]}>
-      <BlurView
-        intensity={Platform.OS === 'ios' ? 80 : 50}
-        tint="dark"
-        style={styles.blurContainer}
-      >
-        <View style={styles.tabRow}>
-          {state.routes.map((route, index) => {
-            const { options } = descriptors[route.key];
-            const isFocused = state.index === index;
+    <View style={[styles.container, { bottom: bottomMargin }]}>
+      {/* Liquid Glass Background */}
+      <View style={styles.glassContainer}>
+        <BlurView
+          intensity={90} // Heavy blur for "Liquid" feel
+          tint={isDark ? "systemMaterialDark" : "systemMaterialLight"} // Adapts nicely
+          style={StyleSheet.absoluteFill}
+        />
+        {/* Subtle Gradient/Noise overlay could go here if we had an image, but pure blur is cleaner */}
+        <View style={[
+          styles.glassBorder,
+          { borderColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.4)' }
+        ]} />
+      </View>
 
-            const onPress = () => {
-              const event = navigation.emit({
-                type: 'tabPress',
-                target: route.key,
-                canPreventDefault: true,
-              });
+      {/* Tab Items */}
+      <View style={styles.tabRow}>
+        {state.routes.map((route, index) => {
+          const { options } = descriptors[route.key];
+          const isFocused = state.index === index;
 
-              if (!isFocused && !event.defaultPrevented) {
-                navigation.navigate(route.name);
-              }
-            };
+          const onPress = () => {
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
 
-            // Special Case for "Add" Button
-            if (route.name === 'add') {
-              return (
-                <View 
-                    key={index} 
-                    style={[styles.addButtonWrapper, { pointerEvents: 'box-none' }]}
-                >
-                    <TouchableOpacity
-                        onPress={onPress}
-                        activeOpacity={0.9}
-                        style={styles.addButtonContainer}
-                    >
-                        <MotiView
-                            from={{ scale: 1 }}
-                            animate={{ scale: isFocused ? 1.05 : 1 }}
-                            transition={{ type: 'spring', damping: 10 }}
-                            style={[styles.addButton, { backgroundColor: '#FF3B30' }]} 
-                        >
-                            <Plus size={28} color="#FFF" strokeWidth={3} />
-                        </MotiView>
-                        <View style={styles.badgeContainer}>
-                            <Text 
-                                style={styles.badgeText} 
-                                numberOfLines={1} 
-                                adjustsFontSizeToFit 
-                                minimumFontScale={0.7}
-                            >
-                                YENİ ELAN
-                            </Text>
-                        </View>
-                    </TouchableOpacity>
-                </View>
-              );
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate(route.name);
             }
+          };
 
-            // Custom Icon Logic
-            let Icon = Home;
-            if (route.name === 'index') Icon = Home;
-            else if (route.name === 'favorites') Icon = Heart;
-            else if (route.name === 'compare') Icon = ArrowLeftRight;
-            else if (route.name === 'contact') Icon = Phone;
-
+          // Special Case for "Add" Button - Floating above
+          if (route.name === 'add') {
             return (
-              <TouchableOpacity
-                key={index}
-                onPress={onPress}
-                style={styles.tabItem}
-                activeOpacity={0.7}
-              >
-                <MotiView
-                  animate={{
-                    scale: isFocused ? 1.1 : 1,
-                    translateY: isFocused ? -2 : 0,
-                  }}
-                  transition={{ type: 'spring', damping: 12 }}
-                  style={styles.iconContainer}
+              <View key={index} style={styles.addButtonWrapper}>
+                <TouchableOpacity
+                  onPress={onPress}
+                  activeOpacity={0.9}
+                  style={styles.addButtonContainer}
                 >
-                  <Icon 
-                    size={24} 
-                    color={isFocused ? '#FF3B30' : '#8E8E93'} 
-                    fill={isFocused && route.name === 'favorites' ? '#FF3B30' : 'transparent'}
-                  />
-                </MotiView>
-              </TouchableOpacity>
+                  {/* Add Button Glow/Shadow */}
+                  <MotiView
+                    from={{ scale: 1 }}
+                    animate={{ scale: isFocused ? 1.1 : 1 }}
+                    transition={{ type: 'spring', damping: 10 }}
+                    style={[styles.addButton, { backgroundColor: '#FF3B30' }]}
+                  >
+                    <Plus size={28} color="#FFF" strokeWidth={3} />
+                  </MotiView>
+
+                  {/* New Listing Badge */}
+                  <View style={styles.badgeContainer}>
+                    <Text style={styles.badgeText} numberOfLines={1}>YENİ ELAN</Text>
+                  </View>
+
+                </TouchableOpacity>
+              </View>
             );
-          })}
-        </View>
-      </BlurView>
+          }
+
+          // Icons
+          let Icon = Home;
+          if (route.name === 'index') Icon = Home;
+          else if (route.name === 'favorites') Icon = Heart;
+          else if (route.name === 'compare') Icon = ArrowLeftRight;
+          else if (route.name === 'contact') Icon = Phone;
+
+          return (
+            <TouchableOpacity
+              key={index}
+              onPress={onPress}
+              style={styles.tabItem}
+              activeOpacity={0.7}
+            >
+              <MotiView
+                animate={{
+                  scale: isFocused ? 1.2 : 1,
+                  translateY: isFocused ? -4 : 0,
+                }}
+                transition={{ type: 'spring', damping: 12 }}
+                style={styles.iconContainer}
+              >
+                <Icon
+                  size={24}
+                  color={isFocused ? (isDark ? '#FFF' : '#000') : (isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)')}
+                  fill={isFocused && route.name === 'favorites' ? (isDark ? '#FFF' : '#000') : 'transparent'}
+                  strokeWidth={isFocused ? 2.5 : 2}
+                />
+
+                {/* Minimal Indicator Dot */}
+                {isFocused && (
+                  <MotiView
+                    from={{ opacity: 0, scale: 0 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    style={[
+                      styles.indicatorDot,
+                      { backgroundColor: isDark ? '#FFF' : '#000' }
+                    ]}
+                  />
+                )}
+              </MotiView>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </View>
   );
 };
@@ -118,26 +133,42 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 20,
     right: 20,
-    elevation: 0,
-    zIndex: 100,
-  },
-  blurContainer: {
-    borderRadius: 30,
-    overflow: 'visible', 
-    height: 60,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: 'rgba(15,15,15,0.9)',
-    boxShadow: '0px 10px 20px rgba(0,0,0,0.3)',
-    elevation: 10,
+    height: 58, // Reduced from 70
+    alignItems: 'center',
     justifyContent: 'center',
+  },
+  glassContainer: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 30, // Reduced from 40
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 15 },
+        shadowOpacity: 0.25,
+        shadowRadius: 25,
+      },
+      android: {
+        elevation: 10,
+      },
+      web: {
+        boxShadow: '0px 15px 25px rgba(0, 0, 0, 0.25)' as any,
+      }
+    }),
+  },
+  glassBorder: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 30, // Reduced from 40
+    borderWidth: 1.5,
+    // Note: borderColor is set inline to adapt to theme
   },
   tabRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    width: '100%',
     height: '100%',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
   },
   tabItem: {
     flex: 1,
@@ -149,50 +180,73 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  indicatorDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginTop: 6,
+    position: 'absolute',
+    bottom: -10,
+  },
   addButtonWrapper: {
-    flex: 1,
+    width: 60, // Reduced from 70
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    height: '100%',
-    zIndex: 20,
+    zIndex: 10,
   },
   addButtonContainer: {
-    position: 'absolute',
-    top: -15,
     alignItems: 'center',
     justifyContent: 'center',
+    // Lift it slightly out of the glass for depth
+    top: -18, // Reduced from -20
   },
   addButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 54, // Reduced from 64
+    height: 54, // Reduced from 64
+    borderRadius: 27, // Reduced from 32
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0px 8px 12px rgba(255, 59, 48, 0.4)',
-    elevation: 8,
-    borderWidth: 4,
-    borderColor: '#121212', 
+    borderWidth: 4, // Ring around button
+    borderColor: 'rgba(255,255,255,0.1)', // Subtle glass ring
+    ...Platform.select({
+      ios: {
+        shadowColor: "#FF3B30",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.5,
+        shadowRadius: 15,
+      },
+      android: { elevation: 15 },
+      web: { boxShadow: '0px 10px 15px rgba(255, 59, 48, 0.5)' as any },
+    }),
   },
   badgeContainer: {
-    backgroundColor: '#34C759', 
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 10,
-    marginTop: 4,
-    borderWidth: 2,
-    borderColor: '#121212',
     position: 'absolute',
-    bottom: -18,
-    minWidth: 70,
+    bottom: -14, // Reduced from -16
+    backgroundColor: '#34C759', // Nice green for "New"
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#FFF', // White border to separate from background
+    minWidth: 70, // Ensure enough width
     alignItems: 'center',
-    justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: { elevation: 4 },
+      web: { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.2)' as any },
+    }),
   },
   badgeText: {
     color: '#FFF',
-    fontSize: 8,
+    fontSize: 9,
     fontFamily: 'RethinkSans_800ExtraBold',
-    textAlign: 'center',
     textTransform: 'uppercase',
-    letterSpacing: 0.2,
-  }
+    textAlign: 'center', // Ensure centered if wider
+  },
 });

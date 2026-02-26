@@ -24,11 +24,11 @@ export default function MenuScreen() {
 
   const fetchStats = async () => {
     try {
-        const { count: activeCars } = await supabase.from('listings').select('*', { count: 'exact', head: true }).eq('status', 'approved');
-        const { count: pendingCars } = await supabase.from('listings').select('*', { count: 'exact', head: true }).eq('status', 'pending');
-        const { count: pendingPlates } = await supabase.from('plates').select('*', { count: 'exact', head: true }).eq('status', 'pending');
-        const { count: activePlates } = await supabase.from('plates').select('*', { count: 'exact', head: true }).eq('status', 'approved');
-        setStats({ activeCars: activeCars || 0, pendingListings: (pendingCars || 0) + (pendingPlates || 0), activePlates: activePlates || 0, totalUsers: 1 });
+      const { count: activeCars } = await supabase.from('listings').select('*', { count: 'exact', head: true }).eq('status', 'approved');
+      const { count: pendingCars } = await supabase.from('listings').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+      const { count: pendingPlates } = await supabase.from('plates').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+      const { count: activePlates } = await supabase.from('plates').select('*', { count: 'exact', head: true }).eq('status', 'approved');
+      setStats({ activeCars: activeCars || 0, pendingListings: (pendingCars || 0) + (pendingPlates || 0), activePlates: activePlates || 0, totalUsers: 1 });
     } catch (error) { console.error(error); } finally { setRefreshing(false); }
   };
 
@@ -42,24 +42,24 @@ export default function MenuScreen() {
 
   const PremiumStatCard = ({ label, value, icon: Icon, gradientColors, delay }: any) => (
     <MotiView from={{ opacity: 0, translateY: 20 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay, type: 'spring', damping: 15 }} style={styles.statCardWrapper}>
-        <LinearGradient colors={gradientColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.statCard}>
-            <View style={styles.statHeader}>
-                <View style={styles.statIconContainer}><Icon size={18} color="#FFF" /></View>
-                <View style={styles.trendBadge}><TrendingUp size={12} color="#FFF" /></View>
-            </View>
-            <View><Text style={styles.statValue}>{value}</Text><Text style={styles.statLabel}>{label}</Text></View>
-            <View style={styles.decorCircle1} /><View style={styles.decorCircle2} />
-        </LinearGradient>
+      <LinearGradient colors={gradientColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.statCard}>
+        <View style={styles.statHeader}>
+          <View style={styles.statIconContainer}><Icon size={18} color="#FFF" /></View>
+          <View style={styles.trendBadge}><TrendingUp size={12} color="#FFF" /></View>
+        </View>
+        <View><Text style={styles.statValue}>{value}</Text><Text style={styles.statLabel}>{label}</Text></View>
+        <View style={styles.decorCircle1} /><View style={styles.decorCircle2} />
+      </LinearGradient>
     </MotiView>
   );
 
   const PremiumMenuItem = ({ icon: Icon, label, desc, route, color, delay, isLast }: any) => (
     <MotiView from={{ opacity: 0, translateX: -20 }} animate={{ opacity: 1, translateX: 0 }} transition={{ delay, type: 'timing' }}>
-        <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }, isLast && { marginBottom: 0, borderBottomWidth: 0 }]} onPress={() => router.push(route)} activeOpacity={0.7}>
-            <LinearGradient colors={[color, `${color}80`]} style={styles.menuIconContainer} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}><Icon size={20} color="#FFF" /></LinearGradient>
-            <View style={styles.menuTextContainer}><Text style={[styles.menuTitle, { color: colors.text }]}>{label}</Text><Text style={[styles.menuDesc, { color: colors.textSecondary }]}>{desc}</Text></View>
-            <View style={[styles.arrowContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#F3F4F6' }]}><ChevronRight size={16} color={colors.textSecondary} /></View>
-        </TouchableOpacity>
+      <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }, isLast && { marginBottom: 0, borderBottomWidth: 0 }]} onPress={() => router.push(route)} activeOpacity={0.7}>
+        <LinearGradient colors={[color, `${color}80`]} style={styles.menuIconContainer} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}><Icon size={20} color="#FFF" /></LinearGradient>
+        <View style={styles.menuTextContainer}><Text style={[styles.menuTitle, { color: colors.text }]}>{label}</Text><Text style={[styles.menuDesc, { color: colors.textSecondary }]}>{desc}</Text></View>
+        <View style={[styles.arrowContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#F3F4F6' }]}><ChevronRight size={16} color={colors.textSecondary} /></View>
+      </TouchableOpacity>
     </MotiView>
   );
 
@@ -90,30 +90,32 @@ export default function MenuScreen() {
               <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>Əsas Əməliyyatlar</Text>
                 <View style={[styles.menuGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <PremiumMenuItem icon={FileText} label="Elanlar" desc="Bütün elanları təsdiqlə və ya sil" route="/admin/listings" color="#FF3B30" delay={300} />
-                    <View style={[styles.separator, { backgroundColor: colors.border }]} />
-                    <PremiumMenuItem icon={Crown} label="VIP Elanlar" desc="VIP statusunu idarə et" route="/admin/vip-listings" color="#FFD700" delay={350} />
-                    <View style={[styles.separator, { backgroundColor: colors.border }]} />
-                    <PremiumMenuItem icon={Bell} label="Bildirişlər" desc="İstifadəçilərə push bildiriş göndər" route="/admin/notifications" color="#AF52DE" delay={380} />
-                    <View style={[styles.separator, { backgroundColor: colors.border }]} />
-                    <PremiumMenuItem icon={Settings} label="Ayarlar" desc="Loqo, əlaqə və ümumi tənzimləmələr" route="/admin/settings" color="#007AFF" delay={400} isLast />
+                  <PremiumMenuItem icon={FileText} label="Elanlar" desc="Bütün elanları təsdiqlə və ya sil" route="/admin/listings" color="#FF3B30" delay={300} />
+                  <View style={[styles.separator, { backgroundColor: colors.border }]} />
+                  <PremiumMenuItem icon={Crown} label="VIP Elanlar" desc="VIP statusunu idarə et" route="/admin/vip-listings" color="#FFD700" delay={350} />
+                  <View style={[styles.separator, { backgroundColor: colors.border }]} />
+                  <PremiumMenuItem icon={Bell} label="Bildirişlər" desc="İstifadəçilərə push bildiriş göndər" route="/admin/notifications" color="#AF52DE" delay={380} />
+                  <View style={[styles.separator, { backgroundColor: colors.border }]} />
+                  <PremiumMenuItem icon={Layers} label="Reklam İdarəetməsi" desc="Banner və reklamları idarə et" route="/admin/banners" color="#34C759" delay={390} />
+                  <View style={[styles.separator, { backgroundColor: colors.border }]} />
+                  <PremiumMenuItem icon={Settings} label="Ayarlar" desc="Loqo, əlaqə və ümumi tənzimləmələr" route="/admin/settings" color="#007AFF" delay={400} isLast />
                 </View>
               </View>
               <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>Verilənlər Bazası</Text>
                 <View style={styles.grid}>
-                    <TouchableOpacity style={[styles.smallCard, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.push('/brands')} activeOpacity={0.7}>
-                        <View style={[styles.smallCardIcon, { backgroundColor: 'rgba(175, 82, 222, 0.15)' }]}><CarFront size={24} color="#AF52DE" /></View>
-                        <Text style={[styles.smallCardText, { color: colors.text }]}>Markalar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.smallCard, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.push('/models')} activeOpacity={0.7}>
-                        <View style={[styles.smallCardIcon, { backgroundColor: 'rgba(255, 149, 0, 0.15)' }]}><Layers size={24} color="#FF9500" /></View>
-                        <Text style={[styles.smallCardText, { color: colors.text }]}>Modellər</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.smallCard, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.push('/admin/features')} activeOpacity={0.7}>
-                        <View style={[styles.smallCardIcon, { backgroundColor: 'rgba(88, 86, 214, 0.15)' }]}><Palette size={24} color="#5856D6" /></View>
-                        <Text style={[styles.smallCardText, { color: colors.text }]}>Xüsusiyyət</Text>
-                    </TouchableOpacity>
+                  <TouchableOpacity style={[styles.smallCard, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.push('/brands')} activeOpacity={0.7}>
+                    <View style={[styles.smallCardIcon, { backgroundColor: 'rgba(175, 82, 222, 0.15)' }]}><CarFront size={24} color="#AF52DE" /></View>
+                    <Text style={[styles.smallCardText, { color: colors.text }]}>Markalar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.smallCard, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.push('/models')} activeOpacity={0.7}>
+                    <View style={[styles.smallCardIcon, { backgroundColor: 'rgba(255, 149, 0, 0.15)' }]}><Layers size={24} color="#FF9500" /></View>
+                    <Text style={[styles.smallCardText, { color: colors.text }]}>Modellər</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.smallCard, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.push('/admin/features')} activeOpacity={0.7}>
+                    <View style={[styles.smallCardIcon, { backgroundColor: 'rgba(88, 86, 214, 0.15)' }]}><Palette size={24} color="#5856D6" /></View>
+                    <Text style={[styles.smallCardText, { color: colors.text }]}>Xüsusiyyət</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
               <TouchableOpacity style={[styles.logoutButton, { backgroundColor: 'rgba(255, 59, 48, 0.1)', borderColor: 'rgba(255, 59, 48, 0.2)' }]} onPress={handleLogoutPress}>
@@ -124,15 +126,15 @@ export default function MenuScreen() {
             </>
           ) : (
             <View style={styles.guestContainer}>
-                <MotiView from={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={[styles.guestIconCircle, { backgroundColor: `${colors.primary}15`, borderColor: colors.primary }]}>
-                    <Crown size={50} color={colors.primary} />
-                </MotiView>
-                <Text style={[styles.guestTitle, { color: colors.text }]}>Giriş Tələb Olunur</Text>
-                <Text style={[styles.guestSub, { color: colors.textSecondary }]}>Admin panelinə daxil olmaq üçün zəhmət olmasa hesabınıza giriş edin.</Text>
-                <TouchableOpacity style={[styles.loginButton, { backgroundColor: colors.primary }]} onPress={() => router.push('/auth/login')}>
-                    <Text style={styles.loginButtonText}>Giriş</Text>
-                    <ChevronRight size={20} color="#FFF" />
-                </TouchableOpacity>
+              <MotiView from={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={[styles.guestIconCircle, { backgroundColor: `${colors.primary}15`, borderColor: colors.primary }]}>
+                <Crown size={50} color={colors.primary} />
+              </MotiView>
+              <Text style={[styles.guestTitle, { color: colors.text }]}>Giriş Tələb Olunur</Text>
+              <Text style={[styles.guestSub, { color: colors.textSecondary }]}>Admin panelinə daxil olmaq üçün zəhmət olmasa hesabınıza giriş edin.</Text>
+              <TouchableOpacity style={[styles.loginButton, { backgroundColor: colors.primary }]} onPress={() => router.push('/auth/login')}>
+                <Text style={styles.loginButtonText}>Giriş</Text>
+                <ChevronRight size={20} color="#FFF" />
+              </TouchableOpacity>
             </View>
           )}
         </ScrollView>

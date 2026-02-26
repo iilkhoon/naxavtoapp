@@ -1,18 +1,20 @@
 import React, { useState, useCallback } from 'react';
-import { 
+import {
   View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Modal,
-  FlatList, Dimensions, StatusBar, Pressable
+  FlatList, Dimensions, StatusBar, Pressable, Platform
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { getFavorites } from '../../lib/favorites';
 import { MotiView } from 'moti';
-import { 
+import {
   Plus, X, Check, AlertCircle, Banknote, Calendar, Gauge, Zap, Fuel, Car, Palette, Settings, Activity, Globe, MapPin, CreditCard, ArrowLeftRight
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useSettings } from '../../contexts/SettingsContext';
+import { BannerSlider } from '../../components/BannerSlider';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -26,6 +28,7 @@ type Car = {
   image_url: string;
   mileage: number;
   engine: string;
+  horsepower?: number;
   location: string;
   is_credit: boolean;
   is_barter: boolean;
@@ -44,11 +47,12 @@ export default function CompareScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
-  
+  const { settings } = useSettings();
+
   const [favorites, setFavorites] = useState<Car[]>([]);
   const [leftCar, setLeftCar] = useState<Car | null>(null);
   const [rightCar, setRightCar] = useState<Car | null>(null);
-  
+
   const [modalVisible, setModalVisible] = useState(false);
   const [activeSide, setActiveSide] = useState<SelectionSide>(null);
   const [loading, setLoading] = useState(false);
@@ -99,7 +103,7 @@ export default function CompareScreen() {
   const ComparisonRow = ({ icon: Icon, label, leftValue, rightValue, highlightBest = false, type = 'text', index }: any) => {
     let leftStyle = [styles.rowValue, { color: colors.text }];
     let rightStyle = [styles.rowValue, { color: colors.text }];
-    
+
     if (highlightBest && leftCar && rightCar && leftValue && rightValue) {
       let isLeftBetter = false;
       let isRightBetter = false;
@@ -123,16 +127,16 @@ export default function CompareScreen() {
     return (
       <View style={[styles.rowContainer, { backgroundColor: rowBg }]}>
         <View style={styles.cellSide}>
-            <Text style={[leftStyle, !leftCar && styles.placeholderValue]} numberOfLines={1}>{leftValue || '-'}</Text>
+          <Text style={[leftStyle, !leftCar && styles.placeholderValue]} numberOfLines={1}>{leftValue || '-'}</Text>
         </View>
         <View style={styles.cellCenter}>
-            <View style={[styles.iconCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#F0F0F0' }]}>
-                <Icon size={14} color={colors.textSecondary} />
-            </View>
-            <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>{label}</Text>
+          <View style={[styles.iconCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#F0F0F0' }]}>
+            <Icon size={14} color={colors.textSecondary} />
+          </View>
+          <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>{label}</Text>
         </View>
         <View style={styles.cellSide}>
-            <Text style={[rightStyle, !rightCar && styles.placeholderValue]} numberOfLines={1}>{rightValue || '-'}</Text>
+          <Text style={[rightStyle, !rightCar && styles.placeholderValue]} numberOfLines={1}>{rightValue || '-'}</Text>
         </View>
       </View>
     );
@@ -143,22 +147,29 @@ export default function CompareScreen() {
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
       <View style={[styles.header, { paddingTop: insets.top + 10, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Müqayisə</Text>
+        <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>Sevdiyiniz avtomobilləri müqayisə edin</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={{ marginBottom: 16 }}>
+          <BannerSlider
+            images={[settings.compare_banner_1, settings.compare_banner_2, settings.compare_banner_3]}
+            height={120}
+          />
+        </View>
         <View style={styles.selectionArea}>
           <View style={styles.slotWrapper}>
             {leftCar ? (
               <MotiView from={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={styles.carCard}>
                 <View style={[styles.imageWrapper, { borderColor: colors.border }]}>
-                    <Image source={{ uri: leftCar.image_url }} style={styles.carImage} />
-                    <LinearGradient colors={['transparent', 'rgba(0,0,0,0.7)']} style={StyleSheet.absoluteFill} />
-                    <TouchableOpacity style={styles.removeBtn} onPress={() => clearSelection('left')}><X size={12} color="#FFF" /></TouchableOpacity>
-                    <View style={styles.imageOverlayContent}><Text style={styles.overlayPrice}>{leftCar.price} {leftCar.currency}</Text></View>
+                  <Image source={{ uri: leftCar.image_url }} style={styles.carImage} />
+                  <LinearGradient colors={['transparent', 'rgba(0,0,0,0.7)']} style={StyleSheet.absoluteFill} />
+                  <TouchableOpacity style={styles.removeBtn} onPress={() => clearSelection('left')}><X size={12} color="#FFF" /></TouchableOpacity>
+                  <View style={styles.imageOverlayContent}><Text style={styles.overlayPrice}>{leftCar.price} {leftCar.currency}</Text></View>
                 </View>
                 <View style={styles.carInfo}>
-                    <Text style={[styles.carMake, { color: colors.textSecondary }]}>{leftCar.make}</Text>
-                    <Text style={[styles.carModel, { color: colors.text }]} numberOfLines={1}>{leftCar.model}</Text>
+                  <Text style={[styles.carMake, { color: colors.textSecondary }]}>{leftCar.make}</Text>
+                  <Text style={[styles.carModel, { color: colors.text }]} numberOfLines={1}>{leftCar.model}</Text>
                 </View>
               </MotiView>
             ) : (
@@ -171,7 +182,7 @@ export default function CompareScreen() {
 
           <View style={styles.vsContainer}>
             <LinearGradient colors={['#FF3B30', '#FF9500']} style={styles.vsCircle} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-                <Text style={styles.vsText}>VS</Text>
+              <Text style={styles.vsText}>VS</Text>
             </LinearGradient>
           </View>
 
@@ -179,14 +190,14 @@ export default function CompareScreen() {
             {rightCar ? (
               <MotiView from={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={styles.carCard}>
                 <View style={[styles.imageWrapper, { borderColor: colors.border }]}>
-                    <Image source={{ uri: rightCar.image_url }} style={styles.carImage} />
-                    <LinearGradient colors={['transparent', 'rgba(0,0,0,0.7)']} style={StyleSheet.absoluteFill} />
-                    <TouchableOpacity style={styles.removeBtn} onPress={() => clearSelection('right')}><X size={12} color="#FFF" /></TouchableOpacity>
-                    <View style={styles.imageOverlayContent}><Text style={styles.overlayPrice}>{rightCar.price} {rightCar.currency}</Text></View>
+                  <Image source={{ uri: rightCar.image_url }} style={styles.carImage} />
+                  <LinearGradient colors={['transparent', 'rgba(0,0,0,0.7)']} style={StyleSheet.absoluteFill} />
+                  <TouchableOpacity style={styles.removeBtn} onPress={() => clearSelection('right')}><X size={12} color="#FFF" /></TouchableOpacity>
+                  <View style={styles.imageOverlayContent}><Text style={styles.overlayPrice}>{rightCar.price} {rightCar.currency}</Text></View>
                 </View>
                 <View style={styles.carInfo}>
-                    <Text style={[styles.carMake, { color: colors.textSecondary }]}>{rightCar.make}</Text>
-                    <Text style={[styles.carModel, { color: colors.text }]} numberOfLines={1}>{rightCar.model}</Text>
+                  <Text style={[styles.carMake, { color: colors.textSecondary }]}>{rightCar.make}</Text>
+                  <Text style={[styles.carModel, { color: colors.text }]} numberOfLines={1}>{rightCar.model}</Text>
                 </View>
               </MotiView>
             ) : (
@@ -199,25 +210,26 @@ export default function CompareScreen() {
         </View>
 
         <View style={styles.instructionContainer}>
-            <Text style={[styles.instructionText, { color: colors.textSecondary }]}>Müqayisə etmək istədiyiniz iki avtomobili seçin</Text>
+          <Text style={[styles.instructionText, { color: colors.textSecondary }]}>Müqayisə etmək istədiyiniz iki avtomobili seçin</Text>
         </View>
 
         {(leftCar || rightCar) && (
-            <MotiView from={{ opacity: 0, translateY: 20 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 500 }} style={[styles.tableContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <ComparisonRow index={0} icon={Banknote} label="Qiymət" leftValue={leftCar ? `${leftCar.price.toLocaleString()} ${leftCar.currency}` : null} rightValue={rightCar ? `${rightCar.price.toLocaleString()} ${rightCar.currency}` : null} highlightBest type="price" />
-                <ComparisonRow index={1} icon={Calendar} label="İl" leftValue={leftCar?.year} rightValue={rightCar?.year} highlightBest type="year" />
-                <ComparisonRow index={2} icon={Gauge} label="Yürüş" leftValue={leftCar ? `${leftCar.mileage} km` : null} rightValue={rightCar ? `${rightCar.mileage} km` : null} highlightBest type="mileage" />
-                <ComparisonRow index={3} icon={Zap} label="Mühərrik" leftValue={leftCar ? `${leftCar.engine} L` : null} rightValue={rightCar ? `${rightCar.engine} L` : null} />
-                <ComparisonRow index={4} icon={Fuel} label="Yanacaq" leftValue={leftCar?.fuel_type} rightValue={rightCar?.fuel_type} />
-                <ComparisonRow index={5} icon={Car} label="Ban növü" leftValue={leftCar?.body_type} rightValue={rightCar?.body_type} />
-                <ComparisonRow index={6} icon={Palette} label="Rəng" leftValue={leftCar?.color} rightValue={rightCar?.color} />
-                <ComparisonRow index={7} icon={Settings} label="Sürətlər qutusu" leftValue={leftCar?.gearbox} rightValue={rightCar?.gearbox} />
-                <ComparisonRow index={8} icon={Activity} label="Ötürücü" leftValue={leftCar?.transmission} rightValue={rightCar?.transmission} />
-                <ComparisonRow index={9} icon={Globe} label="Bazar" leftValue={leftCar?.market} rightValue={rightCar?.market} />
-                <ComparisonRow index={10} icon={MapPin} label="Şəhər" leftValue={leftCar?.location} rightValue={rightCar?.location} />
-                <ComparisonRow index={11} icon={CreditCard} label="Kredit" leftValue={leftCar ? (leftCar.is_credit ? 'Var' : 'Yox') : null} rightValue={rightCar ? (rightCar.is_credit ? 'Var' : 'Yox') : null} />
-                <ComparisonRow index={12} icon={ArrowLeftRight} label="Barter" leftValue={leftCar ? (leftCar.is_barter ? 'Var' : 'Yox') : null} rightValue={rightCar ? (rightCar.is_barter ? 'Var' : 'Yox') : null} />
-            </MotiView>
+          <MotiView from={{ opacity: 0, translateY: 20 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 500 }} style={[styles.tableContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <ComparisonRow index={0} icon={Banknote} label="Qiymət" leftValue={leftCar ? `${leftCar.price.toLocaleString()} ${leftCar.currency}` : null} rightValue={rightCar ? `${rightCar.price.toLocaleString()} ${rightCar.currency}` : null} highlightBest type="price" />
+            <ComparisonRow index={1} icon={Calendar} label="İl" leftValue={leftCar?.year} rightValue={rightCar?.year} highlightBest type="year" />
+            <ComparisonRow index={2} icon={Gauge} label="Yürüş" leftValue={leftCar ? `${leftCar.mileage} km` : null} rightValue={rightCar ? `${rightCar.mileage} km` : null} highlightBest type="mileage" />
+            <ComparisonRow index={3} icon={Zap} label="Mühərrik" leftValue={leftCar ? `${leftCar.engine} L` : null} rightValue={rightCar ? `${rightCar.engine} L` : null} />
+            <ComparisonRow index={4} icon={Zap} label="At gücü" leftValue={leftCar && leftCar.horsepower ? `${leftCar.horsepower} a.g.` : (leftCar ? '-' : null)} rightValue={rightCar && rightCar.horsepower ? `${rightCar.horsepower} a.g.` : (rightCar ? '-' : null)} />
+            <ComparisonRow index={5} icon={Fuel} label="Yanacaq" leftValue={leftCar?.fuel_type} rightValue={rightCar?.fuel_type} />
+            <ComparisonRow index={6} icon={Car} label="Ban növü" leftValue={leftCar?.body_type} rightValue={rightCar?.body_type} />
+            <ComparisonRow index={7} icon={Palette} label="Rəng" leftValue={leftCar?.color} rightValue={rightCar?.color} />
+            <ComparisonRow index={8} icon={Settings} label="Sürətlər qutusu" leftValue={leftCar?.gearbox} rightValue={rightCar?.gearbox} />
+            <ComparisonRow index={9} icon={Activity} label="Ötürücü" leftValue={leftCar?.transmission} rightValue={rightCar?.transmission} />
+            <ComparisonRow index={10} icon={Globe} label="Bazar" leftValue={leftCar?.market} rightValue={rightCar?.market} />
+            <ComparisonRow index={11} icon={MapPin} label="Şəhər" leftValue={leftCar?.location} rightValue={rightCar?.location} />
+            <ComparisonRow index={12} icon={CreditCard} label="Kredit" leftValue={leftCar ? (leftCar.is_credit ? 'Var' : 'Yox') : null} rightValue={rightCar ? (rightCar.is_credit ? 'Var' : 'Yox') : null} />
+            <ComparisonRow index={13} icon={ArrowLeftRight} label="Barter" leftValue={leftCar ? (leftCar.is_barter ? 'Var' : 'Yox') : null} rightValue={rightCar ? (rightCar.is_barter ? 'Var' : 'Yox') : null} />
+          </MotiView>
         )}
       </ScrollView>
 
@@ -242,7 +254,7 @@ export default function CompareScreen() {
                 style={{ width: '100%', flex: 1 }}
                 contentContainerStyle={{ padding: 20 }}
                 renderItem={({ item }) => (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[styles.modalItem, { backgroundColor: colors.background, borderColor: colors.border }, (leftCar?.id === item.id || rightCar?.id === item.id) && styles.disabledItem]}
                     onPress={() => handleSelectCar(item)}
                     disabled={leftCar?.id === item.id || rightCar?.id === item.id}
@@ -267,7 +279,8 @@ export default function CompareScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1, alignItems: 'center' },
-  headerTitle: { fontSize: 18, fontFamily: 'RethinkSans_700Bold' },
+  headerTitle: { fontSize: 24, fontFamily: 'RethinkSans_800ExtraBold', marginBottom: 4 },
+  headerSubtitle: { fontSize: 14, fontFamily: 'RethinkSans_500Medium', opacity: 0.7, textAlign: 'center' },
   scrollContent: { paddingBottom: 100 },
   selectionArea: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 20, marginBottom: 10, position: 'relative', alignItems: 'flex-start' },
   slotWrapper: { width: '46%' },
@@ -279,7 +292,7 @@ const styles = StyleSheet.create({
   carImage: { width: '100%', height: '100%' },
   removeBtn: { position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
   imageOverlayContent: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 8 },
-  overlayPrice: { color: '#FFF', fontSize: 14, fontFamily: 'RethinkSans_800ExtraBold', textShadow: '0px 1px 2px rgba(0,0,0,0.5)' },
+  overlayPrice: { color: '#FFF', fontSize: 14, fontFamily: 'RethinkSans_800ExtraBold', ...Platform.select({ ios: { textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }, android: { textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }, web: { textShadow: '0px 1px 2px rgba(0,0,0,0.5)' as any } }) },
   carInfo: { alignItems: 'center', width: '100%' },
   carMake: { fontSize: 12, fontFamily: 'RethinkSans_600SemiBold', textTransform: 'uppercase', marginBottom: 2 },
   carModel: { fontSize: 16, fontFamily: 'RethinkSans_800ExtraBold', textAlign: 'center' },
@@ -295,7 +308,7 @@ const styles = StyleSheet.create({
   iconCircle: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
   rowLabel: { fontSize: 9, fontFamily: 'RethinkSans_700Bold', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: 'center' },
   rowValue: { fontSize: 13, fontFamily: 'RethinkSans_600SemiBold', textAlign: 'center' },
-  bestValue: { fontSize: 13, fontFamily: 'RethinkSans_800ExtraBold' },
+  bestValue: { fontSize: 13, fontFamily: 'RethinkSans_800ExtraBold', textAlign: 'center' },
   placeholderValue: { opacity: 0.3 },
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center' },
   backdrop: { ...StyleSheet.absoluteFillObject },

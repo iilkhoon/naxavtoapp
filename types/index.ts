@@ -10,6 +10,7 @@ export interface Listing {
   images: string[];
   mileage: number;
   engine: string;
+  horsepower?: number;
   location: string;
   description: string;
   is_credit: boolean;

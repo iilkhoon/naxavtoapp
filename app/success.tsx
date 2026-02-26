@@ -4,8 +4,6 @@ import { useRouter } from 'expo-router';
 import { Check, Home, Eye } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { MotiView } from 'moti';
-import { Confetti } from '../components/ui/Confetti'; // Assuming you might want confetti, but keeping it simple for now
-
 const { width } = Dimensions.get('window');
 
 export default function SuccessScreen() {
@@ -41,7 +39,7 @@ export default function SuccessScreen() {
         transition={{ delay: 500, type: 'timing' }}
         style={styles.buttonContainer}
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.button, { backgroundColor: colors.card, borderColor: colors.border }]}
           onPress={() => router.replace('/(tabs)')}
         >
@@ -49,9 +47,9 @@ export default function SuccessScreen() {
           <Text style={[styles.buttonText, { color: colors.text }]}>Ana Səhifə</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.button, { backgroundColor: colors.primary, borderColor: colors.primary }]}
-          onPress={() => router.replace('/(tabs)/index')} // Or navigate to user's listings if available
+          onPress={() => router.replace('/')} // Or navigate to user's listings if available
         >
           <Eye size={20} color="#FFF" style={{ marginRight: 8 }} />
           <Text style={[styles.buttonText, { color: '#FFF' }]}>Elanlara Bax</Text>

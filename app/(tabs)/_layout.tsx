@@ -13,14 +13,14 @@ export default function TabLayout() {
     >
       <Tabs.Screen name="index" options={{ title: 'Ana səhifə' }} />
       <Tabs.Screen name="favorites" options={{ title: 'Seçilmişlər' }} />
-      <Tabs.Screen 
-        name="add" 
-        options={{ title: 'Elan ver' }} 
+      <Tabs.Screen
+        name="add"
+        options={{ title: 'Elan ver' }}
         listeners={() => ({
-            tabPress: (e) => {
-                e.preventDefault();
-                router.push('/add-listing');
-            },
+          tabPress: (e) => {
+            e.preventDefault();
+            router.push('/add-listing');
+          },
         })}
       />
       <Tabs.Screen name="compare" options={{ title: 'Müqayisə' }} />

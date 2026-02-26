@@ -56,7 +56,7 @@ export const CarCard = memo(({
   const { colors, isDark } = useTheme();
   const formattedPrice = price.toLocaleString().replace(/,/g, '.');
   const displayDate = formatListingDate(date);
-  
+
   const allImages = React.useMemo(() => {
     const list = images && images.length > 0 ? images : [image];
     // Ensure unique images if possible, or just slice
@@ -67,104 +67,60 @@ export const CarCard = memo(({
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // PERFORMANCE OPTIMIZATION: Only animate VIP cards to save resources
-    if (allImages.length <= 1 || !isVip) return;
-    
-    intervalRef.current = setInterval(() => {
-      setCurrentImgIndex((prev) => (prev + 1) % allImages.length);
-    }, 4000);
-    
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [allImages.length, isVip]);
+    // PERFORMANCE OPTIMIZATION: Removed auto-scroll for VIP to improve list performance
+    // if (allImages.length <= 1 || !isVip) return;
+    // intervalRef.current = setInterval(() => {
+    //   setCurrentImgIndex((prev) => (prev + 1) % allImages.length);
+    // }, 4000);
+    // return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, []); // Empty dependency array, effectively disabled
 
   const ImageComponent = Platform.OS === 'web' ? RNImage : ExpoImage;
-  const currentImageSource = allImages[currentImgIndex];
+  // Always use the first image for list performance
+  const currentImageSource = allImages[0];
 
   return (
-    <MotiView
-      from={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ delay: Math.min(index * 50, 300), type: 'spring' }}
-      style={styles.container}
-    >
-      <AnimatedPressable 
+    <View style={styles.container}>
+      <AnimatedPressable
         style={[
-          styles.card, 
-          { 
+          styles.card,
+          {
             backgroundColor: colors.card,
           }
-        ]} 
+        ]}
         onPress={() => onPress && onPress(id)}
       >
         {/* Image Section */}
         <View style={[styles.imageContainer, { backgroundColor: isDark ? '#2C2C2E' : '#E5E5EA' }]}>
-            {/* Only use AnimatePresence for VIPs to reduce render load on standard cards */}
-            {isVip ? (
-                <AnimatePresence exitBeforeEnter={false}>
-                    <MotiView
-                        key={currentImgIndex}
-                        from={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ type: 'timing', duration: 500 }}
-                        style={StyleSheet.absoluteFill}
-                    >
-                        <ImageComponent 
-                            style={styles.image} 
-                            source={Platform.OS === 'web' ? { uri: currentImageSource } : currentImageSource}
-                            {...(Platform.OS !== 'web' ? { contentFit: 'cover', cachePolicy: 'memory-disk' } : { resizeMode: 'cover' })}
-                        />
-                    </MotiView>
-                </AnimatePresence>
-            ) : (
-                <ImageComponent 
-                    style={styles.image} 
-                    source={Platform.OS === 'web' ? { uri: allImages[0] } : allImages[0]}
-                    {...(Platform.OS !== 'web' ? { contentFit: 'cover', cachePolicy: 'memory-disk' } : { resizeMode: 'cover' })}
-                />
-            )}
-          
+          <ImageComponent
+            style={styles.image}
+            source={Platform.OS === 'web' ? { uri: currentImageSource } : currentImageSource}
+            {...(Platform.OS !== 'web' ? { contentFit: 'cover', cachePolicy: 'memory-disk' } : { resizeMode: 'cover' })}
+          />
+
           <View style={styles.topRow}>
             <View style={styles.badges}>
-                {isCredit && <View style={[styles.badge, { backgroundColor: '#007AFF' }]}><Text style={styles.badgeText}>Kredit</Text></View>}
-                {isBarter && <View style={[styles.badge, { backgroundColor: '#FF9500' }]}><Text style={styles.badgeText}>Barter</Text></View>}
-                {isNew && <View style={[styles.badge, { backgroundColor: '#34C759' }]}><Text style={styles.badgeText}>Yeni</Text></View>}
+              {isCredit && <View style={[styles.badge, { backgroundColor: '#007AFF' }]}><Text style={styles.badgeText}>Kredit</Text></View>}
+              {isBarter && <View style={[styles.badge, { backgroundColor: '#FF9500' }]}><Text style={styles.badgeText}>Barter</Text></View>}
+              {isNew && <View style={[styles.badge, { backgroundColor: '#34C759' }]}><Text style={styles.badgeText}>Yeni</Text></View>}
             </View>
 
-            <TouchableOpacity 
-                activeOpacity={0.7}
-                onPress={(e) => { e.stopPropagation(); onToggleFavorite && onToggleFavorite(id); }}
-                style={styles.heartButtonWrapper}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={(e) => { e.stopPropagation(); onToggleFavorite && onToggleFavorite(id); }}
+              style={styles.heartButtonWrapper}
             >
-                <BlurView intensity={30} tint={isDark ? "dark" : "light"} style={styles.heartBlur}>
-                    <Heart size={18} color={isFavorite ? "#FF3B30" : (isDark ? "#FFF" : "#000")} fill={isFavorite ? "#FF3B30" : "transparent"} />
-                </BlurView>
+              {/* Replaced BlurView with simple translucent View for performance */}
+              <View style={[styles.heartBlur, { backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.7)' }]}>
+                <Heart size={18} color={isFavorite ? "#FF3B30" : (isDark ? "#FFF" : "#000")} fill={isFavorite ? "#FF3B30" : "transparent"} />
+              </View>
             </TouchableOpacity>
           </View>
 
           {isVip && (
-              <View style={[styles.vipBadge, { borderColor: '#FFD700', backgroundColor: isDark ? '#000' : '#FFF' }]}>
-                  <Crown size={10} color="#FFD700" fill="#FFD700" style={{ marginRight: 3 }} />
-                  <Text style={[styles.vipText, { color: isDark ? '#FFD700' : '#000' }]}>VIP</Text>
-              </View>
-          )}
-
-          {/* Pagination Dots - Only for VIPs with multiple images */}
-          {isVip && allImages.length > 1 && (
-            <View style={styles.paginationContainer}>
-                {allImages.map((_, i) => (
-                    <View 
-                        key={i} 
-                        style={[
-                            styles.dot, 
-                            { 
-                                backgroundColor: i === currentImgIndex ? '#FFF' : 'rgba(255,255,255,0.4)',
-                                width: i === currentImgIndex ? 6 : 4,
-                                height: i === currentImgIndex ? 6 : 4,
-                            }
-                        ]} 
-                    />
-                ))}
+            <View style={[styles.vipBadge, { borderColor: '#FFD700', backgroundColor: isDark ? '#000' : '#FFF' }]}>
+              <Crown size={10} color="#FFD700" fill="#FFD700" style={{ marginRight: 3 }} />
+              <Text style={[styles.vipText, { color: isDark ? '#FFD700' : '#000' }]}>VIP</Text>
             </View>
           )}
         </View>
@@ -172,12 +128,12 @@ export const CarCard = memo(({
         {/* Content Section */}
         <View style={styles.content}>
           <View style={styles.priceRow}>
-             <Text style={[styles.priceText, { color: colors.primary }]}>
-                {formattedPrice} <Text style={{ fontSize: 12, fontFamily: 'RethinkSans_700Bold' }}>{currency === 'AZN' ? '₼' : currency}</Text>
-             </Text>
-             {isVip && <Crown size={16} color="#FFD700" fill="#FFD700" />}
+            <Text style={[styles.priceText, { color: colors.primary }]}>
+              {formattedPrice} <Text style={{ fontSize: 12, fontFamily: 'RethinkSans_700Bold' }}>{currency === 'AZN' ? '₼' : currency}</Text>
+            </Text>
+            {isVip && <Crown size={16} color="#FFD700" fill="#FFD700" />}
           </View>
-          
+
           <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
             {title}
           </Text>
@@ -191,13 +147,13 @@ export const CarCard = memo(({
           </Text>
         </View>
       </AnimatedPressable>
-    </MotiView>
+    </View>
   );
 });
 
 const styles = StyleSheet.create({
   container: {
-    width: (width - 48) / 2,
+    width: '100%',
     marginBottom: 16,
   },
   card: {
@@ -209,7 +165,7 @@ const styles = StyleSheet.create({
     height: 120,
     width: '100%',
     position: 'relative',
-    overflow: 'hidden', 
+    overflow: 'hidden',
   },
   image: {
     width: '100%',
@@ -229,7 +185,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 3,
-    flex: 1, 
+    flex: 1,
     marginRight: 4,
   },
   badge: {

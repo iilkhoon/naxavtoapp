@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Modal, 
-  View, 
-  StyleSheet, 
-  TouchableOpacity, 
-  Dimensions, 
-  FlatList, 
-  Text, 
+import {
+  Modal,
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  Dimensions,
+  FlatList,
+  Text,
   StatusBar,
   SafeAreaView,
   Platform,
@@ -44,14 +44,16 @@ export const ImageViewer = ({ visible, images, initialIndex = 0, onClose }: Imag
 
   const getWatermarkStyle = () => {
     const pos = settings.watermark_position || 'bottom_right';
-    const baseStyle = { position: 'absolute', width: 100, height: 50, opacity: 0.6, zIndex: 5 };
-    
-    switch(pos) {
-        case 'top_left': return { ...baseStyle, top: 100, left: 20 };
-        case 'top_right': return { ...baseStyle, top: 100, right: 20 };
-        case 'bottom_left': return { ...baseStyle, bottom: 100, left: 20 };
-        case 'center': return { ...baseStyle, top: '50%', left: '50%', marginTop: -25, marginLeft: -50 };
-        default: return { ...baseStyle, bottom: 100, right: 20 };
+    const scaleStr = settings.watermark_scale ? String(settings.watermark_scale).replace(',', '.') : '1';
+    const scale = parseFloat(scaleStr) || 1;
+    const baseStyle = { position: 'absolute', width: 100 * scale, height: 50 * scale, opacity: 0.6, zIndex: 5 };
+
+    switch (pos) {
+      case 'top_left': return { ...baseStyle, top: 100, left: 20 };
+      case 'top_right': return { ...baseStyle, top: 100, right: 20 };
+      case 'bottom_left': return { ...baseStyle, bottom: 100, left: 20 };
+      case 'center': return { ...baseStyle, top: '50%', left: '50%', marginTop: -25 * scale, marginLeft: -50 * scale };
+      default: return { ...baseStyle, bottom: 100, right: 20 };
     }
   };
 
@@ -68,7 +70,7 @@ export const ImageViewer = ({ visible, images, initialIndex = 0, onClose }: Imag
     >
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="black" />
-        
+
         {/* Close Button */}
         <SafeAreaView style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -100,19 +102,19 @@ export const ImageViewer = ({ visible, images, initialIndex = 0, onClose }: Imag
                 centerContent
                 contentContainerStyle={styles.scrollContent}
               >
-                <ExpoImage 
-                    source={{ uri: item.uri }} 
-                    style={styles.image} 
-                    contentFit="contain"
-                    transition={200}
+                <ExpoImage
+                  source={{ uri: item.uri }}
+                  style={styles.image}
+                  contentFit="contain"
+                  transition={200}
                 />
               </ScrollView>
-              
+
               {settings.watermark_url && (
-                <ExpoImage 
-                    source={{ uri: settings.watermark_url }} 
-                    style={getWatermarkStyle() as any} 
-                    contentFit="contain"
+                <ExpoImage
+                  source={{ uri: settings.watermark_url }}
+                  style={getWatermarkStyle() as any}
+                  contentFit="contain"
                 />
               )}
             </View>

@@ -59,9 +59,9 @@ export function usePushNotifications() {
     try {
       const { error } = await supabase
         .from('push_tokens')
-        .upsert({ 
-          token, 
-          user_id: user?.id || null 
+        .upsert({
+          token,
+          user_id: user?.id || null
         }, { onConflict: 'token' });
 
       if (error) {
@@ -93,22 +93,24 @@ async function registerForPushNotificationsAsync() {
   if (Device.isDevice) {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
-    
+
     if (existingStatus !== 'granted') {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
-    
+
     if (finalStatus !== 'granted') {
       console.log('Failed to get push token for push notification!');
       return;
     }
-    
+
     try {
       const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
+      console.log('[Push] Getting token for projectId:', projectId);
       token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-    } catch (e) {
-      console.error(e);
+      console.log('[Push] Token obtained:', token);
+    } catch (e: any) {
+      console.error('[Push] getExpoPushTokenAsync failed:', e?.message ?? e);
     }
   } else {
     console.log('Must use physical device for Push Notifications');

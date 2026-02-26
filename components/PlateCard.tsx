@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Platform } from 'react-native';
 import { MotiView } from 'moti';
 import { Crown } from 'lucide-react-native';
 import { AnimatedPressable } from './ui/AnimatedPressable';
@@ -7,7 +7,7 @@ import { PlateVisual } from './PlateVisual';
 import { useTheme } from '../contexts/ThemeContext';
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - 48) / 2;
+const CARD_WIDTH = Platform.OS === 'web' ? '100%' : (width - 48) / 2;
 
 interface PlateCardProps {
   region: string;
@@ -20,15 +20,15 @@ interface PlateCardProps {
   onPress?: () => void;
 }
 
-export const PlateCard = ({ 
-  region, 
-  series, 
-  number, 
-  price, 
-  description, 
-  index = 0, 
+export const PlateCard = ({
+  region,
+  series,
+  number,
+  price,
+  description,
+  index = 0,
   isVip,
-  onPress 
+  onPress
 }: PlateCardProps) => {
   const { colors, isDark } = useTheme();
 
@@ -39,47 +39,48 @@ export const PlateCard = ({
       transition={{ delay: Math.min(index * 50, 300), type: 'spring' }}
       style={styles.container}
     >
-      <AnimatedPressable 
-        onPress={onPress} 
+      <AnimatedPressable
+        onPress={onPress}
         style={[
-            styles.card, 
-            { 
-                backgroundColor: colors.card,
-                borderColor: isVip ? '#FFD700' : 'transparent',
-                borderWidth: isVip ? 1 : 0,
-            }
+          styles.card,
+          {
+            backgroundColor: colors.card,
+            borderColor: isVip ? '#FFD700' : 'transparent',
+            borderWidth: isVip ? 1 : 0,
+            width: '100%'
+          }
         ]}
       >
         {/* Visual Section */}
         <View style={[styles.visualContainer, { backgroundColor: isDark ? '#2C2C2E' : '#E5E5EA' }]}>
-            <View style={{ transform: [{ scale: 0.45 }] }}>
-                <PlateVisual 
-                    region={region} 
-                    series={series} 
-                    number={number} 
-                />
+          <View style={{ transform: [{ scale: 0.45 }] }}>
+            <PlateVisual
+              region={region}
+              series={series}
+              number={number}
+            />
+          </View>
+          {isVip && (
+            <View style={[styles.vipBadge, { backgroundColor: '#FFD700' }]}>
+              <Crown size={10} color="#000" fill="#000" />
+              <Text style={styles.vipText}>VIP</Text>
             </View>
-            {isVip && (
-                <View style={[styles.vipBadge, { backgroundColor: '#FFD700' }]}>
-                    <Crown size={10} color="#000" fill="#000" />
-                    <Text style={styles.vipText}>VIP</Text>
-                </View>
-            )}
+          )}
         </View>
-        
+
         {/* Info Section */}
         <View style={styles.content}>
-            <Text style={[styles.price, { color: colors.primary }]}>
-                {price.toLocaleString()} <Text style={{ fontSize: 12 }}>AZN</Text>
-            </Text>
-            
-            <Text style={[styles.plateText, { color: colors.text }]}>
-                {region}-{series}-{number}
-            </Text>
-            
-            <Text style={[styles.locationText, { color: colors.textSecondary }]}>
-                Naxçıvan
-            </Text>
+          <Text style={[styles.price, { color: colors.primary }]}>
+            {price.toLocaleString()} <Text style={{ fontSize: 12 }}>AZN</Text>
+          </Text>
+
+          <Text style={[styles.plateText, { color: colors.text }]}>
+            {region}-{series}-{number}
+          </Text>
+
+          <Text style={[styles.locationText, { color: colors.textSecondary }]}>
+            Naxçıvan
+          </Text>
         </View>
       </AnimatedPressable>
     </MotiView>
@@ -88,7 +89,7 @@ export const PlateCard = ({
 
 const styles = StyleSheet.create({
   container: {
-    width: CARD_WIDTH,
+    width: CARD_WIDTH as any,
     marginBottom: 16,
   },
   card: {

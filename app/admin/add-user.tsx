@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TextInput, 
-  TouchableOpacity, 
-  ActivityIndicator, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -20,7 +20,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 export default function AddUserScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
-  
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -47,18 +47,20 @@ export default function AddUserScreen() {
       });
 
       if (error) throw error;
-      
+
       if (data.user) {
         Alert.alert(
-            'Uğurlu', 
-            'Yeni istifadəçi uğurla yaradıldı!',
-            [{ text: 'OK', onPress: () => {
-                setEmail('');
-                setPassword('');
-            }}]
+          'Uğurlu',
+          'Yeni istifadəçi uğurla yaradıldı!',
+          [{
+            text: 'OK', onPress: () => {
+              setEmail('');
+              setPassword('');
+            }
+          }]
         );
       }
-      
+
     } catch (error: any) {
       Alert.alert('Xəta', error.message);
     } finally {
@@ -67,77 +69,77 @@ export default function AddUserScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={{ flex: 1 }} 
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <ArrowLeft size={24} color={colors.text} />
+            <ArrowLeft size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Yeni İstifadəçi</Text>
           <View style={{ width: 24 }} />
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
-            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <View style={[styles.iconCircle, { backgroundColor: `${colors.primary}15` }]}>
-                    <UserPlus size={40} color={colors.primary} />
-                </View>
-                
-                <Text style={[styles.description, { color: colors.textSecondary }]}>
-                    Yeni admin və ya moderator əlavə etmək üçün aşağıdakı formu doldurun.
-                </Text>
-
-                <View style={styles.form}>
-                    <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { color: colors.textSecondary }]}>Email Ünvanı</Text>
-                        <View style={[styles.inputContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                            <Mail size={20} color={colors.textSecondary} style={styles.inputIcon} />
-                            <TextInput
-                                style={[styles.input, { color: colors.text }]}
-                                placeholder="mail@numune.com"
-                                placeholderTextColor={colors.placeholder}
-                                value={email}
-                                onChangeText={setEmail}
-                                autoCapitalize="none"
-                                keyboardType="email-address"
-                            />
-                        </View>
-                    </View>
-
-                    <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { color: colors.textSecondary }]}>Şifrə</Text>
-                        <View style={[styles.inputContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                            <Lock size={20} color={colors.textSecondary} style={styles.inputIcon} />
-                            <TextInput
-                                style={[styles.input, { color: colors.text }]}
-                                placeholder="Minimum 6 simvol"
-                                placeholderTextColor={colors.placeholder}
-                                value={password}
-                                onChangeText={setPassword}
-                                secureTextEntry
-                            />
-                        </View>
-                    </View>
-
-                    <TouchableOpacity 
-                        style={[styles.createButton, { backgroundColor: colors.primary }]}
-                        onPress={handleCreateUser}
-                        disabled={loading}
-                    >
-                        {loading ? (
-                            <ActivityIndicator color="#FFF" />
-                        ) : (
-                            <>
-                                <CheckCircle size={20} color="#FFF" style={{ marginRight: 8 }} />
-                                <Text style={styles.createButtonText}>Əlavə Et</Text>
-                            </>
-                        )}
-                    </TouchableOpacity>
-                </View>
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.iconCircle, { backgroundColor: `${colors.primary}15` }]}>
+              <UserPlus size={40} color={colors.primary} />
             </View>
+
+            <Text style={[styles.description, { color: colors.textSecondary }]}>
+              Yeni admin və ya moderator əlavə etmək üçün aşağıdakı formu doldurun.
+            </Text>
+
+            <View style={styles.form}>
+              <View style={styles.inputGroup}>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>Email Ünvanı</Text>
+                <View style={[styles.inputContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <Mail size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                  <TextInput
+                    style={[styles.input, { color: colors.text }]}
+                    placeholder="mail@numune.com"
+                    placeholderTextColor={colors.placeholder}
+                    value={email}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>Şifrə</Text>
+                <View style={[styles.inputContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <Lock size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                  <TextInput
+                    style={[styles.input, { color: colors.text }]}
+                    placeholder="Minimum 6 simvol"
+                    placeholderTextColor={colors.placeholder}
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry
+                  />
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.createButton, { backgroundColor: colors.primary }]}
+                onPress={handleCreateUser}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <>
+                    <CheckCircle size={20} color="#FFF" style={{ marginRight: 8 }} />
+                    <Text style={styles.createButtonText}>Əlavə Et</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
         </ScrollView>
       </View>
     </KeyboardAvoidingView>
@@ -153,7 +155,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingTop: Platform.OS === 'web' ? 20 : Platform.OS === 'ios' ? 60 : 40,
     borderBottomWidth: 1,
   },
   backButton: {

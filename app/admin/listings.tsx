@@ -16,57 +16,57 @@ type Tab = 'cars' | 'plates';
 type Status = 'approved' | 'pending';
 
 const DateBadge = ({ dateString }: { dateString: string }) => {
-    if (!dateString) return null;
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return null;
-    const daysOld = differenceInDays(new Date(), date);
-    const isExpired = daysOld >= 7;
-    return (
-        <View style={[styles.dateBadge, isExpired && styles.dateBadgeExpired]}>
-            <Clock size={10} color={isExpired ? '#FF3B30' : '#AAA'} style={{ marginRight: 4 }} />
-            <Text style={[styles.dateText, isExpired && styles.dateTextExpired]}>{daysOld === 0 ? 'Bu gün' : `${daysOld} gün`}</Text>
-        </View>
-    );
+  if (!dateString) return null;
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return null;
+  const daysOld = differenceInDays(new Date(), date);
+  const isExpired = daysOld >= 7;
+  return (
+    <View style={[styles.dateBadge, isExpired && styles.dateBadgeExpired]}>
+      <Clock size={10} color={isExpired ? '#FF3B30' : '#AAA'} style={{ marginRight: 4 }} />
+      <Text style={[styles.dateText, isExpired && styles.dateTextExpired]}>{daysOld === 0 ? 'Bu gün' : `${daysOld} gün`}</Text>
+    </View>
+  );
 };
 
 const ActionButton = ({ icon: Icon, color, onPress, bg }: any) => (
-    <TouchableOpacity onPress={onPress} style={[styles.actionBtn, { backgroundColor: bg }]}><Icon size={18} color={color} /></TouchableOpacity>
+  <TouchableOpacity onPress={onPress} style={[styles.actionBtn, { backgroundColor: bg }]}><Icon size={18} color={color} /></TouchableOpacity>
 );
 
 const CarItem = memo(({ item, colors, activeStatus, onView, onApprove, onEdit, onDelete }: any) => (
-    <MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={styles.itemLeft}>
-          <Image source={{ uri: item.image_url || 'https://via.placeholder.com/150' }} style={styles.image} />
-          <View style={styles.info}>
-            <View style={styles.headerRow}><Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{item.make} {item.model}</Text>{item.is_vip && <View style={styles.vipDot} />}</View>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{item.year} • {item.price} AZN</Text>
-            <View style={styles.metaRow}><View style={[styles.idPill, { backgroundColor: colors.background }]}><Text style={[styles.idText, { color: colors.textSecondary }]}>{item.short_id || item.id.substring(0,6)}</Text></View><DateBadge dateString={item.created_at} /></View>
-          </View>
+  <MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <View style={styles.itemLeft}>
+      <Image source={{ uri: item.image_url || 'https://via.placeholder.com/150' }} style={styles.image} />
+      <View style={styles.info}>
+        <View style={styles.headerRow}><Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{item.make} {item.model}</Text>{item.is_vip && <View style={styles.vipDot} />}</View>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{item.year} • {item.price} AZN</Text>
+        <View style={styles.metaRow}><View style={[styles.idPill, { backgroundColor: colors.background }]}><Text style={[styles.idText, { color: colors.textSecondary }]}>{item.short_id || item.id.substring(0, 6)}</Text></View><DateBadge dateString={item.created_at} /></View>
       </View>
-      <View style={styles.actions}>
-        {activeStatus === 'pending' ? (<ActionButton icon={CheckCircle} color="#FFF" bg="#4CD964" onPress={() => onApprove(item.id)} />) : (<ActionButton icon={Eye} color="#FFF" bg="#007AFF" onPress={() => onView(item.id)} />)}
-        <ActionButton icon={Edit} color={colors.text} bg={colors.background} onPress={() => onEdit(item.id)} />
-        <ActionButton icon={Trash2} color="#FF3B30" bg="rgba(255, 59, 48, 0.1)" onPress={() => onDelete(item.id)} />
-      </View>
-    </MotiView>
+    </View>
+    <View style={styles.actions}>
+      {activeStatus === 'pending' ? (<ActionButton icon={CheckCircle} color="#FFF" bg="#4CD964" onPress={() => onApprove(item.id)} />) : (<ActionButton icon={Eye} color="#FFF" bg="#007AFF" onPress={() => onView(item.id)} />)}
+      <ActionButton icon={Edit} color={colors.text} bg={colors.background} onPress={() => onEdit(item.id)} />
+      <ActionButton icon={Trash2} color="#FF3B30" bg="rgba(255, 59, 48, 0.1)" onPress={() => onDelete(item.id)} />
+    </View>
+  </MotiView>
 ));
 
 const PlateItem = memo(({ item, colors, activeStatus, onView, onApprove, onEdit, onDelete }: any) => (
-    <MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={styles.itemLeft}>
-          <View style={styles.plateIcon}><PlateVisual region={item.region} series={item.series} number={item.number} scale={0.35} /></View>
-          <View style={styles.info}>
-            <View style={styles.headerRow}><Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{item.region} {item.series} {item.number}</Text>{item.is_vip && <View style={styles.vipDot} />}</View>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{item.price} AZN</Text>
-            <View style={styles.metaRow}><View style={[styles.idPill, { backgroundColor: colors.background }]}><Text style={[styles.idText, { color: colors.textSecondary }]}>{item.short_id || item.id.substring(0,6)}</Text></View><DateBadge dateString={item.created_at} /></View>
-          </View>
+  <MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <View style={styles.itemLeft}>
+      <View style={styles.plateIcon}><PlateVisual region={item.region} series={item.series} number={item.number} scale={0.35} /></View>
+      <View style={styles.info}>
+        <View style={styles.headerRow}><Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{item.region} {item.series} {item.number}</Text>{item.is_vip && <View style={styles.vipDot} />}</View>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{item.price} AZN</Text>
+        <View style={styles.metaRow}><View style={[styles.idPill, { backgroundColor: colors.background }]}><Text style={[styles.idText, { color: colors.textSecondary }]}>{item.short_id || item.id.substring(0, 6)}</Text></View><DateBadge dateString={item.created_at} /></View>
       </View>
-      <View style={styles.actions}>
-        {activeStatus === 'pending' ? (<ActionButton icon={CheckCircle} color="#FFF" bg="#4CD964" onPress={() => onApprove(item.id)} />) : (<ActionButton icon={Eye} color="#FFF" bg="#007AFF" onPress={() => onView(item.id)} />)}
-        <ActionButton icon={Edit} color={colors.text} bg={colors.background} onPress={() => onEdit(item.id)} />
-        <ActionButton icon={Trash2} color="#FF3B30" bg="rgba(255, 59, 48, 0.1)" onPress={() => onDelete(item.id)} />
-      </View>
-    </MotiView>
+    </View>
+    <View style={styles.actions}>
+      {activeStatus === 'pending' ? (<ActionButton icon={CheckCircle} color="#FFF" bg="#4CD964" onPress={() => onApprove(item.id)} />) : (<ActionButton icon={Eye} color="#FFF" bg="#007AFF" onPress={() => onView(item.id)} />)}
+      <ActionButton icon={Edit} color={colors.text} bg={colors.background} onPress={() => onEdit(item.id)} />
+      <ActionButton icon={Trash2} color="#FF3B30" bg="rgba(255, 59, 48, 0.1)" onPress={() => onDelete(item.id)} />
+    </View>
+  </MotiView>
 ));
 
 export default function AdminListingsScreen() {
@@ -90,15 +90,15 @@ export default function AdminListingsScreen() {
       const selectQuery = activeTab === 'cars' ? 'id, short_id, title, price, image_url, make, model, year, created_at, contact_phone, seller_name, is_vip' : '*';
       const { data, error } = await supabase.from(table).select(selectQuery).eq('status', activeStatus).order('created_at', { ascending: false });
       if (error) throw error;
-      setItems(data as (Listing | Plate)[] || []);
+      setItems(data as unknown as (Listing | Plate)[] || []);
     } catch (error: any) { console.error(error); showToast('Xəta: ' + error.message, 'error'); } finally { setLoading(false); }
   };
 
   const filteredItems = useMemo(() => {
     return items.filter(item => {
-        const query = searchQuery.toLowerCase();
-        const matchesSearch = (item.short_id && item.short_id.toLowerCase().includes(query)) || item.id.toLowerCase().includes(query) || (activeTab === 'cars' ? `${(item as Listing).make} ${(item as Listing).model}`.toLowerCase().includes(query) : `${(item as Plate).region} ${(item as Plate).series} ${(item as Plate).number}`.toLowerCase().includes(query));
-        return matchesSearch;
+      const query = searchQuery.toLowerCase();
+      const matchesSearch = (item.short_id && item.short_id.toLowerCase().includes(query)) || item.id.toLowerCase().includes(query) || (activeTab === 'cars' ? `${(item as Listing).make} ${(item as Listing).model}`.toLowerCase().includes(query) : `${(item as Plate).region} ${(item as Plate).series} ${(item as Plate).number}`.toLowerCase().includes(query));
+      return matchesSearch;
     });
   }, [items, searchQuery, activeTab]);
 
@@ -134,8 +134,8 @@ export default function AdminListingsScreen() {
       </View>
       <View style={styles.tabContainer}>
         <View style={[styles.segmentControl, { backgroundColor: colors.card }]}>
-            <TouchableOpacity style={[styles.segmentBtn, activeTab === 'cars' && { backgroundColor: colors.primary }]} onPress={() => setActiveTab('cars')}><Text style={[styles.segmentText, activeTab === 'cars' ? { color: '#FFF' } : { color: colors.textSecondary }]}>Avtomobillər</Text></TouchableOpacity>
-            <TouchableOpacity style={[styles.segmentBtn, activeTab === 'plates' && { backgroundColor: colors.primary }]} onPress={() => setActiveTab('plates')}><Text style={[styles.segmentText, activeTab === 'plates' ? { color: '#FFF' } : { color: colors.textSecondary }]}>Nömrələr</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.segmentBtn, activeTab === 'cars' && { backgroundColor: colors.primary }]} onPress={() => setActiveTab('cars')}><Text style={[styles.segmentText, activeTab === 'cars' ? { color: '#FFF' } : { color: colors.textSecondary }]}>Avtomobillər</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.segmentBtn, activeTab === 'plates' && { backgroundColor: colors.primary }]} onPress={() => setActiveTab('plates')}><Text style={[styles.segmentText, activeTab === 'plates' ? { color: '#FFF' } : { color: colors.textSecondary }]}>Nömrələr</Text></TouchableOpacity>
         </View>
       </View>
       <View style={styles.statusFilter}>
@@ -144,9 +144,9 @@ export default function AdminListingsScreen() {
       </View>
       <View style={[styles.searchContainer, { backgroundColor: colors.background }]}>
         <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Search size={18} color={colors.textSecondary} style={{ marginLeft: 12 }} />
-            <TextInput style={[styles.searchInput, { color: colors.text }]} placeholder="Axtar..." placeholderTextColor={colors.placeholder} value={searchQuery} onChangeText={setSearchQuery} />
-            {searchQuery.length > 0 && (<TouchableOpacity onPress={() => setSearchQuery('')} style={{ marginRight: 12 }}><X size={16} color={colors.textSecondary} /></TouchableOpacity>)}
+          <Search size={18} color={colors.textSecondary} style={{ marginLeft: 12 }} />
+          <TextInput style={[styles.searchInput, { color: colors.text }]} placeholder="Axtar..." placeholderTextColor={colors.placeholder} value={searchQuery} onChangeText={setSearchQuery} />
+          {searchQuery.length > 0 && (<TouchableOpacity onPress={() => setSearchQuery('')} style={{ marginRight: 12 }}><X size={16} color={colors.textSecondary} /></TouchableOpacity>)}
         </View>
       </View>
       {loading ? (<ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />) : (<FlatList data={filteredItems} keyExtractor={(item) => item.id} contentContainerStyle={styles.list} renderItem={renderItem} ListEmptyComponent={<View style={styles.emptyContainer}><Filter size={40} color={colors.border} /><Text style={[styles.emptyText, { color: colors.textSecondary }]}>Elan tapılmadı</Text></View>} />)}

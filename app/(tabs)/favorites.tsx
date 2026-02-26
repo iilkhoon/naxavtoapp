@@ -1,10 +1,12 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, ActivityIndicator, Platform, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, ActivityIndicator, Platform, Dimensions, useWindowDimensions } from 'react-native';
 import { CarCard } from '../../components/CarCard';
 import { supabase } from '../../lib/supabase';
 import { getFavorites, toggleFavorite } from '../../lib/favorites';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useSettings } from '../../contexts/SettingsContext';
+import { BannerSlider } from '../../components/BannerSlider';
 import { Heart, Sparkles } from 'lucide-react-native';
 import { MotiView } from 'moti';
 
@@ -13,9 +15,16 @@ const { height } = Dimensions.get('window');
 export default function FavoritesScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const { settings } = useSettings();
   const [listings, setListings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [favorites, setFavorites] = useState<string[]>([]);
+
+  const { width } = useWindowDimensions();
+  const numColumns = width > 768 ? 4 : 2;
+  const gap = 12;
+  const padding = 32; // 16 * 2 (horizontal padding)
+  const itemWidth = (width - padding - (numColumns - 1) * gap) / numColumns;
 
   const fetchFavorites = async () => {
     setLoading(true);
@@ -46,7 +55,7 @@ export default function FavoritesScreen() {
 
   const handleToggleFavorite = async (id: string) => {
     await toggleFavorite(id);
-    fetchFavorites(); 
+    fetchFavorites();
   };
 
   const handleCardPress = (id: string) => {
@@ -70,61 +79,66 @@ export default function FavoritesScreen() {
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent}>
+          <BannerSlider
+            images={[settings.favorite_banner_1, settings.favorite_banner_2, settings.favorite_banner_3]}
+            height={120}
+          />
           {listings.length > 0 ? (
-            <View style={styles.grid}>
+            <View style={[styles.grid, { gap }]}>
               {listings.map((item, index) => (
-                <CarCard
-                  key={item.id}
-                  id={item.id}
-                  index={index}
-                  title={item.title || `${item.make} ${item.model}`}
-                  price={item.price}
-                  currency={item.currency || 'AZN'}
-                  image={item.image_url || 'https://via.placeholder.com/400'}
-                  images={item.images}
-                  location={item.location}
-                  date={item.created_at}
-                  mileage={item.mileage}
-                  engine={item.engine}
-                  year={item.year}
-                  isCredit={item.is_credit}
-                  isBarter={item.is_barter}
-                  isVip={item.is_vip}
-                  isNew={item.is_new}
-                  isFavorite={true}
-                  onToggleFavorite={handleToggleFavorite}
-                  onPress={handleCardPress}
-                />
+                <View key={item.id} style={{ width: itemWidth }}>
+                  <CarCard
+                    id={item.id}
+                    index={index}
+                    title={item.title || `${item.make} ${item.model}`}
+                    price={item.price}
+                    currency={item.currency || 'AZN'}
+                    image={item.image_url || 'https://via.placeholder.com/400'}
+                    images={item.images}
+                    location={item.location}
+                    date={item.created_at}
+                    mileage={item.mileage}
+                    engine={item.engine}
+                    year={item.year}
+                    isCredit={item.is_credit}
+                    isBarter={item.is_barter}
+                    isVip={item.is_vip}
+                    isNew={item.is_new}
+                    isFavorite={true}
+                    onToggleFavorite={handleToggleFavorite}
+                    onPress={handleCardPress}
+                  />
+                </View>
               ))}
             </View>
           ) : (
             <View style={styles.emptyState}>
+              <MotiView
+                from={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: 'spring', damping: 15 }}
+                style={[styles.iconCircle, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7' }]}
+              >
+                <Heart size={60} color="#FF3B30" fill="#FF3B30" />
                 <MotiView
-                    from={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ type: 'spring', damping: 15 }}
-                    style={[styles.iconCircle, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7' }]}
+                  from={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1.2 }}
+                  transition={{
+                    type: 'timing',
+                    duration: 1000,
+                    loop: true,
+                    repeatReverse: true
+                  }}
+                  style={{ position: 'absolute', top: -10, right: -10 }}
                 >
-                    <Heart size={60} color="#FF3B30" fill="#FF3B30" />
-                    <MotiView
-                        from={{ opacity: 0, scale: 0.5 }}
-                        animate={{ opacity: 1, scale: 1.2 }}
-                        transition={{ 
-                            type: 'timing', 
-                            duration: 1000, 
-                            loop: true,
-                            repeatReverse: true 
-                        }}
-                        style={{ position: 'absolute', top: -10, right: -10 }}
-                    >
-                        <Sparkles size={30} color="#FFD700" />
-                    </MotiView>
+                  <Sparkles size={30} color="#FFD700" />
                 </MotiView>
-                
-                <Text style={[styles.emptyText, { color: colors.text }]}>Hələ ki, boşdur</Text>
-                <Text style={[styles.emptySubText, { color: colors.textSecondary }]}>
-                    Sevdiyin elanın üzərindəki ürək ikonuna klik et, sehri gör!
-                </Text>
+              </MotiView>
+
+              <Text style={[styles.emptyText, { color: colors.text }]}>Hələ ki, boşdur</Text>
+              <Text style={[styles.emptySubText, { color: colors.textSecondary }]}>
+                Sevdiyin elanın üzərindəki ürək ikonuna klik et, sehri gör!
+              </Text>
             </View>
           )}
         </ScrollView>
@@ -160,8 +174,8 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
+    // justifyContent: 'space-between', // Handled by width calc and gap
   },
   emptyState: {
     flex: 1,

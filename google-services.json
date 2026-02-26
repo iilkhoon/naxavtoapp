@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "791722850863",
+    "project_id": "naxcivanavto-c0bfb",
+    "storage_bucket": "naxcivanavto-c0bfb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:791722850863:android:f2fbafae453007ec6f64da",
+        "android_client_info": {
+          "package_name": "com.naxavtoapp.novoloji"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB5MlJQJ9cUQb5gMh3cTKlvc7_dpcMOek4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

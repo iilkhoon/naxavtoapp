@@ -1,4 +1,5 @@
 import '../utils/ssr-polyfill';
+import '../global.css';
 import React, { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -11,39 +12,49 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, Platform, Text, TextInput } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { 
-  useFonts, 
-  RethinkSans_400Regular, 
-  RethinkSans_500Medium, 
-  RethinkSans_600SemiBold, 
-  RethinkSans_700Bold, 
-  RethinkSans_800ExtraBold 
+import {
+  useFonts,
+  RethinkSans_400Regular,
+  RethinkSans_500Medium,
+  RethinkSans_600SemiBold,
+  RethinkSans_700Bold,
+  RethinkSans_800ExtraBold
 } from '@expo-google-fonts/rethink-sans';
 import { usePushNotifications } from '../hooks/usePushNotifications';
+import { InstagramPopup } from '../components/InstagramPopup';
+import { WebSideBanners } from '../components/WebSideBanners';
 
 SplashScreen.preventAutoHideAsync();
 
-// Apply default font globally
+// Apply default font globally using defaultProps
 const applyGlobalFont = () => {
-  if (Platform.OS === 'web') return; 
+  if (Platform.OS === 'web') return;
 
-  const oldTextRender = Text.render;
-  // @ts-ignore
-  Text.render = function (...args) {
-    const origin = oldTextRender.call(this, ...args);
-    return React.cloneElement(origin, {
-      style: [{ fontFamily: 'RethinkSans_400Regular' }, origin.props.style],
-    });
+  const CustomTextProps = {
+    style: { fontFamily: 'RethinkSans_400Regular' },
   };
 
-  const oldTextInputRender = TextInput.render;
-  // @ts-ignore
-  TextInput.render = function (...args) {
-    const origin = oldTextInputRender.call(this, ...args);
-    return React.cloneElement(origin, {
-      style: [{ fontFamily: 'RethinkSans_400Regular' }, origin.props.style],
-    });
+  const CustomTextInputProps = {
+    style: { fontFamily: 'RethinkSans_400Regular' },
   };
+
+  // @ts-ignore
+  if (Text.defaultProps) {
+    // @ts-ignore
+    Text.defaultProps.style = [{ fontFamily: 'RethinkSans_400Regular' }];
+  } else {
+    // @ts-ignore
+    Text.defaultProps = CustomTextProps;
+  }
+
+  // @ts-ignore
+  if (TextInput.defaultProps) {
+    // @ts-ignore
+    TextInput.defaultProps.style = [{ fontFamily: 'RethinkSans_400Regular' }];
+  } else {
+    // @ts-ignore
+    TextInput.defaultProps = CustomTextInputProps;
+  }
 };
 
 // Execute the patch
@@ -58,25 +69,25 @@ function RootLayoutNav() {
     headerShown: false,
     contentStyle: { backgroundColor: colors.background },
     headerTitleStyle: {
-        fontFamily: 'RethinkSans_700Bold',
-        fontSize: 17,
+      fontFamily: 'RethinkSans_700Bold',
+      fontSize: 17,
     },
     headerBackTitle: 'Geri',
     headerBackTitleStyle: { fontFamily: 'RethinkSans_500Medium' },
     headerTintColor: colors.primary,
     // Use platform default for best native feel (smooth slide on iOS, slide/fade on Android)
-    animation: Platform.OS === 'ios' ? 'default' : 'fade_from_bottom', 
+    animation: (Platform.OS === 'ios' ? 'default' : 'fade_from_bottom') as any,
     animationDuration: 350,
     gestureEnabled: true, // Enable swipe back gesture
-    gestureDirection: 'horizontal',
+    gestureDirection: 'horizontal' as const,
   } as const;
 
   // Configuration for Modals (Slide from bottom)
   const modalScreenOptions = {
     // 'modal' presentation on iOS gives the native sheet look & feel with drag-to-dismiss
     // 'card' on Android with slide_from_bottom mimics a full-screen modal nicely
-    presentation: Platform.OS === 'ios' ? 'modal' : 'card', 
-    animation: Platform.OS === 'ios' ? 'default' : 'slide_from_bottom', 
+    presentation: (Platform.OS === 'ios' ? 'modal' : 'card') as any,
+    animation: (Platform.OS === 'ios' ? 'default' : 'slide_from_bottom') as any,
     gestureDirection: 'vertical' as const,
     gestureEnabled: true,
     headerShown: false,
@@ -87,34 +98,34 @@ function RootLayoutNav() {
       <Stack screenOptions={screenOptions}>
         {/* Main Tabs */}
         <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
-        
+
         <Stack.Screen name="+not-found" />
-        
+
         {/* Modals & Menus */}
         <Stack.Screen name="menu" options={modalScreenOptions} />
         <Stack.Screen name="add-listing" options={modalScreenOptions} />
         <Stack.Screen name="select-option" options={modalScreenOptions} />
         <Stack.Screen name="filter" options={modalScreenOptions} />
         <Stack.Screen name="comment" options={modalScreenOptions} />
-        
+
         {/* Auth */}
-        <Stack.Screen 
-          name="auth/login" 
-          options={{ 
+        <Stack.Screen
+          name="auth/login"
+          options={{
             ...modalScreenOptions,
             headerShown: true,
             title: 'Giriş',
             headerStyle: { backgroundColor: colors.card },
             headerTintColor: colors.text,
             headerTitleStyle: { fontFamily: 'RethinkSans_700Bold' },
-          }} 
+          }}
         />
 
         {/* Standard Screens (Will inherit slide_from_right/default) */}
         <Stack.Screen name="calculator" />
         <Stack.Screen name="brands/index" />
         <Stack.Screen name="models/index" />
-        
+
         {/* Admin Screens */}
         <Stack.Screen name="admin/settings" />
         <Stack.Screen name="admin/features" />
@@ -124,7 +135,7 @@ function RootLayoutNav() {
         <Stack.Screen name="admin/edit-listing/[id]" />
         <Stack.Screen name="admin/edit-plate/[id]" />
         <Stack.Screen name="admin/vip-listings" />
-        
+
         {/* Detail Screens */}
         <Stack.Screen name="listing/[id]" />
         <Stack.Screen name="plate/[id]" />
@@ -163,6 +174,7 @@ export default function RootLayout() {
             <AuthProvider>
               <ToastProvider>
                 <RootLayoutNav />
+                <InstagramPopup />
               </ToastProvider>
             </AuthProvider>
           </SettingsProvider>

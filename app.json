@@ -2,19 +2,37 @@
   "expo": {
     "name": "Naxçıvan Avto",
     "slug": "naxcivan-avto",
-    "version": "1.0.1",
+    "version": "1.0.6",
     "orientation": "portrait",
+    "icon": "./icons/android-icon.png",
     "scheme": "naxcivan-avto",
     "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./icons/splash-light.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff",
+      "dark": {
+        "image": "./icons/splash-dark.png",
+        "backgroundColor": "#121212"
+      }
+    },
     "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.naxcivan.avto"
+      "bundleIdentifier": "com.naxavtoapp.novoloji",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
-      "package": "com.naxcivan.avto",
+      "package": "com.naxavtoapp.novoloji",
+      "adaptiveIcon": {
+        "foregroundImage": "./icons/android-icon.png",
+        "backgroundColor": "#ffffff"
+      },
       "softwareKeyboardLayoutMode": "pan",
-      "versionCode": 3
+      "googleServicesFile": "./google-services.json",
+      "versionCode": 9
     },
     "web": {
       "bundler": "metro",
@@ -29,6 +47,7 @@
           "android": {
             "compileSdkVersion": 35,
             "targetSdkVersion": 35,
+            "minSdkVersion": 24,
             "buildToolsVersion": "35.0.0",
             "enableShrinkResourcesInReleaseBuilds": true,
             "enableProguardInReleaseBuilds": true
@@ -41,6 +60,14 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "38110a1a-4c6a-4e2a-840a-8abfc3baa335"
+      }
     }
   }
 }
