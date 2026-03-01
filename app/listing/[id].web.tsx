@@ -61,6 +61,9 @@ export default function WebListingDetail() {
     const fetchAll = async () => {
         setLoading(true);
         try {
+            // Increment views
+            supabase.rpc('increment_listing_views', { row_id: listingId }).then();
+
             const { data } = await supabase.from('listings').select('*').eq('id', listingId).single();
             if (data) {
                 setListing(data as Listing);
@@ -137,7 +140,7 @@ export default function WebListingDetail() {
     const formattedPrice = listing.price.toLocaleString().replace(/,/g, '.');
 
     const specs = [
-        { label: 'İl', value: listing.year, icon: Calendar },
+        { label: 'Buraxılış', value: listing.year, icon: Calendar },
         { label: 'Mühərrik', value: listing.engine ? `${listing.engine} L` : null, icon: Settings },
         { label: 'At gücü', value: listing.horsepower ? `${listing.horsepower} a.g.` : null, icon: Settings },
         { label: 'Kilometr', value: listing.mileage ? `${listing.mileage} km` : null, icon: Gauge },
@@ -232,6 +235,7 @@ export default function WebListingDetail() {
                                     {listing.is_credit && <View style={[styles.badge, { backgroundColor: '#007AFF' }]}><Text style={styles.badgeText}>Kredit</Text></View>}
                                     {listing.is_barter && <View style={[styles.badge, { backgroundColor: '#FF9500' }]}><Text style={styles.badgeText}>Barter</Text></View>}
                                     {listing.is_new && <View style={[styles.badge, { backgroundColor: '#34C759' }]}><Text style={styles.badgeText}>Yeni</Text></View>}
+                                    {listing.is_urgent && <View style={[styles.badge, { backgroundColor: '#FF3B30' }]}><Text style={styles.badgeText}>Təcili</Text></View>}
                                 </View>
                                 <Text style={[styles.listingTitle, { color: colors.text, fontSize: 20, lineHeight: 26 }]}>
                                     {listing.make} {listing.model} {listing.year}
@@ -453,6 +457,7 @@ export default function WebListingDetail() {
                                     {listing.is_credit && <View style={[styles.badge, { backgroundColor: '#007AFF' }]}><Text style={styles.badgeText}>Kredit</Text></View>}
                                     {listing.is_barter && <View style={[styles.badge, { backgroundColor: '#FF9500' }]}><Text style={styles.badgeText}>Barter</Text></View>}
                                     {listing.is_new && <View style={[styles.badge, { backgroundColor: '#34C759' }]}><Text style={styles.badgeText}>Yeni</Text></View>}
+                                    {listing.is_urgent && <View style={[styles.badge, { backgroundColor: '#FF3B30' }]}><Text style={styles.badgeText}>Təcili</Text></View>}
                                 </View>
 
                                 {/* Title & Price */}

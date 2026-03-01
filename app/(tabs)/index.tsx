@@ -16,7 +16,7 @@ import {
   FlatList,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { SlidersHorizontal, Sun, Moon, Calculator, Wallet, Percent, ArrowLeftRight, X } from 'lucide-react-native';
+import { SlidersHorizontal, Sun, Moon, Calculator, Wallet, Percent, ArrowLeftRight, X, Zap, Gift } from 'lucide-react-native';
 import { CarCard } from '../../components/CarCard';
 import { PlateCard } from '../../components/PlateCard';
 import { BannerSlider } from '../../components/BannerSlider';
@@ -32,7 +32,7 @@ import { Listing, Plate, Brand, Model, AdvancedFilters } from '../../types';
 
 const { width } = Dimensions.get('window');
 
-type FilterType = 'cash' | 'credit' | 'barter';
+type FilterType = 'cash' | 'credit' | 'barter' | 'urgent';
 
 // Improved Looping Typewriter Component
 const Typewriter = ({ words, color, style }: { words: string[], color: string, style?: TextStyle }) => {
@@ -106,7 +106,28 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeCompetition, setActiveCompetition] = useState<any>(null);
 
+  const fetchActiveCompetition = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('competitions')
+        .select('*')
+        .eq('is_active', true)
+        .gte('end_date', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!error && data) {
+        setActiveCompetition(data);
+      } else {
+        setActiveCompetition(null);
+      }
+    } catch (err) {
+      setActiveCompetition(null);
+    }
+  };
   const flatListRef = React.useRef<FlatList>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -135,7 +156,7 @@ export default function HomeScreen() {
       // Optimized query: Select only needed fields
       let query = supabase
         .from('listings')
-        .select('id, make, model, price, currency, image_url, images, location, created_at, mileage, engine, year, is_credit, is_barter, is_vip, is_new', { count: 'exact' })
+        .select('id, make, model, price, currency, image_url, images, location, created_at, mileage, engine, year, is_credit, is_barter, is_vip, is_urgent, is_new', { count: 'exact' })
         .eq('status', 'approved')
         .order('is_vip', { ascending: false }) // VIPs first
         .order('created_at', { ascending: false });
@@ -145,6 +166,7 @@ export default function HomeScreen() {
 
       if (activeFilterType === 'credit') query = query.eq('is_credit', true);
       if (activeFilterType === 'barter') query = query.eq('is_barter', true);
+      if (activeFilterType === 'urgent') query = query.eq('is_urgent', true);
 
       if (advancedFilters.minPrice) query = query.gte('price', parseFloat(advancedFilters.minPrice));
       if (advancedFilters.maxPrice) query = query.lte('price', parseFloat(advancedFilters.maxPrice));
@@ -235,6 +257,7 @@ export default function HomeScreen() {
   useEffect(() => {
     loadFavorites();
     fetchPlates();
+    fetchActiveCompetition();
   }, []);
 
   useEffect(() => {
@@ -263,6 +286,7 @@ export default function HomeScreen() {
     if (activeTopTab === 'transport') fetchListings(true);
     else fetchPlates(true);
     loadFavorites();
+    fetchActiveCompetition();
   }, [activeTopTab]);
 
   const handleBrandSelect = () => {
@@ -457,10 +481,32 @@ export default function HomeScreen() {
 
       {activeTopTab === 'transport' && (
         <View>
+          {activeCompetition && (
+            <TouchableOpacity
+              style={[styles.competitionBanner, { backgroundColor: isDark ? '#333' : '#F2F2F7', borderColor: colors.primary, borderWidth: 1 }]}
+              onPress={() => router.push('/competition')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.competitionContent}>
+                <View style={[styles.competitionIconBg, { backgroundColor: colors.primary + '20' }]}>
+                  <Gift size={24} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={[styles.competitionTitle, { color: colors.text }]}>{activeCompetition.title || 'Böyük Yarışma Başladı!'}</Text>
+                  <Text style={[styles.competitionSubtitle, { color: colors.textSecondary }]}>Hədiyyələr qazanmaq üçün dərhal qatıl.</Text>
+                </View>
+                <View style={[styles.competitionAction, { backgroundColor: colors.primary }]}>
+                  <Text style={{ color: '#FFF', fontFamily: 'RethinkSans_700Bold', fontSize: 12 }}>Qatıl</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          )}
+
           <View style={styles.quickFiltersContainer}>
             <LargeFilterButton type="cash" label="Nağd" icon={Wallet} activeColor="#FF3B30" />
             <LargeFilterButton type="credit" label="Kredit" icon={Percent} activeColor="#AF52DE" />
             <LargeFilterButton type="barter" label="Barter" icon={ArrowLeftRight} activeColor="#34C759" />
+            <LargeFilterButton type="urgent" label="Təcili" icon={Zap} activeColor="#FF3B30" />
           </View>
 
 
@@ -580,6 +626,7 @@ export default function HomeScreen() {
                 isBarter={car.is_barter}
                 isVip={car.is_vip}
                 isNew={car.is_new}
+                isUrgent={car.is_urgent}
                 isFavorite={favorites.includes(car.id)}
                 onToggleFavorite={handleToggleFavorite}
                 onPress={(id) => router.push(`/listing/${id}`)}
@@ -797,6 +844,39 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 6,
+  },
+
+  // Competition Banner
+  competitionBanner: {
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderRadius: 20,
+    padding: 12,
+  },
+  competitionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  competitionIconBg: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  competitionTitle: {
+    fontSize: 16,
+    fontFamily: 'RethinkSans_800ExtraBold',
+    marginBottom: 4,
+  },
+  competitionSubtitle: {
+    fontSize: 12,
+    fontFamily: 'RethinkSans_500Medium',
+  },
+  competitionAction: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
   },
 
   // Large Quick Filters

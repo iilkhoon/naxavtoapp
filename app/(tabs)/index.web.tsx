@@ -7,7 +7,7 @@ import {
 import {
     Search, X, Wallet, Percent, ArrowLeftRight,
     TrendingUp, Star, Zap, ChevronRight, Crown, Heart,
-    SlidersHorizontal, Calculator
+    SlidersHorizontal, Calculator, AlertTriangle
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,7 +23,7 @@ import { WebSideBanners } from '../../components/WebSideBanners';
 import { Pagination } from '../../components/Pagination';
 import { PlateCard } from '../../components/PlateCard'; // Added PlateCard import
 
-type FilterType = 'cash' | 'credit' | 'barter';
+type FilterType = 'cash' | 'credit' | 'barter' | 'urgent';
 
 import { StyleProp } from 'react-native';
 const Typewriter = ({ words, color, style }: { words: string[], color: string, style?: StyleProp<TextStyle> }) => {
@@ -130,6 +130,14 @@ const CarCard = ({ car, isFavorite, onToggleFavorite, onPress }: any) => {
                     </View>
                 )}
 
+                {/* Urgent badge */}
+                {car.is_urgent && (
+                    <View style={[styles.vipBadge, { backgroundColor: 'rgba(255,59,48,0.85)', borderColor: '#FF3B30', bottom: car.is_vip ? 34 : 8 }]}>
+                        <AlertTriangle size={9} color="#FFF" fill="#FFF" />
+                        <Text style={{ color: '#FFF', fontSize: 8, fontFamily: 'RethinkSans_800ExtraBold', marginLeft: 3 }}>TƏCİLİ</Text>
+                    </View>
+                )}
+
                 {/* Price overlay bottom-right */}
                 <View style={styles.priceOverlay}>
                     <Text style={styles.priceOverlayText}>
@@ -177,6 +185,7 @@ export default function WebHomeScreen() {
 
     const [listings, setListings] = useState<Listing[]>([]);
     const [vipListings, setVipListings] = useState<Listing[]>([]);
+    const [urgentListings, setUrgentListings] = useState<Listing[]>([]);
     const [favorites, setFavorites] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -272,13 +281,14 @@ export default function WebHomeScreen() {
             setLoading(true);
             let query = supabase
                 .from('listings')
-                .select('id, make, model, price, currency, image_url, images, location, created_at, mileage, engine, year, is_credit, is_barter, is_vip, is_new', { count: 'exact' })
+                .select('id, make, model, price, currency, image_url, images, location, created_at, mileage, engine, year, is_credit, is_barter, is_vip, is_urgent, is_new', { count: 'exact' })
                 .eq('status', 'approved')
                 .order('is_vip', { ascending: false })
                 .order('created_at', { ascending: false });
 
             if (activeFilterType === 'credit') query = query.eq('is_credit', true);
             if (activeFilterType === 'barter') query = query.eq('is_barter', true);
+            if (activeFilterType === 'urgent') query = query.eq('is_urgent', true);
             if (searchQuery.trim()) query = query.or(`make.ilike.%${searchQuery}%,model.ilike.%${searchQuery}%`);
             if (selectedBrand) query = query.eq('make', selectedBrand.name);
             if (selectedModel) query = query.eq('model', selectedModel.name);
@@ -294,6 +304,7 @@ export default function WebHomeScreen() {
             if (data) {
                 setListings(data as Listing[]);
                 setVipListings((data as Listing[]).filter(l => l.is_vip).slice(0, 6));
+                setUrgentListings((data as Listing[]).filter(l => l.is_urgent).slice(0, 6));
                 if (count !== null) setTotalPages(Math.ceil(count / PAGE_SIZE));
             }
         } catch (err) { console.error(err); }
@@ -356,6 +367,7 @@ export default function WebHomeScreen() {
         { type: 'cash' as FilterType, label: 'Hamısı', icon: Wallet, color: '#FF3B30' },
         { type: 'credit' as FilterType, label: 'Kredit', icon: Percent, color: '#AF52DE' },
         { type: 'barter' as FilterType, label: 'Barter', icon: ArrowLeftRight, color: '#FF9500' },
+        { type: 'urgent' as FilterType, label: 'Təcili', icon: Zap, color: '#FF3B30' },
     ];
 
     return (
@@ -570,6 +582,40 @@ export default function WebHomeScreen() {
                         images={[settings.home_banner_url, settings.home_banner_url_2, settings.home_banner_url_3]}
                         height={isMobile ? 120 : 180}
                     />
+                </View>
+            )}
+
+            {/* ═══ URGENT LISTINGS ════════════════════════════════ */}
+            {urgentListings.length > 0 && (
+                <View style={[styles.vipSection, { backgroundColor: isDark ? '#1A0505' : '#FFF5F5', borderTopColor: isDark ? '#3C1515' : '#FFE5E5', borderBottomColor: isDark ? '#3C1515' : '#FFE5E5' }]}>
+                    <View style={styles.sectionWrap}>
+                        <View style={styles.sectionHeaderRow}>
+                            <View style={styles.sectionTitleGroup}>
+                                <AlertTriangle size={20} color="#FF3B30" fill="#FF3B30" />
+                                <Text style={[styles.sectionTitle, { color: colors.text }]}>Təcili Elanlar</Text>
+                                <View style={[styles.newBadge, { backgroundColor: '#FF3B30' }]}>
+                                    <Text style={styles.newBadgeText}>TƏCİLİ</Text>
+                                </View>
+                            </View>
+                            <TouchableOpacity style={styles.seeAllBtn} onPress={() => setActiveFilterType('cash')}>
+                                <Text style={[styles.seeAllText, { color: colors.primary }]}>Hamısına bax</Text>
+                                <ChevronRight size={16} color={colors.primary} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: isMobile ? -16 : -32 }} contentContainerStyle={{ paddingHorizontal: isMobile ? 16 : 32, gap: isMobile ? 12 : 16 }}>
+                            {urgentListings.map(car => (
+                                <View key={car.id} style={styles.vipCardWrap}>
+                                    <CarCard
+                                        car={car}
+                                        isFavorite={favorites.includes(car.id)}
+                                        onToggleFavorite={handleToggleFavorite}
+                                        onPress={(id: string) => router.push(`/listing/${id}`)}
+                                    />
+                                </View>
+                            ))}
+                        </ScrollView>
+                    </View>
                 </View>
             )}
 

@@ -140,9 +140,9 @@ export default function SendNotificationScreen() {
 
           {/* Preview Card */}
           <MotiView
-            from={{ opacity: 0, translateY: 20 }}
+            from={{ opacity: 0, translateY: 10 }}
             animate={{ opacity: 1, translateY: 0 }}
-            transition={{ type: 'spring' }}
+            transition={{ type: 'timing', duration: 450 }}
             style={styles.previewSection}
           >
             <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Görünüş</Text>
@@ -223,7 +223,8 @@ export default function SendNotificationScreen() {
             <MotiView
               from={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              style={[styles.successCard, { backgroundColor: 'rgba(76, 217, 100, 0.1)', borderColor: '#4CD964' }]}
+              transition={{ type: 'timing', duration: 400 }}
+              style={[styles.successCard, { backgroundColor: colors.card, borderColor: '#4CD964' }]}
             >
               <CheckCircle size={24} color="#4CD964" style={{ marginRight: 10 }} />
               <Text style={[styles.successText, { color: '#4CD964' }]}>

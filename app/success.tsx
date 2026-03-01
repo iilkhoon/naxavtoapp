@@ -15,7 +15,7 @@ export default function SuccessScreen() {
       <MotiView
         from={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: 'spring', damping: 12 }}
+        transition={{ type: 'timing', duration: 450 }}
         style={[styles.iconCircle, { backgroundColor: colors.success }]}
       >
         <Check size={50} color="#FFF" strokeWidth={3} />

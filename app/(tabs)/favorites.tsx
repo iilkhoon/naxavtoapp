@@ -116,7 +116,7 @@ export default function FavoritesScreen() {
               <MotiView
                 from={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                transition={{ type: 'spring', damping: 15 }}
+                transition={{ type: 'timing', duration: 400 }}
                 style={[styles.iconCircle, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7' }]}
               >
                 <Heart size={60} color="#FF3B30" fill="#FF3B30" />

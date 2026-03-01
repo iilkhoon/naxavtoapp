@@ -95,7 +95,7 @@ export default function VipListingsScreen() {
     <MotiView
       from={{ opacity: 0, translateY: 10 }}
       animate={{ opacity: 1, translateY: 0 }}
-      transition={{ delay: index * 50 }}
+      transition={{ type: 'timing', duration: 450, delay: index * 50 }}
     >
       <View style={[
         styles.item,

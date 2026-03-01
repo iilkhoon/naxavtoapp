@@ -122,7 +122,7 @@ export default function ContactScreen() {
         <MotiView
           from={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'spring' }}
+          transition={{ type: 'timing', duration: 400 }}
           style={styles.header}
         >
           <Text style={[styles.title, { color: colors.text }]}>Əlaqə Mərkəzi</Text>

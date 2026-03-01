@@ -88,6 +88,9 @@ export default function ListingDetailScreen() {
 
     const fetchListingDetails = async () => {
         try {
+            // Increment views
+            supabase.rpc('increment_listing_views', { row_id: listingId }).then();
+
             const { data, error } = await supabase.from('listings').select('*').eq('id', listingId).single();
             if (error) throw error;
             setListing(data as Listing);
@@ -391,6 +394,12 @@ export default function ListingDetailScreen() {
                                     <Text style={[styles.priceTagText, { color: '#34C759' }]}>Barter</Text>
                                 </View>
                             )}
+                            {listing.is_urgent && (
+                                <View style={[styles.priceTag, { backgroundColor: 'rgba(255,59,48,0.1)' }]}>
+                                    <Zap size={14} color="#FF3B30" style={{ marginRight: 4 }} />
+                                    <Text style={[styles.priceTagText, { color: '#FF3B30' }]}>Təcili Satılır</Text>
+                                </View>
+                            )}
                         </View>
                     </View>
 
@@ -438,6 +447,7 @@ export default function ListingDetailScreen() {
 
                     <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 24 }]}>Göstəricilər</Text>
                     <View style={styles.specsGrid}>
+                        <SpecItem icon={Calendar} label="Buraxılış" value={`${listing.year}`} />
                         <SpecItem icon={Gauge} label="Yürüş" value={`${listing.mileage} km`} />
                         <SpecItem icon={Car} label="Ban növü" value={listing.body_type} />
                         <SpecItem icon={Palette} label="Rəng" value={listing.color} />

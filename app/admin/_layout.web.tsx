@@ -10,10 +10,12 @@ import {
     Users,
     Bell,
     Star,
+    Zap,
     LogOut,
     Menu,
     X,
-    MessageSquare
+    MessageSquare,
+    PieChart
 } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { WebHeader } from '../../components/WebHeader.web';
@@ -59,8 +61,10 @@ export default function AdminLayoutWeb() {
     }
 
     const menuItems = [
+        { title: 'Statistika', path: '/admin/statistics', icon: PieChart },
         { title: 'Elanlar', path: '/admin/listings', icon: LayoutDashboard },
         { title: 'VIP Elanlar', path: '/admin/vip-listings', icon: Star },
+        { title: 'Təcili Elanlar', path: '/admin/urgent-listings', icon: Zap },
         { title: 'Reklam İdarəetməsi', path: '/admin/banners', icon: ImageIcon },
         { title: 'Marka/Model & Şəhər', path: '/admin/features', icon: MessageSquare },
         { title: 'İstifadəçilər', path: '/admin/add-user', icon: Users },

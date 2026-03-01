@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  ActivityIndicator, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
   StatusBar,
   Linking,
   Share,
@@ -14,10 +14,10 @@ import {
   Image
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { 
-  ArrowLeft, 
-  Share2, 
-  Phone, 
+import {
+  ArrowLeft,
+  Share2,
+  Phone,
   Clock,
   MapPin,
   ShieldCheck,
@@ -41,7 +41,7 @@ export default function PlateDetailScreen() {
   const { colors, isDark } = useTheme();
   const { settings } = useSettings();
   const { showToast } = useToast();
-  
+
   const [plate, setPlate] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -51,6 +51,9 @@ export default function PlateDetailScreen() {
 
   const fetchPlateDetails = async () => {
     try {
+      // Increment views
+      supabase.rpc('increment_plate_views', { row_id: id }).then();
+
       const { data, error } = await supabase
         .from('plates')
         .select('*')
@@ -68,7 +71,7 @@ export default function PlateDetailScreen() {
 
   const handleShare = async () => {
     const message = `Naxavto-da bu nömrəyə bax: ${plate.region}-${plate.series}-${plate.number} - ${plate.price} AZN`;
-    
+
     try {
       if (Platform.OS === 'web') {
         if (navigator.share) {
@@ -98,8 +101,8 @@ export default function PlateDetailScreen() {
 
   const handleCopyId = async () => {
     if (plate?.short_id || plate?.id) {
-        await Clipboard.setStringAsync(plate.short_id || plate.id);
-        showToast('Elan ID kopyalandı', 'success');
+      await Clipboard.setStringAsync(plate.short_id || plate.id);
+      showToast('Elan ID kopyalandı', 'success');
     }
   };
 
@@ -111,7 +114,7 @@ export default function PlateDetailScreen() {
     .filter(k => k.startsWith('phone_') && settings[k])
     .sort()
     .map(k => settings[k]);
-  
+
   if (adminPhones.length === 0 && settings.phone) adminPhones.push(settings.phone);
   if (adminPhones.length === 0) adminPhones.push('+994 50 123 45 67'); // Default fallback
 
@@ -150,134 +153,134 @@ export default function PlateDetailScreen() {
         </AnimatedPressable>
       </View>
 
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {/* Visual Plate Display */}
-        <MotiView 
-            from={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ type: 'spring' }}
-            style={styles.plateContainer}
+        <MotiView
+          from={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'timing', duration: 400 }}
+          style={styles.plateContainer}
         >
-            <PlateVisual 
-                region={plate.region} 
-                series={plate.series} 
-                number={plate.number} 
-                scale={1.1}
-            />
-            
-            {plate.is_vip && (
-                <View style={styles.vipTag}>
-                    <Text style={styles.vipText}>VIP Nömrə</Text>
-                </View>
-            )}
+          <PlateVisual
+            region={plate.region}
+            series={plate.series}
+            number={plate.number}
+            scale={1.1}
+          />
+
+          {plate.is_vip && (
+            <View style={styles.vipTag}>
+              <Text style={styles.vipText}>VIP Nömrə</Text>
+            </View>
+          )}
         </MotiView>
 
         {/* Info Cards */}
-        <MotiView 
-            from={{ translateY: 20, opacity: 0 }}
-            animate={{ translateY: 0, opacity: 1 }}
-            delay={200}
-            style={styles.detailsContainer}
+        <MotiView
+          from={{ translateY: 20, opacity: 0 }}
+          animate={{ translateY: 0, opacity: 1 }}
+          delay={200}
+          style={styles.detailsContainer}
         >
-            {/* ID Display - Now using Short ID */}
-            <TouchableOpacity 
-                style={[styles.idContainer, { backgroundColor: isDark ? '#333' : '#F3F4F6' }]} 
-                onPress={handleCopyId}
-            >
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Hash size={14} color={colors.textSecondary} style={{ marginRight: 6 }} />
-                    <Text style={[styles.idText, { color: colors.textSecondary }]}>
-                        Elan ID: {plate.short_id || plate.id.split('-')[0].toUpperCase()}
-                    </Text>
-                </View>
-                <Copy size={14} color={colors.textSecondary} />
-            </TouchableOpacity>
+          {/* ID Display - Now using Short ID */}
+          <TouchableOpacity
+            style={[styles.idContainer, { backgroundColor: isDark ? '#333' : '#F3F4F6' }]}
+            onPress={handleCopyId}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Hash size={14} color={colors.textSecondary} style={{ marginRight: 6 }} />
+              <Text style={[styles.idText, { color: colors.textSecondary }]}>
+                Elan ID: {plate.short_id || plate.id.split('-')[0].toUpperCase()}
+              </Text>
+            </View>
+            <Copy size={14} color={colors.textSecondary} />
+          </TouchableOpacity>
 
-            <View style={[styles.priceCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>Qiymət</Text>
-                <Text style={[styles.priceValue, { color: colors.primary }]}>{plate.price.toLocaleString()} AZN</Text>
+          <View style={[styles.priceCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>Qiymət</Text>
+            <Text style={[styles.priceValue, { color: colors.primary }]}>{plate.price.toLocaleString()} AZN</Text>
+          </View>
+
+          <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.infoRow}>
+              <Clock size={18} color={colors.textSecondary} />
+              <Text style={[styles.infoText, { color: colors.text }]}>
+                Elan tarixi: {format(new Date(plate.created_at), 'dd.MM.yyyy')}
+              </Text>
+            </View>
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <View style={styles.infoRow}>
+              <MapPin size={18} color={colors.textSecondary} />
+              <Text style={[styles.infoText, { color: colors.text }]}>Şəhər: Naxçıvan</Text>
+            </View>
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <View style={styles.infoRow}>
+              <ShieldCheck size={18} color={Colors.dark.success} />
+              <Text style={[styles.infoText, { color: Colors.dark.success }]}>
+                Yoxlanılmış Satıcı
+              </Text>
+            </View>
+          </View>
+
+          {/* Seller / Contact Section */}
+          <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 16 }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 12 }]}>Satıcı</Text>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+              <View style={{ marginRight: 12, position: 'relative' }}>
+                <Image
+                  source={{ uri: logoUrl || 'https://via.placeholder.com/50' }}
+                  style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: isDark ? 'transparent' : '#F8F9FA' }}
+                  resizeMode="contain"
+                />
+                <View style={{ position: 'absolute', bottom: 0, right: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: '#4CD964', borderWidth: 2, borderColor: '#FFF' }} />
+              </View>
+              <View>
+                <Text style={[styles.sellerName, { color: colors.text }]}>{settings.seller_name || 'Naxçıvan Avto'}</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Rəsmi Satıcı</Text>
+              </View>
             </View>
 
-            <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <View style={styles.infoRow}>
-                    <Clock size={18} color={colors.textSecondary} />
-                    <Text style={[styles.infoText, { color: colors.text }]}>
-                        Elan tarixi: {format(new Date(plate.created_at), 'dd.MM.yyyy')}
-                    </Text>
-                </View>
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
-                <View style={styles.infoRow}>
-                    <MapPin size={18} color={colors.textSecondary} />
-                    <Text style={[styles.infoText, { color: colors.text }]}>Şəhər: Naxçıvan</Text>
-                </View>
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
-                <View style={styles.infoRow}>
-                    <ShieldCheck size={18} color={Colors.dark.success} />
-                    <Text style={[styles.infoText, { color: Colors.dark.success }]}>
-                        Yoxlanılmış Satıcı
-                    </Text>
-                </View>
+            <View style={styles.contactList}>
+              {adminPhones.map((phone, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[styles.contactItem, { backgroundColor: isDark ? '#333' : '#F3F4F6' }]}
+                  onPress={() => handleCall(phone)}
+                >
+                  <Phone size={18} color={colors.primary} />
+                  <Text style={[styles.contactText, { color: colors.text }]}>{phone}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
+          </View>
 
-            {/* Seller / Contact Section */}
-            <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 16 }]}>
-                <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 12 }]}>Satıcı</Text>
-                
-                <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 16}}>
-                    <View style={{marginRight: 12, position: 'relative'}}>
-                        <Image 
-                            source={{ uri: logoUrl || 'https://via.placeholder.com/50' }} 
-                            style={{width: 50, height: 50, borderRadius: 25, backgroundColor: isDark ? 'transparent' : '#F8F9FA'}} 
-                            resizeMode="contain"
-                        />
-                        <View style={{position: 'absolute', bottom: 0, right: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: '#4CD964', borderWidth: 2, borderColor: '#FFF'}} />
-                    </View>
-                    <View>
-                        <Text style={[styles.sellerName, { color: colors.text }]}>{settings.seller_name || 'Naxçıvan Avto'}</Text>
-                        <Text style={{color: colors.textSecondary, fontSize: 12}}>Rəsmi Satıcı</Text>
-                    </View>
-                </View>
-                
-                <View style={styles.contactList}>
-                    {adminPhones.map((phone, index) => (
-                        <TouchableOpacity 
-                            key={index} 
-                            style={[styles.contactItem, { backgroundColor: isDark ? '#333' : '#F3F4F6' }]} 
-                            onPress={() => handleCall(phone)}
-                        >
-                            <Phone size={18} color={colors.primary} />
-                            <Text style={[styles.contactText, { color: colors.text }]}>{phone}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
+          {plate.description ? (
+            <View style={[styles.descriptionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Açıqlama</Text>
+              <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>{plate.description}</Text>
             </View>
+          ) : null}
 
-            {plate.description ? (
-                <View style={[styles.descriptionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Text style={[styles.sectionTitle, { color: colors.text }]}>Açıqlama</Text>
-                    <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>{plate.description}</Text>
-                </View>
-            ) : null}
+          {/* Footer Info */}
+          <View style={styles.footerInfo}>
+            <Text style={[styles.disclaimerText, { color: colors.textSecondary }]}>
+              Avtomobil və nömrə haqqında ətraflı məlumat üçün bizimlə əlaqə saxlayın!
+            </Text>
+            <Text style={[styles.devCredit, { color: colors.textSecondary }]}>
+              İlkin Rzayev / Novoloji / +994 55 466 66 63
+            </Text>
+          </View>
 
-            {/* Footer Info */}
-            <View style={styles.footerInfo}>
-                <Text style={[styles.disclaimerText, { color: colors.textSecondary }]}>
-                    Avtomobil və nömrə haqqında ətraflı məlumat üçün bizimlə əlaqə saxlayın!
-                </Text>
-                <Text style={[styles.devCredit, { color: colors.textSecondary }]}>
-                    İlkin Rzayev / Novoloji / +994 55 466 66 63
-                </Text>
-            </View>
-
-            <View style={{ height: 100 }} />
+          <View style={{ height: 100 }} />
         </MotiView>
       </ScrollView>
 
       {/* Footer Actions */}
-      <MotiView 
+      <MotiView
         from={{ translateY: 100 }}
         animate={{ translateY: 0 }}
         delay={300}
@@ -322,7 +325,7 @@ const styles = StyleSheet.create({
   footer: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingVertical: 16, paddingBottom: Platform.OS === 'ios' ? 34 : 16, flexDirection: 'row', gap: 12, borderTopWidth: 1 },
   callButton: { flex: 1, height: 56, borderRadius: 28, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   callButtonText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
-  
+
   // Footer Info Styles
   footerInfo: {
     marginTop: 20,

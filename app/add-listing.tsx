@@ -69,6 +69,7 @@ export default function AddListingScreen() {
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const [isCredit, setIsCredit] = useState(false);
   const [isBarter, setIsBarter] = useState(false);
+  const [isUrgent, setIsUrgent] = useState(false);
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
 
   const [plateRegion, setPlateRegion] = useState('');
@@ -109,7 +110,7 @@ export default function AddListingScreen() {
     setMake(''); setModel(''); setYear(''); setPrice(''); setMileage(''); setEngine(''); setHorsepower(''); setLocation('');
     setDescription(''); setContactPhone('+994'); setSellerName(''); setVinCode(''); setBodyType('');
     setColor(''); setGearbox(''); setTransmission(''); setMarket(''); setFuelType(''); setIsNew(false);
-    setSelectedImages([]); setIsCredit(false); setIsBarter(false); setSelectedFeatures([]);
+    setSelectedImages([]); setIsCredit(false); setIsBarter(false); setIsUrgent(false); setSelectedFeatures([]);
     setPlateRegion(''); setPlateSeries(''); setPlateNumber(''); setPlatePrice(''); setPlateDesc('');
     setPlateContact('+994'); setPlateSellerName(''); setPlateIsVip(false);
   };
@@ -213,7 +214,7 @@ export default function AddListingScreen() {
       const mainImageUrl = uploadedImageUrls.length > 0 ? uploadedImageUrls[0] : null;
       const status = user ? 'approved' : 'pending';
       const { data, error } = await supabase.from('listings').insert({
-        make, model, year: parseInt(year) || 2020, price: parseFloat(price) || 0, mileage: parseInt(mileage) || 0, engine: engine || '2.0', horsepower: parseInt(horsepower) || null, location, image_url: mainImageUrl, images: uploadedImageUrls, is_credit: isCredit, is_barter: isBarter, title: `${make} ${model}`, currency: 'AZN', body_type: bodyType, color, gearbox, transmission, market, fuel_type: fuelType, is_new: isNew, description: description || '', contact_phone: contactPhone || '+994', seller_name: sellerName, vin_code: vinCode.toUpperCase(), status, features: selectedFeatures
+        make, model, year: parseInt(year) || 2020, price: parseFloat(price) || 0, mileage: parseInt(mileage) || 0, engine: engine || '2.0', horsepower: parseInt(horsepower) || null, location, image_url: mainImageUrl, images: uploadedImageUrls, is_credit: isCredit, is_barter: isBarter, is_urgent: isUrgent, title: `${make} ${model}`, currency: 'AZN', body_type: bodyType, color, gearbox, transmission, market, fuel_type: fuelType, is_new: isNew, description: description || '', contact_phone: contactPhone || '+994', seller_name: sellerName, vin_code: vinCode.toUpperCase(), status, features: selectedFeatures
       }).select().single();
       if (error) throw error;
       if (data && data.short_id) setCreatedShortId(data.short_id);
@@ -405,7 +406,8 @@ export default function AddListingScreen() {
                   </View>
                   <View style={[styles.togglesContainer, { backgroundColor: colors.card, marginBottom: 20 }]}>
                     <View style={[styles.toggleRow, { borderBottomColor: colors.border }]}><Text style={[styles.toggleLabel, { color: colors.text }]}>Kreditlə mümkündür?</Text><Switch value={isCredit} onValueChange={setIsCredit} trackColor={{ false: '#333', true: colors.primary }} /></View>
-                    <View style={[styles.toggleRow, { borderBottomWidth: 0 }]}><Text style={[styles.toggleLabel, { color: colors.text }]}>Barter mümkündür?</Text><Switch value={isBarter} onValueChange={setIsBarter} trackColor={{ false: '#333', true: colors.primary }} /></View>
+                    <View style={[styles.toggleRow, { borderBottomColor: colors.border }]}><Text style={[styles.toggleLabel, { color: colors.text }]}>Barter mümkündür?</Text><Switch value={isBarter} onValueChange={setIsBarter} trackColor={{ false: '#333', true: colors.primary }} /></View>
+                    <View style={[styles.toggleRow, { borderBottomWidth: 0 }]}><Text style={[styles.toggleLabel, { color: colors.text }]}>🔴 Təcili satılır?</Text><Switch value={isUrgent} onValueChange={setIsUrgent} trackColor={{ false: '#333', true: '#FF3B30' }} /></View>
                   </View>
                   <View style={styles.row}>
                     <View style={[styles.compactFormGroup, { flex: 1, marginRight: 8 }]}><Text style={[styles.label, { color: colors.textSecondary }]}>Ad Soyad</Text><TextInput style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]} placeholder="Ad Soyad" placeholderTextColor={colors.placeholder} value={sellerName} onChangeText={setSellerName} /></View>

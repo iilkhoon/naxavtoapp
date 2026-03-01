@@ -34,7 +34,7 @@ const ActionButton = ({ icon: Icon, color, onPress, bg }: any) => (
 );
 
 const CarItem = memo(({ item, colors, activeStatus, onView, onApprove, onEdit, onDelete }: any) => (
-  <MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}>
+  <MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 450 }} style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}>
     <View style={styles.itemLeft}>
       <Image source={{ uri: item.image_url || 'https://via.placeholder.com/150' }} style={styles.image} />
       <View style={styles.info}>
@@ -52,7 +52,7 @@ const CarItem = memo(({ item, colors, activeStatus, onView, onApprove, onEdit, o
 ));
 
 const PlateItem = memo(({ item, colors, activeStatus, onView, onApprove, onEdit, onDelete }: any) => (
-  <MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}>
+  <MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 450 }} style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}>
     <View style={styles.itemLeft}>
       <View style={styles.plateIcon}><PlateVisual region={item.region} series={item.series} number={item.number} scale={0.35} /></View>
       <View style={styles.info}>

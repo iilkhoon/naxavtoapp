@@ -80,7 +80,9 @@ export default function BannersScreen() {
                 { key: 'favorite_banner_1', label: 'Seçilmişlər Banner 1' }, { key: 'favorite_banner_2', label: 'Seçilmişlər Banner 2' }, { key: 'favorite_banner_3', label: 'Seçilmişlər Banner 3' },
                 { key: 'compare_banner_1', label: 'Müqayisə Banner 1' }, { key: 'compare_banner_2', label: 'Müqayisə Banner 2' }, { key: 'compare_banner_3', label: 'Müqayisə Banner 3' },
                 { key: 'web_left_banner_url', label: 'Sol Veb Banner Şəkli' }, { key: 'web_left_banner_link', label: 'Sol Veb Banner Linki' },
-                { key: 'web_right_banner_url', label: 'Sağ Veb Banner Şəkli' }, { key: 'web_right_banner_link', label: 'Sağ Veb Banner Linki' }
+                { key: 'web_right_banner_url', label: 'Sağ Veb Banner Şəkli' }, { key: 'web_right_banner_link', label: 'Sağ Veb Banner Linki' },
+                { key: 'required_app_version', label: 'Tələb Olunan Versiya (məs: 1.0.7)' },
+                { key: 'update_url', label: 'Yönləndirmə Linki' }
             ];
 
             bannerKeys.forEach(def => { if (!currentSettings.find(s => s.key === def.key)) { currentSettings.push({ key: def.key, value: '', label: def.label }); } });
@@ -114,7 +116,7 @@ export default function BannersScreen() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            const updates = settings.filter(s => s.key.includes('banner') || s.key.includes('startup_popup')).map(item => ({ key: item.key, value: item.value || '', label: item.label }));
+            const updates = settings.filter(s => s.key.includes('banner') || s.key.includes('startup_popup') || s.key === 'required_app_version' || s.key === 'update_url').map(item => ({ key: item.key, value: item.value || '', label: item.label }));
             const { error } = await supabase.from('app_settings').upsert(updates, { onConflict: 'key' });
             if (error) throw error;
             await refreshSettings();
@@ -133,7 +135,11 @@ export default function BannersScreen() {
                 </View>
                 {loading ? (<ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />) : (
                     <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-                        <View style={styles.sectionHeader}><Text style={[styles.sectionTitle, { color: colors.primary }]}>Tətbiq Popupu</Text></View>
+                        <View style={styles.sectionHeader}><Text style={[styles.sectionTitle, { color: colors.primary }]}>Məcburi Güncəlləmə</Text></View>
+                        {settings.filter(s => s.key === 'required_app_version').map((item) => (<InputField key={item.key} item={item} colors={colors} onChange={updateSetting} />))}
+                        {settings.filter(s => s.key === 'update_url').map((item) => (<InputField key={item.key} item={item} colors={colors} onChange={updateSetting} />))}
+
+                        <View style={[styles.sectionHeader, { marginTop: 16 }]}><Text style={[styles.sectionTitle, { color: colors.primary }]}>Tətbiq Popupu</Text></View>
                         {settings.filter(s => s.key === 'startup_popup_enabled').map((item) => (
                             <View key={item.key} style={[styles.inputWrapper, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
                                 <Text style={[styles.label, { color: colors.textSecondary, marginBottom: 0 }]}>{item.label}</Text>

@@ -1,7 +1,7 @@
 import React, { memo, useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Image as RNImage, Dimensions } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { Heart, Crown } from 'lucide-react-native';
+import { Heart, Crown, Zap } from 'lucide-react-native';
 import { MotiView, AnimatePresence } from 'moti';
 import { AnimatedPressable } from './ui/AnimatedPressable';
 import { useTheme } from '../contexts/ThemeContext';
@@ -26,6 +26,7 @@ interface CarCardProps {
   isBarter?: boolean;
   isVip?: boolean;
   isNew?: boolean;
+  isUrgent?: boolean;
   isFavorite?: boolean;
   onToggleFavorite?: (id: string) => void;
   onPress?: (id: string) => void;
@@ -48,6 +49,7 @@ export const CarCard = memo(({
   isBarter,
   isVip,
   isNew,
+  isUrgent,
   isFavorite,
   onToggleFavorite,
   onPress,
@@ -121,6 +123,12 @@ export const CarCard = memo(({
             <View style={[styles.vipBadge, { borderColor: '#FFD700', backgroundColor: isDark ? '#000' : '#FFF' }]}>
               <Crown size={10} color="#FFD700" fill="#FFD700" style={{ marginRight: 3 }} />
               <Text style={[styles.vipText, { color: isDark ? '#FFD700' : '#000' }]}>VIP</Text>
+            </View>
+          )}
+          {isUrgent && (
+            <View style={[styles.vipBadge, { borderColor: '#FF3B30', backgroundColor: 'rgba(255,59,48,0.85)', bottom: isVip ? 36 : 8 }]}>
+              <Zap size={10} color="#FFF" fill="#FFF" style={{ marginRight: 3 }} />
+              <Text style={[styles.vipText, { color: '#FFF' }]}>TƏCİLİ</Text>
             </View>
           )}
         </View>

@@ -16,6 +16,7 @@ export interface Listing {
   is_credit: boolean;
   is_barter: boolean;
   is_vip: boolean;
+  is_urgent: boolean;
   is_new: boolean;
   body_type: string;
   color: string;

@@ -14,7 +14,8 @@ export const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarPro
   const insets = useSafeAreaInsets();
 
   // Floating bottom margin
-  const bottomMargin = Platform.OS === 'ios' && insets.bottom > 0 ? insets.bottom : 24;
+  // Respects safe area bottom on all platforms so it doesn't get covered by the Android system navbar.
+  const bottomMargin = insets.bottom > 0 ? insets.bottom + (Platform.OS === 'android' ? 12 : 0) : 24;
 
   return (
     <View style={[styles.container, { bottom: bottomMargin }]}>
@@ -95,10 +96,15 @@ export const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarPro
             >
               <MotiView
                 animate={{
-                  scale: isFocused ? 1.2 : 1,
-                  translateY: isFocused ? -4 : 0,
+                  scale: isFocused ? 1.15 : 1,
+                  translateY: isFocused ? -2 : 0,
                 }}
-                transition={{ type: 'spring', damping: 12 }}
+                transition={{
+                  type: 'spring',
+                  stiffness: 250,
+                  damping: 20,
+                  mass: 0.8
+                }}
                 style={styles.iconContainer}
               >
                 <Icon
@@ -109,16 +115,18 @@ export const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarPro
                 />
 
                 {/* Minimal Indicator Dot */}
-                {isFocused && (
-                  <MotiView
-                    from={{ opacity: 0, scale: 0 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    style={[
-                      styles.indicatorDot,
-                      { backgroundColor: isDark ? '#FFF' : '#000' }
-                    ]}
-                  />
-                )}
+                <MotiView
+                  animate={{
+                    opacity: isFocused ? 1 : 0,
+                    scale: isFocused ? 1 : 0,
+                    translateY: isFocused ? 0 : 5
+                  }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                  style={[
+                    styles.indicatorDot,
+                    { backgroundColor: isDark ? '#FFF' : '#000' }
+                  ]}
+                />
               </MotiView>
             </TouchableOpacity>
           );

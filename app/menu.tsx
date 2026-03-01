@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Platform, ScrollView, RefreshControl, Dimensions, StatusBar, Image as RNImage } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { X, LogOut, CarFront, Layers, Settings, Palette, FileText, AlertCircle, Hash, Crown, ChevronRight, TrendingUp, ShieldCheck, UserPlus, Bell } from 'lucide-react-native';
+import { X, LogOut, CarFront, Layers, Settings, Palette, FileText, AlertCircle, Hash, Crown, ChevronRight, TrendingUp, ShieldCheck, UserPlus, Bell, Zap, PieChart, Gift } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { MotiView } from 'moti';
@@ -41,7 +41,7 @@ export default function MenuScreen() {
   };
 
   const PremiumStatCard = ({ label, value, icon: Icon, gradientColors, delay }: any) => (
-    <MotiView from={{ opacity: 0, translateY: 20 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay, type: 'spring', damping: 15 }} style={styles.statCardWrapper}>
+    <MotiView from={{ opacity: 0, translateY: 20 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay, type: 'timing', duration: 400 }} style={styles.statCardWrapper}>
       <LinearGradient colors={gradientColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.statCard}>
         <View style={styles.statHeader}>
           <View style={styles.statIconContainer}><Icon size={18} color="#FFF" /></View>
@@ -90,15 +90,21 @@ export default function MenuScreen() {
               <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>Əsas Əməliyyatlar</Text>
                 <View style={[styles.menuGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <PremiumMenuItem icon={PieChart} label="Statistika" desc="Genişləndirilmiş tətbiq statistikası" route="/admin/statistics" color="#5856D6" delay={250} />
+                  <View style={[styles.separator, { backgroundColor: colors.border }]} />
                   <PremiumMenuItem icon={FileText} label="Elanlar" desc="Bütün elanları təsdiqlə və ya sil" route="/admin/listings" color="#FF3B30" delay={300} />
                   <View style={[styles.separator, { backgroundColor: colors.border }]} />
                   <PremiumMenuItem icon={Crown} label="VIP Elanlar" desc="VIP statusunu idarə et" route="/admin/vip-listings" color="#FFD700" delay={350} />
+                  <View style={[styles.separator, { backgroundColor: colors.border }]} />
+                  <PremiumMenuItem icon={Zap} label="Təcili Elanlar" desc="Təcili satış statusunu idarə et" route="/admin/urgent-listings" color="#FF3B30" delay={365} />
                   <View style={[styles.separator, { backgroundColor: colors.border }]} />
                   <PremiumMenuItem icon={Bell} label="Bildirişlər" desc="İstifadəçilərə push bildiriş göndər" route="/admin/notifications" color="#AF52DE" delay={380} />
                   <View style={[styles.separator, { backgroundColor: colors.border }]} />
                   <PremiumMenuItem icon={Layers} label="Reklam İdarəetməsi" desc="Banner və reklamları idarə et" route="/admin/banners" color="#34C759" delay={390} />
                   <View style={[styles.separator, { backgroundColor: colors.border }]} />
-                  <PremiumMenuItem icon={Settings} label="Ayarlar" desc="Loqo, əlaqə və ümumi tənzimləmələr" route="/admin/settings" color="#007AFF" delay={400} isLast />
+                  <PremiumMenuItem icon={Settings} label="Ayarlar" desc="Loqo, əlaqə və ümumi tənzimləmələr" route="/admin/settings" color="#007AFF" delay={400} />
+                  <View style={[styles.separator, { backgroundColor: colors.border }]} />
+                  <PremiumMenuItem icon={Gift} label="Yarışmalar" desc="Səhifə böyütmək üçün hədiyyəli yarışmalar" route="/admin/competitions" color="#FF9500" delay={410} isLast />
                 </View>
               </View>
               <View style={styles.section}>

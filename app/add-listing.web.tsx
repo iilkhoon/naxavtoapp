@@ -117,6 +117,7 @@ export default function WebAddListingScreen() {
     const [isNew, setIsNew] = useState(false);
     const [isCredit, setIsCredit] = useState(false);
     const [isBarter, setIsBarter] = useState(false);
+    const [isUrgent, setIsUrgent] = useState(false);
     const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
     const [selectedImages, setSelectedImages] = useState<{ uri: string; file: File }[]>([]);
 
@@ -222,7 +223,7 @@ export default function WebAddListingScreen() {
                 const { data, error } = await supabase.from('listings').insert({
                     make, model, year: parseInt(year) || 2020, price: parseFloat(price) || 0,
                     mileage: parseInt(mileage) || 0, engine: engine || '2.0', horsepower: parseInt(horsepower) || null, location,
-                    image_url: urls[0] || null, images: urls, is_credit: isCredit, is_barter: isBarter,
+                    image_url: urls[0] || null, images: urls, is_credit: isCredit, is_barter: isBarter, is_urgent: isUrgent,
                     title: `${make} ${model}`, currency: 'AZN', body_type: bodyType, color, gearbox,
                     transmission, market, fuel_type: fuelType, is_new: isNew, description,
                     contact_phone: contactPhone, seller_name: sellerName, vin_code: vinCode.toUpperCase(),
@@ -505,6 +506,10 @@ export default function WebAddListingScreen() {
                         <View style={[styles.switchCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                             <Text style={[styles.switchLabel, { color: colors.text }]}>Barter mümkündür?</Text>
                             <Switch value={isBarter} onValueChange={setIsBarter} trackColor={{ false: '#555', true: colors.primary }} />
+                        </View>
+                        <View style={[styles.switchCard, { backgroundColor: colors.card, borderColor: '#FF3B30' }]}>
+                            <Text style={[styles.switchLabel, { color: colors.text }]}>🔴 Təcili satılır?</Text>
+                            <Switch value={isUrgent} onValueChange={setIsUrgent} trackColor={{ false: '#555', true: '#FF3B30' }} />
                         </View>
 
                         <Text style={[styles.label, { color: colors.textSecondary, marginTop: 12 }]}>Əlavə məlumat</Text>

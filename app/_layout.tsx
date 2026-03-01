@@ -7,11 +7,13 @@ import { useFrameworkReady } from '../hooks/useFrameworkReady';
 import { AuthProvider } from '../contexts/AuthContext';
 import { ToastProvider } from '../contexts/ToastContext';
 import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
-import { SettingsProvider } from '../contexts/SettingsContext';
+import { SettingsProvider, useSettings } from '../contexts/SettingsContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, Platform, Text, TextInput } from 'react-native';
+import { View, Platform, Text, TextInput, Linking, TouchableOpacity, StyleSheet } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
+import Constants from 'expo-constants';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { AlertCircle } from 'lucide-react-native';
 import {
   useFonts,
   RethinkSans_400Regular,
@@ -60,9 +62,26 @@ const applyGlobalFont = () => {
 // Execute the patch
 applyGlobalFont();
 
+// Helper to compare semantic versions (e.g. "1.0.6" vs "1.0.7")
+// Returns -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
+function compareVersions(v1: string, v2: string): number {
+  if (!v1 || !v2) return 0;
+  const p1 = v1.split('.').map(Number);
+  const p2 = v2.split('.').map(Number);
+  const len = Math.max(p1.length, p2.length);
+  for (let i = 0; i < len; i++) {
+    const num1 = p1[i] || 0;
+    const num2 = p2[i] || 0;
+    if (num1 < num2) return -1;
+    if (num1 > num2) return 1;
+  }
+  return 0;
+}
+
 function RootLayoutNav() {
   const { colors, isDark } = useTheme();
   usePushNotifications(); // Register push token
+  const { settings, loading } = useSettings();
 
   // Global Smooth Transition Configuration
   const screenOptions = {
@@ -93,57 +112,118 @@ function RootLayoutNav() {
     headerShown: false,
   };
 
+  if (loading) return null;
+
+  const currentVersion = Constants.expoConfig?.version || "1.0.0";
+  const requiredVersion = settings.required_app_version || "0.0.0";
+  const needsUpdate = compareVersions(currentVersion, requiredVersion) < 0;
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <Stack screenOptions={screenOptions}>
-        {/* Main Tabs */}
-        <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
+      {needsUpdate ? (
+        <View style={[styles.updateBlocker, { backgroundColor: colors.background }]}>
+          <AlertCircle size={64} color={colors.primary} style={{ marginBottom: 24 }} />
+          <Text style={[styles.updateTitle, { color: colors.text }]}>Vacib Güncəlləmə</Text>
+          <Text style={[styles.updateDesc, { color: colors.textSecondary }]}>
+            Tətbiqin yeni və daha mükəmməl versiyası artıq mövcuddur. Xahiş edirik, istifadəyə davam etmək üçün tətbiqi güncəlləyin.
+          </Text>
+          <TouchableOpacity
+            style={[styles.updateButton, { backgroundColor: colors.primary }]}
+            onPress={() => {
+              if (settings.update_url) {
+                Linking.openURL(settings.update_url).catch(err => console.error("URL aça bilmədi", err));
+              }
+            }}
+          >
+            <Text style={styles.updateButtonText}>Güncəllə</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <Stack screenOptions={screenOptions}>
+          {/* Main Tabs */}
+          <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
 
-        <Stack.Screen name="+not-found" />
+          <Stack.Screen name="+not-found" />
 
-        {/* Modals & Menus */}
-        <Stack.Screen name="menu" options={modalScreenOptions} />
-        <Stack.Screen name="add-listing" options={modalScreenOptions} />
-        <Stack.Screen name="select-option" options={modalScreenOptions} />
-        <Stack.Screen name="filter" options={modalScreenOptions} />
-        <Stack.Screen name="comment" options={modalScreenOptions} />
+          {/* Modals & Menus */}
+          <Stack.Screen name="menu" options={modalScreenOptions} />
+          <Stack.Screen name="add-listing" options={modalScreenOptions} />
+          <Stack.Screen name="select-option" options={modalScreenOptions} />
+          <Stack.Screen name="filter" options={modalScreenOptions} />
+          <Stack.Screen name="comment" options={modalScreenOptions} />
 
-        {/* Auth */}
-        <Stack.Screen
-          name="auth/login"
-          options={{
-            ...modalScreenOptions,
-            headerShown: true,
-            title: 'Giriş',
-            headerStyle: { backgroundColor: colors.card },
-            headerTintColor: colors.text,
-            headerTitleStyle: { fontFamily: 'RethinkSans_700Bold' },
-          }}
-        />
+          {/* Auth */}
+          <Stack.Screen
+            name="auth/login"
+            options={{
+              ...modalScreenOptions,
+              headerShown: true,
+              title: 'Giriş',
+              headerStyle: { backgroundColor: colors.card },
+              headerTintColor: colors.text,
+              headerTitleStyle: { fontFamily: 'RethinkSans_700Bold' },
+            }}
+          />
 
-        {/* Standard Screens (Will inherit slide_from_right/default) */}
-        <Stack.Screen name="calculator" />
-        <Stack.Screen name="brands/index" />
-        <Stack.Screen name="models/index" />
+          {/* Standard Screens (Will inherit slide_from_right/default) */}
+          <Stack.Screen name="calculator" />
+          <Stack.Screen name="brands/index" />
+          <Stack.Screen name="models/index" />
 
-        {/* Admin Screens */}
-        <Stack.Screen name="admin/settings" />
-        <Stack.Screen name="admin/features" />
-        <Stack.Screen name="admin/listings" />
-        <Stack.Screen name="admin/add-user" />
-        <Stack.Screen name="admin/notifications" />
-        <Stack.Screen name="admin/edit-listing/[id]" />
-        <Stack.Screen name="admin/edit-plate/[id]" />
-        <Stack.Screen name="admin/vip-listings" />
+          {/* Admin Screens */}
+          <Stack.Screen name="admin" />
 
-        {/* Detail Screens */}
-        <Stack.Screen name="listing/[id]" />
-        <Stack.Screen name="plate/[id]" />
-      </Stack>
+          {/* Detail Screens */}
+          <Stack.Screen name="listing/[id]" />
+          <Stack.Screen name="plate/[id]" />
+        </Stack>
+      )}
       <StatusBar style={isDark ? "light" : "dark"} />
+      {Platform.OS === 'web' && (
+        <>
+          <WebSideBanners side="left" />
+          <WebSideBanners side="right" />
+        </>
+      )}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  updateBlocker: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+    padding: 24,
+  },
+  updateTitle: {
+    fontSize: 24,
+    fontFamily: 'RethinkSans_800ExtraBold',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  updateDesc: {
+    fontSize: 15,
+    fontFamily: 'RethinkSans_500Medium',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 32,
+  },
+  updateButton: {
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 300,
+  },
+  updateButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontFamily: 'RethinkSans_700Bold',
+    textAlign: 'center',
+  }
+});
 
 export default function RootLayout() {
   useFrameworkReady();
