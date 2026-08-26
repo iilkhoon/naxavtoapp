@@ -2,6 +2,7 @@ import '../utils/ssr-polyfill';
 import '../global.css';
 import React, { useEffect } from 'react';
 import { Stack } from 'expo-router';
+import * as Updates from 'expo-updates';
 import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '../hooks/useFrameworkReady';
 import { AuthProvider } from '../contexts/AuthContext';
@@ -9,7 +10,7 @@ import { ToastProvider } from '../contexts/ToastContext';
 import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
 import { SettingsProvider, useSettings } from '../contexts/SettingsContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, Platform, Text, TextInput, Linking, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Platform, Text, TextInput, Linking, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import Constants from 'expo-constants';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -112,11 +113,18 @@ function RootLayoutNav() {
     headerShown: false,
   };
 
-  if (loading) return null;
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
   const currentVersion = Constants.expoConfig?.version || "1.0.0";
   const requiredVersion = settings.required_app_version || "0.0.0";
-  const needsUpdate = compareVersions(currentVersion, requiredVersion) < 0;
+  // Never block web users with app version update screen
+  const needsUpdate = Platform.OS !== 'web' && compareVersions(currentVersion, requiredVersion) < 0;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -172,6 +180,9 @@ function RootLayoutNav() {
 
           {/* Admin Screens */}
           <Stack.Screen name="admin" />
+
+          {/* Loan Screens */}
+          <Stack.Screen name="my-loans" />
 
           {/* Detail Screens */}
           <Stack.Screen name="listing/[id]" />
@@ -237,10 +248,38 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
+    // Fail-safe: Ensure splash screen hides within 2.5 seconds no matter what
+    const failSafeTimer = setTimeout(() => {
+      SplashScreen.hideAsync().catch(() => {});
+    }, 2500);
+
     if (fontsLoaded) {
-      SplashScreen.hideAsync();
+      SplashScreen.hideAsync().catch(() => {});
     }
+
+    return () => clearTimeout(failSafeTimer);
   }, [fontsLoaded]);
+
+  // Check for OTA updates in background after startup delay to avoid blocking cold start
+  useEffect(() => {
+    if (Platform.OS === 'web' || __DEV__) return;
+    const timer = setTimeout(() => {
+      async function checkForUpdates() {
+        try {
+          const update = await Updates.checkForUpdateAsync();
+          if (update.isAvailable) {
+            await Updates.fetchUpdateAsync();
+            await Updates.reloadAsync();
+          }
+        } catch (e) {
+          // Ignore errors silently
+        }
+      }
+      checkForUpdates();
+    }, 3500);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   if (!fontsLoaded) {
     return null;

@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import {
   Phone, Mail, MapPin, MessageCircle, Instagram, Video,
-  Globe, ChevronRight, Shield, FileText, ExternalLink
+  Globe, ChevronRight, Shield, FileText, ExternalLink, CreditCard
 } from 'lucide-react-native';
 import { MotiView } from 'moti';
 import { AnimatedPressable } from '../../components/ui/AnimatedPressable';
@@ -14,6 +14,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../lib/supabase';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { AdminExpensesSection } from '../../components/AdminExpensesSection';
 
 const { width, height } = Dimensions.get('window');
 
@@ -21,6 +23,7 @@ export default function ContactScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
+  const { isAdmin, isSuperAdmin } = useAuth();
   const [settings, setSettings] = useState<any>({});
   const [phones, setPhones] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -119,6 +122,8 @@ export default function ContactScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        {isAdmin && isSuperAdmin && <AdminExpensesSection />}
+
         <MotiView
           from={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -130,6 +135,8 @@ export default function ContactScreen() {
             Sualınız var? Bizimlə asanlıqla əlaqə saxlayın.
           </Text>
         </MotiView>
+
+
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Bizimlə Əlaqə</Text>

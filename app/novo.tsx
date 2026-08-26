@@ -20,7 +20,7 @@ export default function NovoAdminLogin() {
         try {
             const { error } = await supabase.auth.signInWithPassword({ email, password });
             if (error) throw error;
-            router.replace('/admin/listings');
+            router.replace('/admin');
         } catch (error: any) {
             Alert.alert('Xəta', error.message);
         } finally {

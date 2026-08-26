@@ -28,7 +28,7 @@ export default function WebFavoritesScreen() {
         }
         const { data } = await supabase
             .from('listings')
-            .select('id, make, model, price, currency, image_url, images, location, created_at, mileage, engine, year, is_credit, is_barter, is_vip, is_new')
+            .select('id, make, model, price, currency, image_url, images, location, created_at, mileage, engine, year, is_credit, is_barter, is_vip, is_new, short_id')
             .in('id', favIds);
         setListings(data || []);
         setLoading(false);
@@ -108,7 +108,7 @@ export default function WebFavoritesScreen() {
                                     { backgroundColor: colors.card, borderColor: colors.border },
                                     isMobile && { flexBasis: '48%', maxWidth: '50%' }
                                     ]}
-                                    onPress={() => router.push(`/listing/${car.id}`)}
+                                    onPress={() => router.push(`/listing/${car.short_id || car.id}` as any)}
                                     activeOpacity={0.85}
                                 >
                                     <View style={[styles.cardImgWrap, { backgroundColor: isDark ? '#2C2C2E' : '#E5E5EA' }]}>

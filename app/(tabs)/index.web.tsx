@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getFavorites, toggleFavorite } from '../../lib/favorites';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -24,6 +25,9 @@ import { Pagination } from '../../components/Pagination';
 import { PlateCard } from '../../components/PlateCard'; // Added PlateCard import
 
 type FilterType = 'cash' | 'credit' | 'barter' | 'urgent';
+
+const HOME_LISTINGS_CACHE_KEY = 'home_listings_cache';
+const HOME_PLATES_CACHE_KEY = 'home_plates_cache';
 
 import { StyleProp } from 'react-native';
 const Typewriter = ({ words, color, style }: { words: string[], color: string, style?: StyleProp<TextStyle> }) => {
@@ -39,7 +43,7 @@ const Typewriter = ({ words, color, style }: { words: string[], color: string, s
 
     useEffect(() => {
         const currentWord = words[currentWordIndex];
-        let timer: NodeJS.Timeout;
+        let timer: ReturnType<typeof setTimeout>;
         if (isDeleting) {
             timer = setTimeout(() => {
                 setDisplayedText(prev => prev.slice(0, -1));
@@ -89,7 +93,7 @@ const CarCard = ({ car, isFavorite, onToggleFavorite, onPress }: any) => {
                 { backgroundColor: colors.card, borderColor: hovered ? colors.primary + '60' : colors.border },
                 hovered && { transform: [{ translateY: -4 }], boxShadow: `0 16px 40px rgba(0,0,0,${isDark ? '0.4' : '0.12'})` } as any
             ]}
-            onPress={() => onPress(car.id)}
+            onPress={() => onPress(car.short_id || car.id)}
             activeOpacity={1}
             {...{ onMouseEnter: () => setHovered(true), onMouseLeave: () => setHovered(false) } as any}
         >
@@ -276,12 +280,12 @@ export default function WebHomeScreen() {
         }
     }, []);
 
-    const fetchListings = useCallback(async () => {
+    const fetchListings = useCallback(async (retryCount = 0) => {
         try {
-            setLoading(true);
+            if (listings.length === 0) setLoading(true);
             let query = supabase
                 .from('listings')
-                .select('id, make, model, price, currency, image_url, images, location, created_at, mileage, engine, year, is_credit, is_barter, is_vip, is_urgent, is_new', { count: 'exact' })
+                .select('id, make, model, price, currency, image_url, images, location, created_at, mileage, engine, year, is_credit, is_barter, is_vip, is_urgent, is_new, short_id', { count: 'exact' })
                 .eq('status', 'approved')
                 .order('is_vip', { ascending: false })
                 .order('created_at', { ascending: false });
@@ -300,20 +304,36 @@ export default function WebHomeScreen() {
             if (advancedFilters.bodyType) query = query.eq('body_type', advancedFilters.bodyType);
             query = query.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
 
-            const { data, count } = await query;
+            const timeoutPromise = new Promise<{ data: null; count: null; error: Error }>((resolve) =>
+                setTimeout(() => resolve({ data: null, count: null, error: new Error('Request timeout') }), 15000)
+            );
+
+            const { data, count, error: supabaseError } = (await Promise.race([query, timeoutPromise])) as any;
+            if (supabaseError) throw supabaseError;
+
             if (data) {
                 setListings(data as Listing[]);
                 setVipListings((data as Listing[]).filter(l => l.is_vip).slice(0, 6));
                 setUrgentListings((data as Listing[]).filter(l => l.is_urgent).slice(0, 6));
                 if (count !== null) setTotalPages(Math.ceil(count / PAGE_SIZE));
-            }
-        } catch (err) { console.error(err); }
-        finally { setLoading(false); }
-    }, [activeFilterType, searchQuery, selectedBrand, selectedModel, advancedFilters, page]);
 
-    const fetchPlates = useCallback(async () => {
+                const isDefaultFeed = page === 1 && !selectedBrand && !selectedModel && activeFilterType === 'cash' && !searchQuery.trim() && Object.keys(advancedFilters).length === 0;
+                if (isDefaultFeed && data.length > 0) {
+                    AsyncStorage.setItem(HOME_LISTINGS_CACHE_KEY, JSON.stringify(data)).catch(() => {});
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching web listings:', err);
+            if (retryCount < 1) {
+                setTimeout(() => fetchListings(retryCount + 1), 1200);
+            }
+        }
+        finally { setLoading(false); }
+    }, [activeFilterType, searchQuery, selectedBrand, selectedModel, advancedFilters, page, listings.length]);
+
+    const fetchPlates = useCallback(async (retryCount = 0) => {
         try {
-            setLoading(true);
+            if (plates.length === 0) setLoading(true);
             let query = supabase
                 .from('plates')
                 .select('id, region, series, number, price, description, is_vip, created_at, status', { count: 'exact' })
@@ -327,14 +347,30 @@ export default function WebHomeScreen() {
 
             query = query.range((platesPage - 1) * PAGE_SIZE, platesPage * PAGE_SIZE - 1);
 
-            const { data, count } = await query;
+            const timeoutPromise = new Promise<{ data: null; count: null; error: Error }>((resolve) =>
+                setTimeout(() => resolve({ data: null, count: null, error: new Error('Request timeout') }), 15000)
+            );
+
+            const { data, count, error: err } = (await Promise.race([query, timeoutPromise])) as any;
+            if (err) throw err;
+
             if (data) {
                 setPlates(data);
                 if (count !== null) setTotalPlatesPages(Math.ceil(count / PAGE_SIZE));
+
+                const isDefaultPlates = platesPage === 1 && !plateSearchRegion && !plateSearchSeries && !plateSearchNumber;
+                if (isDefaultPlates && data.length > 0) {
+                    AsyncStorage.setItem(HOME_PLATES_CACHE_KEY, JSON.stringify(data)).catch(() => {});
+                }
             }
-        } catch (err) { console.error(err); }
+        } catch (err) {
+            console.error('Error fetching web plates:', err);
+            if (retryCount < 1) {
+                setTimeout(() => fetchPlates(retryCount + 1), 1200);
+            }
+        }
         finally { setLoading(false); }
-    }, [plateSearchRegion, plateSearchSeries, plateSearchNumber, platesPage]);
+    }, [plateSearchRegion, plateSearchSeries, plateSearchNumber, platesPage, plates.length]);
 
     useEffect(() => {
         setPage(1);
@@ -344,7 +380,24 @@ export default function WebHomeScreen() {
         setPlatesPage(1);
     }, [plateSearchRegion, plateSearchSeries, plateSearchNumber]);
 
-    useEffect(() => { getFavorites().then(setFavorites); fetchTodayCount(); }, [fetchTodayCount]);
+    useEffect(() => {
+        AsyncStorage.getItem(HOME_LISTINGS_CACHE_KEY).then((cached) => {
+            if (cached) {
+                try {
+                    const parsed = JSON.parse(cached);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        setListings((prev) => (prev.length === 0 ? parsed : prev));
+                        setVipListings((prev) => (prev.length === 0 ? parsed.filter((l: any) => l.is_vip).slice(0, 6) : prev));
+                        setUrgentListings((prev) => (prev.length === 0 ? parsed.filter((l: any) => l.is_urgent).slice(0, 6) : prev));
+                        setLoading(false);
+                    }
+                } catch (e) {}
+            }
+        }).catch(() => {});
+
+        getFavorites().then(setFavorites);
+        fetchTodayCount();
+    }, [fetchTodayCount]);
 
     useEffect(() => {
         const t = setTimeout(() => {
@@ -468,7 +521,7 @@ export default function WebHomeScreen() {
                                     {isMobile && <Text style={{ color: '#FFF', marginLeft: 8, fontFamily: 'RethinkSans_600SemiBold' }}>Ətraflı</Text>}
                                 </TouchableOpacity>
 
-                                <TouchableOpacity style={[styles.searchActionSubmit, isMobile && { flex: 1, marginLeft: 0 }]} onPress={fetchListings}>
+                                <TouchableOpacity style={[styles.searchActionSubmit, isMobile && { flex: 1, marginLeft: 0 }]} onPress={() => fetchListings()}>
                                     <LinearGradient
                                         colors={['#FF3B30', '#FF6B35']}
                                         style={styles.searchActionSubmitGrad}
@@ -533,7 +586,7 @@ export default function WebHomeScreen() {
                             )}
 
                             <View style={[isMobile ? { flexDirection: 'row', width: '100%', justifyContent: 'space-between', gap: 10, marginTop: 4 } : { flexDirection: 'row', alignItems: 'center' }]}>
-                                <TouchableOpacity style={[styles.searchActionSubmit, { flex: 1, marginLeft: 0 }]} onPress={fetchPlates}>
+                                <TouchableOpacity style={[styles.searchActionSubmit, { flex: 1, marginLeft: 0 }]} onPress={() => fetchPlates()}>
                                     <LinearGradient
                                         colors={['#FF3B30', '#FF6B35']}
                                         style={styles.searchActionSubmitGrad}

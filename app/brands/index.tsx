@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
-  TouchableOpacity, 
-  TextInput, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  TextInput,
   Alert,
   ActivityIndicator,
   Platform,
@@ -18,11 +18,12 @@ import { Trash2, Plus, ArrowLeft, Search, CarFront } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { MotiView } from 'moti';
+import LoadingAnimation from '../../components/LoadingAnimation';
 
 export default function BrandsScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
-  
+
   const [brands, setBrands] = useState<any[]>([]);
   const [filteredBrands, setFilteredBrands] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -37,9 +38,9 @@ export default function BrandsScreen() {
 
   useEffect(() => {
     if (searchQuery) {
-        setFilteredBrands(brands.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase())));
+      setFilteredBrands(brands.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase())));
     } else {
-        setFilteredBrands(brands);
+      setFilteredBrands(brands);
     }
   }, [searchQuery, brands]);
 
@@ -49,7 +50,7 @@ export default function BrandsScreen() {
         .from('brands')
         .select('*')
         .order('name');
-      
+
       if (error) throw error;
       setBrands(data || []);
       setFilteredBrands(data || []);
@@ -76,7 +77,7 @@ export default function BrandsScreen() {
         .insert({ name: newBrand.trim() });
 
       if (error) throw error;
-      
+
       setNewBrand('');
       fetchBrands();
     } catch (error: any) {
@@ -89,79 +90,79 @@ export default function BrandsScreen() {
 
   const performDelete = async (id: string) => {
     try {
-        const { error } = await supabase
+      const { error } = await supabase
         .from('brands')
         .delete()
         .eq('id', id);
-        
-        if (error) throw error;
-        fetchBrands();
+
+      if (error) throw error;
+      fetchBrands();
     } catch (error: any) {
-        Alert.alert('Xəta', error.message);
+      Alert.alert('Xəta', error.message);
     }
   };
 
   const handleDeleteBrand = async (id: string, name: string) => {
     if (Platform.OS === 'web') {
-        if (window.confirm(`"${name}" markasını silmək istədiyinizə əminsiniz?`)) {
-            performDelete(id);
-        }
+      if (window.confirm(`"${name}" markasını silmək istədiyinizə əminsiniz?`)) {
+        performDelete(id);
+      }
     } else {
-        Alert.alert(
-          'Sil',
-          `"${name}" markasını silmək istədiyinizə əminsiniz?`,
-          [
-            { text: 'Ləğv et', style: 'cancel' },
-            { 
-              text: 'Sil', 
-              style: 'destructive',
-              onPress: () => performDelete(id)
-            }
-          ]
-        );
+      Alert.alert(
+        'Sil',
+        `"${name}" markasını silmək istədiyinizə əminsiniz?`,
+        [
+          { text: 'Ləğv et', style: 'cancel' },
+          {
+            text: 'Sil',
+            style: 'destructive',
+            onPress: () => performDelete(id)
+          }
+        ]
+      );
     }
   };
 
   const renderItem = ({ item, index }: { item: any, index: number }) => (
     <MotiView
-        from={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: index * 30 }}
-        style={styles.cardWrapper}
+      from={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ delay: index * 30 }}
+      style={styles.cardWrapper}
     >
-        <View style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.itemLeft}>
-                <View style={[styles.iconContainer, { backgroundColor: isDark ? '#333' : '#F8F9FA' }]}>
-                    {item.logo_url ? (
-                        <Image 
-                            source={{ uri: item.logo_url }} 
-                            style={styles.brandLogo} 
-                            resizeMode="contain"
-                        />
-                    ) : (
-                        <CarFront size={24} color={colors.textSecondary} />
-                    )}
-                </View>
-                <Text style={[styles.itemText, { color: colors.text }]}>{item.name}</Text>
-            </View>
-            <TouchableOpacity 
-                onPress={() => handleDeleteBrand(item.id, item.name)}
-                style={[styles.deleteButton, { backgroundColor: 'rgba(255, 59, 48, 0.1)' }]}
-            >
-                <Trash2 size={18} color="#FF3B30" />
-            </TouchableOpacity>
+      <View style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.itemLeft}>
+          <View style={[styles.iconContainer, { backgroundColor: isDark ? '#333' : '#F8F9FA' }]}>
+            {item.logo_url ? (
+              <Image
+                source={{ uri: item.logo_url }}
+                style={styles.brandLogo}
+                resizeMode="contain"
+              />
+            ) : (
+              <CarFront size={24} color={colors.textSecondary} />
+            )}
+          </View>
+          <Text style={[styles.itemText, { color: colors.text }]}>{item.name}</Text>
         </View>
+        <TouchableOpacity
+          onPress={() => handleDeleteBrand(item.id, item.name)}
+          style={[styles.deleteButton, { backgroundColor: 'rgba(255, 59, 48, 0.1)' }]}
+        >
+          <Trash2 size={18} color="#FF3B30" />
+        </TouchableOpacity>
+      </View>
     </MotiView>
   );
 
   return (
-    <KeyboardAvoidingView 
-        style={[styles.container, { backgroundColor: colors.background }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <ArrowLeft size={24} color={colors.text} />
+          <ArrowLeft size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.text }]}>Markalar</Text>
         <View style={{ width: 24 }} />
@@ -169,19 +170,19 @@ export default function BrandsScreen() {
 
       <View style={styles.searchSection}>
         <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Search size={20} color={colors.placeholder} style={{ marginLeft: 12 }} />
-            <TextInput
-                style={[styles.searchInput, { color: colors.text }]}
-                placeholder="Marka axtar..."
-                placeholderTextColor={colors.placeholder}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-            />
+          <Search size={20} color={colors.placeholder} style={{ marginLeft: 12 }} />
+          <TextInput
+            style={[styles.searchInput, { color: colors.text }]}
+            placeholder="Marka axtar..."
+            placeholderTextColor={colors.placeholder}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
         </View>
       </View>
 
       {loading && !refreshing ? (
-        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 20 }} />
+        <LoadingAnimation fullScreen={false} size={120} />
       ) : (
         <FlatList
           data={filteredBrands}
@@ -201,24 +202,24 @@ export default function BrandsScreen() {
 
       <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
         <View style={styles.inputRow}>
-            <TextInput
-                style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-                placeholder="Yeni marka adı..."
-                placeholderTextColor={colors.placeholder}
-                value={newBrand}
-                onChangeText={setNewBrand}
-            />
-            <TouchableOpacity 
-                style={[styles.addButton, { backgroundColor: colors.primary }, (!newBrand.trim() || adding) && styles.disabledButton]}
-                onPress={handleAddBrand}
-                disabled={!newBrand.trim() || adding}
-            >
-                {adding ? (
-                    <ActivityIndicator color="#FFF" size="small" />
-                ) : (
-                    <Plus size={24} color="#FFF" />
-                )}
-            </TouchableOpacity>
+          <TextInput
+            style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+            placeholder="Yeni marka adı..."
+            placeholderTextColor={colors.placeholder}
+            value={newBrand}
+            onChangeText={setNewBrand}
+          />
+          <TouchableOpacity
+            style={[styles.addButton, { backgroundColor: colors.primary }, (!newBrand.trim() || adding) && styles.disabledButton]}
+            onPress={handleAddBrand}
+            disabled={!newBrand.trim() || adding}
+          >
+            {adding ? (
+              <ActivityIndicator color="#FFF" size="small" />
+            ) : (
+              <Plus size={24} color="#FFF" />
+            )}
+          </TouchableOpacity>
         </View>
       </View>
     </KeyboardAvoidingView>

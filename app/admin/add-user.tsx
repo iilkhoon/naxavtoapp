@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,21 +9,32 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  ScrollView
+  ScrollView,
+  Switch
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { Colors } from '../../constants/Colors';
 import { Mail, Lock, UserPlus, ArrowLeft, CheckCircle } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function AddUserScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const { isSuperAdmin, loading: authLoading } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isSuperAdminChecked, setIsSuperAdminChecked] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading && !isSuperAdmin) {
+      Alert.alert('Giriş qadağandır', 'Yeni istifadəçiləri yalnız superadminlər yarada bilər!');
+      router.back();
+    }
+  }, [isSuperAdmin, authLoading]);
 
   const handleCreateUser = async () => {
     if (!email || !password) {
@@ -39,23 +50,40 @@ export default function AddUserScreen() {
     setLoading(true);
     try {
       // Create user using Supabase Auth
-      // Note: This will create a user in auth.users. 
-      // The trigger we created earlier will automatically add them to public.profiles
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            full_name: email.split('@')[0],
+          }
+        }
       });
 
       if (error) throw error;
 
       if (data.user) {
+        // Explicitly set role = 'admin' and is_superadmin status in public.profiles table
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            role: 'admin',
+            is_superadmin: isSuperAdminChecked,
+            email: email
+          })
+          .eq('id', data.user.id);
+
+        if (profileError) throw profileError;
+
         Alert.alert(
           'Uğurlu',
-          'Yeni istifadəçi uğurla yaradıldı!',
+          'Yeni admin istifadəçisi uğurla yaradıldı!',
           [{
             text: 'OK', onPress: () => {
               setEmail('');
               setPassword('');
+              setIsSuperAdminChecked(false);
+              router.back();
             }
           }]
         );
@@ -68,6 +96,14 @@ export default function AddUserScreen() {
     }
   };
 
+  if (authLoading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
@@ -78,7 +114,7 @@ export default function AddUserScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <ArrowLeft size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Yeni İstifadəçi</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Yeni Admin</Text>
           <View style={{ width: 24 }} />
         </View>
 
@@ -89,7 +125,7 @@ export default function AddUserScreen() {
             </View>
 
             <Text style={[styles.description, { color: colors.textSecondary }]}>
-              Yeni admin və ya moderator əlavə etmək üçün aşağıdakı formu doldurun.
+              Yeni admin və ya superadmin əlavə etmək üçün aşağıdakı formu doldurun.
             </Text>
 
             <View style={styles.form}>
@@ -122,6 +158,19 @@ export default function AddUserScreen() {
                     secureTextEntry
                   />
                 </View>
+              </View>
+
+              <View style={[styles.inputGroup, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, marginBottom: 20 }]}>
+                <View style={{ flex: 1, marginRight: 10 }}>
+                  <Text style={[styles.label, { color: colors.text, marginBottom: 4 }]}>Superadmin Statusu</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Kredit paneli daxil olmaqla tam idarəetmə icazəsi verir</Text>
+                </View>
+                <Switch
+                  value={isSuperAdminChecked}
+                  onValueChange={setIsSuperAdminChecked}
+                  trackColor={{ false: '#767577', true: colors.primary }}
+                  thumbColor={isSuperAdminChecked ? '#FFF' : '#f4f3f4'}
+                />
               </View>
 
               <TouchableOpacity

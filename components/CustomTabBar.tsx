@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, Dimensions, DeviceEventEmitter } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { BlurView } from 'expo-blur';
-import { Home, Heart, Plus, ArrowLeftRight, Phone } from 'lucide-react-native';
+import { Home, Heart, Plus, User, Phone } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { MotiView } from 'moti';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -33,11 +33,16 @@ export const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarPro
         ]} />
       </View>
 
+
       {/* Tab Items */}
       <View style={styles.tabRow}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const isFocused = state.index === index;
+
+          // Skip hidden tabs - only show these specific routes
+          const visibleRoutes = ['index', 'favorites', 'add', 'credit', 'contact'];
+          if (!visibleRoutes.includes(route.name)) return null;
 
           const onPress = () => {
             const event = navigation.emit({
@@ -46,7 +51,11 @@ export const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarPro
               canPreventDefault: true,
             });
 
-            if (!isFocused && !event.defaultPrevented) {
+            if (isFocused) {
+              if (route.name === 'index') {
+                DeviceEventEmitter.emit('scroll_to_top_home');
+              }
+            } else if (!event.defaultPrevented) {
               navigation.navigate(route.name);
             }
           };
@@ -84,12 +93,12 @@ export const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarPro
           let Icon = Home;
           if (route.name === 'index') Icon = Home;
           else if (route.name === 'favorites') Icon = Heart;
-          else if (route.name === 'compare') Icon = ArrowLeftRight;
+          else if (route.name === 'credit') Icon = User;
           else if (route.name === 'contact') Icon = Phone;
 
           return (
             <TouchableOpacity
-              key={index}
+              key={state.routes[index].key}
               onPress={onPress}
               style={styles.tabItem}
               activeOpacity={0.7}

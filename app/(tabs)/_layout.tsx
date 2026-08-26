@@ -23,8 +23,10 @@ export default function TabLayout() {
           },
         })}
       />
-      <Tabs.Screen name="compare" options={{ title: 'Müqayisə' }} />
+      <Tabs.Screen name="credit" options={{ title: 'Kredit' }} />
       <Tabs.Screen name="contact" options={{ title: 'Əlaqə' }} />
+      {/* Hidden screens */}
+      <Tabs.Screen name="compare" options={{ href: null }} />
     </Tabs>
   );
 }

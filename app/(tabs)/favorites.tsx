@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, ActivityIndicator, Platform, Dimensions, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, ActivityIndicator, Platform, Dimensions, useWindowDimensions, TouchableOpacity } from 'react-native';
 import { CarCard } from '../../components/CarCard';
 import { supabase } from '../../lib/supabase';
 import { getFavorites, toggleFavorite } from '../../lib/favorites';
@@ -7,7 +7,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { BannerSlider } from '../../components/BannerSlider';
-import { Heart, Sparkles } from 'lucide-react-native';
+import { Heart, Sparkles, ArrowLeftRight } from 'lucide-react-native';
 import { MotiView } from 'moti';
 
 const { height } = Dimensions.get('window');
@@ -59,7 +59,7 @@ export default function FavoritesScreen() {
   };
 
   const handleCardPress = (id: string) => {
-    router.push(`/listing/${id}`);
+    router.push(`/listing/${id}` as any);
   };
 
   useFocusEffect(
@@ -74,6 +74,22 @@ export default function FavoritesScreen() {
         <Text style={[styles.headerTitle, { color: colors.text }]}>Seçilmişlər</Text>
         <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>Sevdiyiniz avtomobillər burada!</Text>
       </View>
+
+      {/* Müqayisə Button */}
+      <TouchableOpacity
+        style={[styles.compareBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+        onPress={() => router.push('/(tabs)/compare' as any)}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.compareBtnIcon, { backgroundColor: isDark ? '#1c2a3d' : '#EFF6FF' }]}>
+          <ArrowLeftRight size={20} color="#007AFF" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.compareBtnTitle, { color: colors.text }]}>Müqayisə Et</Text>
+          <Text style={[styles.compareBtnDesc, { color: colors.textSecondary }]}>Seçilmiş avtomobilləri müqayisə et</Text>
+        </View>
+        <ArrowLeftRight size={16} color={colors.textSecondary} />
+      </TouchableOpacity>
 
       {loading ? (
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
@@ -217,5 +233,31 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     opacity: 0.8,
     fontFamily: 'RethinkSans_400Regular',
+  },
+  compareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 12,
+  },
+  compareBtnIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  compareBtnTitle: {
+    fontSize: 15,
+    fontFamily: 'RethinkSans_700Bold',
+  },
+  compareBtnDesc: {
+    fontSize: 12,
+    fontFamily: 'RethinkSans_400Regular',
+    marginTop: 2,
   },
 });

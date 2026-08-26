@@ -15,13 +15,14 @@ import {
     Menu,
     X,
     MessageSquare,
-    PieChart
+    PieChart,
+    FileText
 } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { WebHeader } from '../../components/WebHeader.web';
 
 export default function AdminLayoutWeb() {
-    const { session, loading } = useAuth();
+    const { session, loading, isSuperAdmin } = useAuth();
     const router = useRouter();
     const pathname = usePathname();
     const { colors, isDark } = useTheme();
@@ -36,11 +37,7 @@ export default function AdminLayoutWeb() {
     }, [session, loading]);
 
     useEffect(() => {
-        if (!isMobile) {
-            setMenuOpen(true);
-        } else {
-            setMenuOpen(false);
-        }
+        setMenuOpen(!isMobile);
     }, [isMobile]);
 
     const handleLogout = async () => {
@@ -60,17 +57,22 @@ export default function AdminLayoutWeb() {
         return null;
     }
 
-    const menuItems = [
+    const allMenuItems = [
         { title: 'Statistika', path: '/admin/statistics', icon: PieChart },
+        { title: 'Kredit Paneli', path: '/admin/loans', icon: Star, superAdminOnly: true },
+        { title: 'Kredit Müraciətləri', path: '/admin/applications', icon: FileText },
+        { title: 'Canlı Çat', path: '/admin/chats', icon: MessageSquare },
         { title: 'Elanlar', path: '/admin/listings', icon: LayoutDashboard },
         { title: 'VIP Elanlar', path: '/admin/vip-listings', icon: Star },
         { title: 'Təcili Elanlar', path: '/admin/urgent-listings', icon: Zap },
         { title: 'Reklam İdarəetməsi', path: '/admin/banners', icon: ImageIcon },
         { title: 'Marka/Model & Şəhər', path: '/admin/features', icon: MessageSquare },
-        { title: 'İstifadəçilər', path: '/admin/add-user', icon: Users },
+        { title: 'Admin İstifadəçilər', path: '/admin/add-user', icon: Users, superAdminOnly: true },
         { title: 'Bildirişlər', path: '/admin/notifications', icon: Bell },
         { title: 'Ayarlar', path: '/admin/settings', icon: Settings },
     ];
+
+    const menuItems = allMenuItems.filter(item => !item.superAdminOnly || isSuperAdmin);
 
     return (
         <View style={{ flex: 1, backgroundColor: colors.background, flexDirection: 'column', height: '100vh' as any }}>

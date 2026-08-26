@@ -17,7 +17,7 @@ export const BannerSlider: React.FC<BannerSliderProps> = ({
     contentFit = 'cover'
 }) => {
     const { width } = useWindowDimensions();
-    const itemWidth = Math.min(width - 40, 400); // Max width of 400px for banners (phone size)
+    const itemWidth = Math.min(width - 40, 400); // Inner visible banner width
 
     const [currentIndex, setCurrentIndex] = useState(0);
     const flatListRef = useRef<FlatList>(null);
@@ -41,38 +41,40 @@ export const BannerSlider: React.FC<BannerSliderProps> = ({
         }, autoPlayInterval);
 
         return () => clearInterval(interval);
-    }, [validImages.length, autoPlayInterval, isAutoPlayPaused]); // Removed currentIndex dependency
+    }, [validImages.length, autoPlayInterval, isAutoPlayPaused]);
 
     const renderItem = ({ item }: { item: string }) => (
-        <Pressable
-            onPressIn={() => setIsAutoPlayPaused(true)}
-            onPressOut={() => setIsAutoPlayPaused(false)}
-            style={[styles.slide, { height, width: itemWidth }]}
-        >
-            <Image
-                source={{ uri: item }}
-                style={styles.image}
-                contentFit={contentFit}
-                transition={200}
-            />
-        </Pressable>
+        <View style={{ width, justifyContent: 'center', alignItems: 'center' }}>
+            <Pressable
+                onPressIn={() => setIsAutoPlayPaused(true)}
+                onPressOut={() => setIsAutoPlayPaused(false)}
+                style={[styles.slide, { height, width: itemWidth }]}
+            >
+                <Image
+                    source={{ uri: item }}
+                    style={styles.image}
+                    contentFit={contentFit}
+                    transition={200}
+                />
+            </Pressable>
+        </View>
     );
 
     const onMomentumScrollEnd = (event: any) => {
-        const index = Math.round(event.nativeEvent.contentOffset.x / itemWidth);
+        const index = Math.round(event.nativeEvent.contentOffset.x / width);
         setCurrentIndex(index);
     };
 
     const getItemLayout = (_: any, index: number) => ({
-        length: itemWidth,
-        offset: itemWidth * index,
+        length: width,
+        offset: width * index,
         index,
     });
 
     if (validImages.length === 0) return null;
 
     return (
-        <View style={[styles.container, { height, width: itemWidth, alignSelf: 'center' }]}>
+        <View style={[styles.container, { height, width }]}>
             <FlatList
                 ref={flatListRef}
                 data={validImages}
@@ -83,15 +85,13 @@ export const BannerSlider: React.FC<BannerSliderProps> = ({
                 keyExtractor={(item, index) => index.toString()}
                 onMomentumScrollEnd={onMomentumScrollEnd}
                 getItemLayout={getItemLayout}
-                contentContainerStyle={styles.listContent}
-                snapToInterval={itemWidth}
                 decelerationRate="fast"
                 onScrollBeginDrag={() => setIsAutoPlayPaused(true)}
                 onScrollEndDrag={() => setIsAutoPlayPaused(false)}
             />
 
             {validImages.length > 1 && (
-                <View style={[styles.pagination, { width: itemWidth }]}>
+                <View style={[styles.pagination, { width: width }]}>
                     {validImages.map((_, index) => (
                         <View
                             key={index}
@@ -110,16 +110,9 @@ export const BannerSlider: React.FC<BannerSliderProps> = ({
 const styles = StyleSheet.create({
     container: {
         marginBottom: 24,
-        borderRadius: 16,
-        overflow: 'hidden',
-        // marginHorizontal: 20, // Handled by width calculation now
         position: 'relative',
     },
-    listContent: {
-        // paddingHorizontal: 0 is default
-    },
     slide: {
-        // width handled dynamically
         overflow: 'hidden',
         borderRadius: 16,
     },
@@ -130,8 +123,6 @@ const styles = StyleSheet.create({
     pagination: {
         position: 'absolute',
         bottom: 8,
-        left: 0,
-        // right: 0, // Removed right: 0 because width is explicit
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',

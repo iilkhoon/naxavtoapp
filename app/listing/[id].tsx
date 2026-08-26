@@ -19,8 +19,10 @@ import { Listing } from '../../types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useToast } from '../../contexts/ToastContext';
 import { CreditCalculatorModal } from '../../components/CreditCalculatorModal';
+import { CreditApplicationModal } from '../../components/CreditApplicationModal';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
+import LoadingAnimation from '../../components/LoadingAnimation';
 
 import * as Clipboard from 'expo-clipboard';
 import { CarCard } from '../../components/CarCard';
@@ -49,6 +51,7 @@ export default function ListingDetailScreen() {
     const [activeSlide, setActiveSlide] = useState(0);
     const [isViewerVisible, setIsViewerVisible] = useState(false);
     const [showCalculator, setShowCalculator] = useState(false);
+    const [showApplication, setShowApplication] = useState(false);
     const [featureCategories, setFeatureCategories] = useState<any[]>([]);
     const [randomListings, setRandomListings] = useState<Listing[]>([]);
     const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
@@ -91,7 +94,13 @@ export default function ListingDetailScreen() {
             // Increment views
             supabase.rpc('increment_listing_views', { row_id: listingId }).then();
 
-            const { data, error } = await supabase.from('listings').select('*').eq('id', listingId).single();
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(listingId);
+
+            const { data, error } = await supabase
+                .from('listings')
+                .select('*')
+                .eq(isUuid ? 'id' : 'short_id', listingId)
+                .single();
             if (error) throw error;
             setListing(data as Listing);
 
@@ -140,8 +149,14 @@ export default function ListingDetailScreen() {
 
     const handleShare = async () => {
         if (!listing) return;
+        const shareUrl = `https://naxavto.com/listing/${listing.short_id || listing.id}`;
         try {
-            await Share.share({ message: `Naxavto: ${listing.make} ${listing.model} - ${listing.price} AZN` });
+            await Share.share({
+                message: Platform.OS === 'ios'
+                    ? `Naxavto: ${listing.make} ${listing.model} - ${listing.price} AZN`
+                    : `Naxavto: ${listing.make} ${listing.model} - ${listing.price} AZN\n${shareUrl}`,
+                url: shareUrl, // iOS support
+            });
         } catch (error) { console.log(error); }
     };
 
@@ -233,7 +248,7 @@ export default function ListingDetailScreen() {
         }
     };
 
-    if (loading) return <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}><ActivityIndicator size="large" color={colors.primary} /></View>;
+    if (loading) return <LoadingAnimation />;
     if (!listing) return <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}><Text style={{ color: colors.text, fontFamily: 'RethinkSans_500Medium' }}>Elan tapılmadı</Text></View>;
 
     const SpecItem = ({ icon: Icon, label, value }: any) => (
@@ -573,7 +588,7 @@ export default function ListingDetailScreen() {
                                                 isNew={item.is_new}
                                                 isFavorite={favoriteIds.includes(item.id)}
                                                 onToggleFavorite={handleToggleFavorite}
-                                                onPress={() => router.push(`/listing/${item.id}`)}
+                                                onPress={() => router.push(`/listing/${item.id}` as any)}
                                                 index={index}
                                             />
                                         </View>
@@ -596,12 +611,16 @@ export default function ListingDetailScreen() {
                 </View>
             </ScrollView >
 
-            <BlurView intensity={90} tint="dark" style={[styles.footer, { paddingBottom: insets.bottom + 10, borderColor: 'rgba(255,255,255,0.1)' }]}>
+            <BlurView intensity={90} tint="dark" style={[styles.footer, { paddingBottom: insets.bottom + 10, borderColor: 'rgba(255,255,255,0.1)', gap: 10 }]}>
                 <TouchableOpacity style={[styles.calcButton, { backgroundColor: 'rgba(255,255,255,0.1)' }]} onPress={() => setShowCalculator(true)}>
                     <Calculator size={24} color="#FFF" />
                 </TouchableOpacity>
+                <TouchableOpacity style={[styles.applyButton, { backgroundColor: '#FF9500' }]} onPress={() => setShowApplication(true)}>
+                    <Percent size={18} color="#FFF" style={{ marginRight: 6 }} />
+                    <Text style={styles.applyButtonText}>Müraciət et</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={[styles.callButton, { backgroundColor: colors.primary }]} onPress={() => handleCall(adminPhones[0])}>
-                    <Phone size={20} color="#FFF" style={{ marginRight: 10 }} />
+                    <Phone size={18} color="#FFF" style={{ marginRight: 6 }} />
                     <Text style={styles.callButtonText}>Zəng et</Text>
                 </TouchableOpacity>
             </BlurView>
@@ -610,6 +629,15 @@ export default function ListingDetailScreen() {
                 visible={showCalculator}
                 onClose={() => setShowCalculator(false)}
                 initialPrice={listing.price.toString()}
+            />
+
+            <CreditApplicationModal
+                visible={showApplication}
+                onClose={() => setShowApplication(false)}
+                carId={listing.id}
+                carTitle={`${listing.make} ${listing.model}`}
+                carPrice={listing.price}
+                carCurrency={listing.currency}
             />
 
             <ImageViewer
@@ -688,10 +716,12 @@ const styles = StyleSheet.create({
     phoneList: { gap: 8 },
     phoneRow: { flexDirection: 'row', alignItems: 'center', padding: 10, borderRadius: 10, gap: 10 },
     phoneText: { fontSize: 15, fontFamily: 'RethinkSans_600SemiBold' },
-    footer: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', padding: 16, paddingHorizontal: 24, gap: 16, borderTopWidth: 1, boxShadow: '0px -2px 10px rgba(0, 0, 0, 0.05)', elevation: 5 },
+    footer: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', padding: 16, paddingHorizontal: 24, gap: 10, borderTopWidth: 1, boxShadow: '0px -2px 10px rgba(0, 0, 0, 0.05)', elevation: 5 },
     calcButton: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center' },
     callButton: { flex: 1, height: 56, borderRadius: 28, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
-    callButtonText: { color: '#FFF', fontSize: 18, fontFamily: 'RethinkSans_700Bold' },
+    callButtonText: { color: '#FFF', fontSize: 15, fontFamily: 'RethinkSans_700Bold' },
+    applyButton: { flex: 1, height: 56, borderRadius: 28, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+    applyButtonText: { color: '#FFF', fontSize: 15, fontFamily: 'RethinkSans_700Bold' },
     footerInfo: {
         marginTop: 20,
         alignItems: 'center',

@@ -1,0 +1,1 @@
+ALTER TABLE competitions ADD COLUMN IF NOT EXISTS slogan text DEFAULT NULL;

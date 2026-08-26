@@ -119,7 +119,9 @@ export default function AdminListingsScreen() {
   }, [activeTab, fetchItems, showToast]);
 
   const handleEdit = useCallback((id: string) => { if (activeTab === 'cars') { router.push(`/admin/edit-listing/${id}`); } else { router.push(`/admin/edit-plate/${id}`); } }, [activeTab, router]);
-  const handleView = useCallback((id: string) => { if (activeTab === 'cars') { router.push(`/listing/${id}`); } else { router.push(`/plate/${id}`); } }, [activeTab, router]);
+  const handleView = useCallback((id: string) => {
+    if (activeTab === 'cars') { router.push(`/listing/${id}`); } else { router.push(`/plate/${id}`); }
+  }, [activeTab, router]);
 
   const renderItem = useCallback(({ item }: { item: any }) => {
     if (activeTab === 'cars') { return (<CarItem item={item} colors={colors} activeStatus={activeStatus} onView={handleView} onApprove={performApprove} onEdit={handleEdit} onDelete={confirmDelete} />); } else { return (<PlateItem item={item} colors={colors} activeStatus={activeStatus} onView={handleView} onApprove={performApprove} onEdit={handleEdit} onDelete={confirmDelete} />); }

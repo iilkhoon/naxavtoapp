@@ -10,7 +10,7 @@ interface ToastContextType {
 }
 
 const ToastContext = createContext<ToastContextType>({
-  showToast: () => {},
+  showToast: () => { },
 });
 
 export const useToast = () => useContext(ToastContext);
@@ -21,7 +21,7 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
   const showToast = useCallback((message: string, type: ToastType = 'success') => {
     const id = Date.now();
     setToast({ message, type, id });
-    
+
     setTimeout(() => {
       setToast((current) => (current?.id === id ? null : current));
     }, 3000);
@@ -49,10 +49,10 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
       <AnimatePresence>
         {toast && (
           <MotiView
-            from={{ opacity: 0, translateY: 100, scale: 0.9 }}
-            animate={{ opacity: 1, translateY: 0, scale: 1 }}
-            exit={{ opacity: 0, translateY: 100, scale: 0.9 }}
-            transition={{ type: 'spring', damping: 15 }}
+            from={{ opacity: 0, translateY: -20 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            exit={{ opacity: 0, translateY: -20 }}
+            transition={{ type: 'timing', duration: 250 }}
             style={styles.toastContainer}
           >
             <View style={[styles.toast, { backgroundColor: getBackgroundColor(toast.type) }]}>

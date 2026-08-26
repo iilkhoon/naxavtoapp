@@ -1,0 +1,14 @@
+[
+    {
+        "relation": [
+            "delegate_permission/common.handle_all_urls"
+        ],
+        "target": {
+            "namespace": "android_app",
+            "package_name": "com.naxavtoapp.novoloji",
+            "sha256_cert_fingerprints": [
+                "79:52:AA:74:16:6B:EB:90:56:FE:52:E8:2E:07:22:4E:F6:B1:65:28:3C:15:B0:9A:A5:1D:99:28:03:23:76:73"
+            ]
+        }
+    }
+]

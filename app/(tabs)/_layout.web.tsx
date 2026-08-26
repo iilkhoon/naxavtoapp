@@ -13,6 +13,7 @@ export default function WebTabLayout() {
                 <Tabs.Screen name="favorites" options={{ title: 'Seçilmişlər' }} />
                 <Tabs.Screen name="add" options={{ title: 'Elan ver' }} />
                 <Tabs.Screen name="compare" options={{ title: 'Müqayisə' }} />
+                <Tabs.Screen name="credit" options={{ title: 'Kredit' }} />
                 <Tabs.Screen name="contact" options={{ title: 'Əlaqə' }} />
             </Tabs>
         </>

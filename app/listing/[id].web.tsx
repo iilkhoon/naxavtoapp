@@ -17,6 +17,8 @@ import { useToast } from '../../contexts/ToastContext';
 import { Listing } from '../../types';
 import { WebHeader } from '../../components/WebHeader.web';
 import { WebListingCalculator } from '../../components/WebListingCalculator';
+import LoadingAnimation from '../../components/LoadingAnimation';
+import { CreditApplicationModal } from '../../components/CreditApplicationModal';
 
 export default function WebListingDetail() {
     const { id } = useLocalSearchParams();
@@ -51,6 +53,7 @@ export default function WebListingDetail() {
     const [isFavorite, setIsFavorite] = useState(false);
     const [activeImg, setActiveImg] = useState(0);
     const [featureCategories, setFeatureCategories] = useState<any[]>([]);
+    const [showApplication, setShowApplication] = useState(false);
 
     const logoUrl = isDark ? settings.site_logo_dark : settings.site_logo_light;
 
@@ -64,7 +67,13 @@ export default function WebListingDetail() {
             // Increment views
             supabase.rpc('increment_listing_views', { row_id: listingId }).then();
 
-            const { data } = await supabase.from('listings').select('*').eq('id', listingId).single();
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(listingId);
+
+            const { data } = await supabase
+                .from('listings')
+                .select('*')
+                .eq(isUuid ? 'id' : 'short_id', listingId)
+                .single();
             if (data) {
                 setListing(data as Listing);
                 if (data.features?.length > 0) {
@@ -116,9 +125,7 @@ export default function WebListingDetail() {
         return (
             <View style={{ flex: 1, backgroundColor: colors.background }}>
                 <WebHeader />
-                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 76 }}>
-                    <ActivityIndicator size="large" color={colors.primary} />
-                </View>
+                <LoadingAnimation />
             </View>
         );
     }
@@ -330,6 +337,12 @@ export default function WebListingDetail() {
                                     </View>
                                 </View>
                                 <View style={{ height: 1, backgroundColor: colors.border, marginBottom: 16 }} />
+                                <TouchableOpacity
+                                    style={[styles.callBtn, { backgroundColor: '#FF9500', paddingVertical: 12, borderRadius: 12, marginBottom: 16 }]}
+                                    onPress={() => setShowApplication(true)}
+                                >
+                                    <Text style={[styles.callBtnText, { fontSize: 14, fontFamily: 'RethinkSans_700Bold' }]}>Kredit üçün Müraciət et</Text>
+                                </TouchableOpacity>
                                 <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 12, fontFamily: 'RethinkSans_500Medium' }}>Əlaqə Nömrələri:</Text>
                                 {adminPhones.map((phone, i) => (
                                     <TouchableOpacity
@@ -493,6 +506,12 @@ export default function WebListingDetail() {
                                         </View>
                                     </View>
                                     <View style={{ height: 1, backgroundColor: colors.border, marginBottom: 16 }} />
+                                    <TouchableOpacity
+                                        style={[styles.callBtn, { backgroundColor: '#FF9500', marginBottom: 16 }]}
+                                        onPress={() => setShowApplication(true)}
+                                    >
+                                        <Text style={[styles.callBtnText, { fontFamily: 'RethinkSans_700Bold' }]}>Kredit üçün Müraciət et</Text>
+                                    </TouchableOpacity>
                                     <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 12, fontFamily: 'RethinkSans_500Medium' }}>Əlaqə Nömrələri:</Text>
                                     {adminPhones.map((phone, i) => (
                                         <TouchableOpacity
@@ -564,6 +583,15 @@ export default function WebListingDetail() {
                     <Text style={[styles.footerText, isMobile && { fontSize: 11 }]}>© 2025 Naxçıvan Avto. Bütün hüquqlar qorunur.</Text>
                 </View>
             </ScrollView>
+
+            <CreditApplicationModal
+                visible={showApplication}
+                onClose={() => setShowApplication(false)}
+                carId={listing.id}
+                carTitle={`${listing.make} ${listing.model}`}
+                carPrice={listing.price}
+                carCurrency={listing.currency}
+            />
         </View>
     );
 }

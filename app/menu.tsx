@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Platform, ScrollView, RefreshControl, Dimensions, StatusBar, Image as RNImage } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { X, LogOut, CarFront, Layers, Settings, Palette, FileText, AlertCircle, Hash, Crown, ChevronRight, TrendingUp, ShieldCheck, UserPlus, Bell, Zap, PieChart, Gift } from 'lucide-react-native';
+import { X, LogOut, CarFront, Layers, Settings, Palette, FileText, AlertCircle, Hash, Crown, ChevronRight, TrendingUp, ShieldCheck, UserPlus, Bell, Zap, PieChart, Gift, MessageSquare, CreditCard, Users } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { MotiView } from 'moti';
@@ -15,12 +15,13 @@ const { width } = Dimensions.get('window');
 
 export default function MenuScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const { showToast } = useToast();
   const { colors, isDark } = useTheme();
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [stats, setStats] = useState({ activeCars: 0, pendingListings: 0, activePlates: 0, totalUsers: 0 });
   const [refreshing, setRefreshing] = useState(false);
+  const [versionClickCount, setVersionClickCount] = useState(0);
 
   const fetchStats = async () => {
     try {
@@ -38,6 +39,17 @@ export default function MenuScreen() {
   const confirmLogout = async () => {
     setLogoutModalVisible(false);
     try { const { error } = await supabase.auth.signOut(); if (error) throw error; showToast('Hesabdan çıxış edildi', 'info'); router.dismiss(); } catch (error: any) { showToast('Xəta: ' + error.message, 'error'); }
+  };
+
+  const handleVersionClick = () => {
+    const newCount = versionClickCount + 1;
+    if (newCount === 5) {
+      setVersionClickCount(0);
+      router.push('/admin/secret-winners');
+    } else {
+      setVersionClickCount(newCount);
+      // Optional: hide/show subtler feedback if needed
+    }
   };
 
   const PremiumStatCard = ({ label, value, icon: Icon, gradientColors, delay }: any) => (
@@ -92,6 +104,16 @@ export default function MenuScreen() {
                 <View style={[styles.menuGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <PremiumMenuItem icon={PieChart} label="Statistika" desc="Genişləndirilmiş tətbiq statistikası" route="/admin/statistics" color="#5856D6" delay={250} />
                   <View style={[styles.separator, { backgroundColor: colors.border }]} />
+                  {isSuperAdmin && (
+                    <>
+                      <PremiumMenuItem icon={CreditCard} label="Kredit Paneli" desc="Kredit və nağd satışları idarə et" route="/admin/loans" color="#00C7BE" delay={260} />
+                      <View style={[styles.separator, { backgroundColor: colors.border }]} />
+                    </>
+                  )}
+                  <PremiumMenuItem icon={FileText} label="Kredit Müraciətləri" desc="Müştəri kredit müraciətlərini idarə et" route="/admin/applications" color="#FF9500" delay={270} />
+                  <View style={[styles.separator, { backgroundColor: colors.border }]} />
+                  <PremiumMenuItem icon={MessageSquare} label="Canlı Dəstək" desc="Müştəri çatlarına cavab verin" route="/admin/chats" color="#007AFF" delay={275} />
+                  <View style={[styles.separator, { backgroundColor: colors.border }]} />
                   <PremiumMenuItem icon={FileText} label="Elanlar" desc="Bütün elanları təsdiqlə və ya sil" route="/admin/listings" color="#FF3B30" delay={300} />
                   <View style={[styles.separator, { backgroundColor: colors.border }]} />
                   <PremiumMenuItem icon={Crown} label="VIP Elanlar" desc="VIP statusunu idarə et" route="/admin/vip-listings" color="#FFD700" delay={350} />
@@ -102,6 +124,12 @@ export default function MenuScreen() {
                   <View style={[styles.separator, { backgroundColor: colors.border }]} />
                   <PremiumMenuItem icon={Layers} label="Reklam İdarəetməsi" desc="Banner və reklamları idarə et" route="/admin/banners" color="#34C759" delay={390} />
                   <View style={[styles.separator, { backgroundColor: colors.border }]} />
+                  {isSuperAdmin && (
+                    <>
+                      <PremiumMenuItem icon={Users} label="Admin İstifadəçilər" desc="Admin və superadminləri idarə et" route="/admin/users" color="#5856D6" delay={395} />
+                      <View style={[styles.separator, { backgroundColor: colors.border }]} />
+                    </>
+                  )}
                   <PremiumMenuItem icon={Settings} label="Ayarlar" desc="Loqo, əlaqə və ümumi tənzimləmələr" route="/admin/settings" color="#007AFF" delay={400} />
                   <View style={[styles.separator, { backgroundColor: colors.border }]} />
                   <PremiumMenuItem icon={Gift} label="Yarışmalar" desc="Səhifə böyütmək üçün hədiyyəli yarışmalar" route="/admin/competitions" color="#FF9500" delay={410} isLast />
@@ -128,7 +156,9 @@ export default function MenuScreen() {
                 <LogOut size={20} color="#FF3B30" style={{ marginRight: 10 }} />
                 <Text style={styles.logoutText}>Hesabdan Çıxış</Text>
               </TouchableOpacity>
-              <Text style={[styles.versionText, { color: colors.textSecondary }]}>Naxçıvan Avto Admin v1.0.1</Text>
+              <TouchableOpacity onPress={handleVersionClick} activeOpacity={1}>
+                <Text style={[styles.versionText, { color: colors.textSecondary }]}>Naxçıvan Avto Admin v1.0.1</Text>
+              </TouchableOpacity>
             </>
           ) : (
             <View style={styles.guestContainer}>

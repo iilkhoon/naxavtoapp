@@ -1,0 +1,14 @@
+{
+    "applinks": {
+        "apps": [],
+        "details": [
+            {
+                "appID": "36W77TT9ZQ.com.naxavtoapp.novoloji",
+                "paths": [
+                    "/listing/*",
+                    "/plate/*"
+                ]
+            }
+        ]
+    }
+}

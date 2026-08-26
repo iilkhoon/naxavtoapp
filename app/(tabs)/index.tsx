@@ -16,11 +16,13 @@ import {
   FlatList,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { SlidersHorizontal, Sun, Moon, Calculator, Wallet, Percent, ArrowLeftRight, X, Zap, Gift } from 'lucide-react-native';
+import { SlidersHorizontal, Sun, Moon, Calculator, Wallet, Percent, ArrowLeftRight, X, Zap, Gift, AlertCircle, RefreshCw } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CarCard } from '../../components/CarCard';
 import { PlateCard } from '../../components/PlateCard';
 import { BannerSlider } from '../../components/BannerSlider';
 import { Pagination } from '../../components/Pagination';
+import { FloatingChatButton } from '../../components/FloatingChatButton';
 import { supabase } from '../../lib/supabase';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { getFavorites, toggleFavorite } from '../../lib/favorites';
@@ -33,6 +35,9 @@ import { Listing, Plate, Brand, Model, AdvancedFilters } from '../../types';
 const { width } = Dimensions.get('window');
 
 type FilterType = 'cash' | 'credit' | 'barter' | 'urgent';
+
+const HOME_LISTINGS_CACHE_KEY = 'home_listings_cache';
+const HOME_PLATES_CACHE_KEY = 'home_plates_cache';
 
 // Improved Looping Typewriter Component
 const Typewriter = ({ words, color, style }: { words: string[], color: string, style?: TextStyle }) => {
@@ -56,7 +61,7 @@ const Typewriter = ({ words, color, style }: { words: string[], color: string, s
     const deleteSpeed = 50;
     const pauseTime = 2000; // Wait time before deleting
 
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setTimeout>;
 
     if (isDeleting) {
       // Deleting
@@ -103,10 +108,16 @@ export default function HomeScreen() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [plates, setPlates] = useState<Plate[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [listingsLoading, setListingsLoading] = useState(true);
+  const [platesLoading, setPlatesLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [platesError, setPlatesError] = useState<string | null>(null);
   const [activeCompetition, setActiveCompetition] = useState<any>(null);
+  const [competitionParticipantCount, setCompetitionParticipantCount] = useState<number>(0);
+
+  const listingsRequestIdRef = React.useRef(0);
+  const platesRequestIdRef = React.useRef(0);
 
   const fetchActiveCompetition = async () => {
     try {
@@ -121,11 +132,19 @@ export default function HomeScreen() {
 
       if (!error && data) {
         setActiveCompetition(data);
+        // Fetch participant count
+        const { count } = await supabase
+          .from('competition_participants')
+          .select('*', { count: 'exact', head: true })
+          .eq('competition_id', data.id);
+        setCompetitionParticipantCount(count ?? 0);
       } else {
         setActiveCompetition(null);
+        setCompetitionParticipantCount(0);
       }
     } catch (err) {
       setActiveCompetition(null);
+      setCompetitionParticipantCount(0);
     }
   };
   const flatListRef = React.useRef<FlatList>(null);
@@ -146,76 +165,142 @@ export default function HomeScreen() {
   const [plateSearchSeries, setPlateSearchSeries] = useState('');
   const [plateSearchNumber, setPlateSearchNumber] = useState('');
 
+  // Refs to always access the latest values inside async functions
+  const selectedBrandRef = React.useRef(selectedBrand);
+  selectedBrandRef.current = selectedBrand;
+
+  const selectedModelRef = React.useRef(selectedModel);
+  selectedModelRef.current = selectedModel;
+
+  const advancedFiltersRef = React.useRef(advancedFilters);
+  advancedFiltersRef.current = advancedFilters;
+
+  const activeFilterTypeRef = React.useRef(activeFilterType);
+  activeFilterTypeRef.current = activeFilterType;
+
+  const pageRef = React.useRef(page);
+  pageRef.current = page;
+
+  const plateSearchRegionRef = React.useRef(plateSearchRegion);
+  plateSearchRegionRef.current = plateSearchRegion;
+
+  const plateSearchSeriesRef = React.useRef(plateSearchSeries);
+  plateSearchSeriesRef.current = plateSearchSeries;
+
+  const plateSearchNumberRef = React.useRef(plateSearchNumber);
+  plateSearchNumberRef.current = plateSearchNumber;
+
+  const platesPageRef = React.useRef(platesPage);
+  platesPageRef.current = platesPage;
+
   const ImageComponent = Platform.OS === 'web' ? RNImage : ExpoImage;
 
-  const fetchListings = async (isRefresh = false) => {
+  const fetchListings = async (isRefresh = false, retryCount = 0) => {
+    const currentRequestId = ++listingsRequestIdRef.current;
     try {
-      if ((!isRefresh && listings.length === 0) || (isRefresh && error)) setLoading(true);
+      if ((!isRefresh && listings.length === 0) || (isRefresh && error)) {
+        setListingsLoading(true);
+      }
       setError(null);
+
+      const brand = selectedBrandRef.current;
+      const model = selectedModelRef.current;
+      const advFilters = advancedFiltersRef.current;
+      const filterType = activeFilterTypeRef.current;
+      const currentPage = pageRef.current;
 
       // Optimized query: Select only needed fields
       let query = supabase
         .from('listings')
-        .select('id, make, model, price, currency, image_url, images, location, created_at, mileage, engine, year, is_credit, is_barter, is_vip, is_urgent, is_new', { count: 'exact' })
+        .select('id, make, model, price, currency, image_url, images, location, created_at, mileage, engine, year, is_credit, is_barter, is_vip, is_urgent, is_new, short_id', { count: 'exact' })
         .eq('status', 'approved')
         .order('is_vip', { ascending: false }) // VIPs first
         .order('created_at', { ascending: false });
 
-      if (selectedBrand) query = query.eq('make', selectedBrand.name);
-      if (selectedModel) query = query.eq('model', selectedModel.name);
+      if (brand) query = query.eq('make', brand.name);
+      if (model) query = query.eq('model', model.name);
 
-      if (activeFilterType === 'credit') query = query.eq('is_credit', true);
-      if (activeFilterType === 'barter') query = query.eq('is_barter', true);
-      if (activeFilterType === 'urgent') query = query.eq('is_urgent', true);
+      if (filterType === 'credit') query = query.eq('is_credit', true);
+      if (filterType === 'barter') query = query.eq('is_barter', true);
+      if (filterType === 'urgent') query = query.eq('is_urgent', true);
 
-      if (advancedFilters.minPrice) query = query.gte('price', parseFloat(advancedFilters.minPrice));
-      if (advancedFilters.maxPrice) query = query.lte('price', parseFloat(advancedFilters.maxPrice));
+      if (advFilters.minPrice) query = query.gte('price', parseFloat(advFilters.minPrice));
+      if (advFilters.maxPrice) query = query.lte('price', parseFloat(advFilters.maxPrice));
 
-      if (advancedFilters.minYear) query = query.gte('year', parseInt(advancedFilters.minYear));
-      if (advancedFilters.maxYear) query = query.lte('year', parseInt(advancedFilters.maxYear));
+      if (advFilters.minYear) query = query.gte('year', parseInt(advFilters.minYear));
+      if (advFilters.maxYear) query = query.lte('year', parseInt(advFilters.maxYear));
 
-      if (advancedFilters.minMileage) query = query.gte('mileage', parseInt(advancedFilters.minMileage));
-      if (advancedFilters.maxMileage) query = query.lte('mileage', parseInt(advancedFilters.maxMileage));
+      if (advFilters.minMileage) query = query.gte('mileage', parseInt(advFilters.minMileage));
+      if (advFilters.maxMileage) query = query.lte('mileage', parseInt(advFilters.maxMileage));
 
-      if (advancedFilters.minEngine) query = query.gte('engine', advancedFilters.minEngine);
-      if (advancedFilters.maxEngine) query = query.lte('engine', advancedFilters.maxEngine);
+      if (advFilters.minEngine) query = query.gte('engine', advFilters.minEngine);
+      if (advFilters.maxEngine) query = query.lte('engine', advFilters.maxEngine);
 
-      if (advancedFilters.city) query = query.ilike('location', `%${advancedFilters.city}%`);
+      if (advFilters.city) query = query.ilike('location', `%${advFilters.city}%`);
 
-      if (advancedFilters.bodyType) query = query.eq('body_type', advancedFilters.bodyType);
-      if (advancedFilters.fuelType) query = query.eq('fuel_type', advancedFilters.fuelType);
-      if (advancedFilters.gearbox) query = query.eq('gearbox', advancedFilters.gearbox);
-      if (advancedFilters.transmission) query = query.eq('transmission', advancedFilters.transmission);
-      if (advancedFilters.color) query = query.eq('color', advancedFilters.color);
-      if (advancedFilters.market) query = query.eq('market', advancedFilters.market);
+      if (advFilters.bodyType) query = query.eq('body_type', advFilters.bodyType);
+      if (advFilters.fuelType) query = query.eq('fuel_type', advFilters.fuelType);
+      if (advFilters.gearbox) query = query.eq('gearbox', advFilters.gearbox);
+      if (advFilters.transmission) query = query.eq('transmission', advFilters.transmission);
+      if (advFilters.color) query = query.eq('color', advFilters.color);
+      if (advFilters.market) query = query.eq('market', advFilters.market);
 
-      if (advancedFilters.isNew) query = query.eq('is_new', true);
-      if (advancedFilters.isCredit) query = query.eq('is_credit', true);
-      if (advancedFilters.isBarter) query = query.eq('is_barter', true);
+      if (advFilters.isNew) query = query.eq('is_new', true);
+      if (advFilters.isCredit) query = query.eq('is_credit', true);
+      if (advFilters.isBarter) query = query.eq('is_barter', true);
 
-      // Limit results for performance (can implement pagination later)
-      query = query.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
+      // Limit results for performance
+      query = query.range((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE - 1);
 
-      const { data, count, error: supabaseError } = await query;
+      const timeoutPromise = new Promise<{ data: null; count: null; error: Error }>((resolve) =>
+        setTimeout(() => resolve({ data: null, count: null, error: new Error('Request timeout') }), 15000)
+      );
+
+      const { data, count, error: supabaseError } = (await Promise.race([query, timeoutPromise])) as any;
       if (supabaseError) throw supabaseError;
 
-      if (data) {
-        setListings(data as Listing[]);
-        if (count) setTotalPages(Math.ceil(count / PAGE_SIZE));
+      if (currentRequestId === listingsRequestIdRef.current) {
+        if (data) {
+          setListings(data as Listing[]);
+          if (count !== null && count !== undefined) setTotalPages(Math.ceil(count / PAGE_SIZE));
+
+          // Save default page 1 to cache for instant cold start display
+          const isDefaultFeed = currentPage === 1 && !brand && !model && filterType === 'cash' && Object.keys(advFilters).length === 0;
+          if (isDefaultFeed && data.length > 0) {
+            AsyncStorage.setItem(HOME_LISTINGS_CACHE_KEY, JSON.stringify(data)).catch(() => {});
+          }
+        }
       }
     } catch (err: any) {
       console.error('Error fetching listings:', err);
-      if (listings.length === 0) setError('Yükləmə xətası.');
+      if (currentRequestId === listingsRequestIdRef.current) {
+        // Auto-retry once on cold start / transient error
+        if (retryCount < 1) {
+          setTimeout(() => {
+            fetchListings(isRefresh, retryCount + 1);
+          }, 1200);
+          return;
+        }
+        if (listings.length === 0) setError('Məlumatları yükləmək mümkün olmadı.');
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (currentRequestId === listingsRequestIdRef.current) {
+        setListingsLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
-  const fetchPlates = async (isRefresh = false) => {
+  const fetchPlates = async (isRefresh = false, retryCount = 0) => {
+    const currentRequestId = ++platesRequestIdRef.current;
     try {
-      if ((!isRefresh && plates.length === 0) || (isRefresh && error)) setLoading(true);
-      setError(null);
+      if ((!isRefresh && plates.length === 0) || (isRefresh && platesError)) setPlatesLoading(true);
+      setPlatesError(null);
+
+      const region = plateSearchRegionRef.current;
+      const series = plateSearchSeriesRef.current;
+      const number = plateSearchNumberRef.current;
+      const currentPlatesPage = platesPageRef.current;
 
       let query = supabase
         .from('plates')
@@ -224,21 +309,46 @@ export default function HomeScreen() {
         .order('is_vip', { ascending: false })
         .order('created_at', { ascending: false });
 
-      if (plateSearchRegion) query = query.eq('region', plateSearchRegion);
-      if (plateSearchSeries) query = query.ilike('series', `${plateSearchSeries}%`);
-      if (plateSearchNumber) query = query.ilike('number', `${plateSearchNumber}%`);
+      if (region) query = query.eq('region', region);
+      if (series) query = query.ilike('series', `${series}%`);
+      if (number) query = query.ilike('number', `${number}%`);
 
-      query = query.range((platesPage - 1) * PAGE_SIZE, platesPage * PAGE_SIZE - 1);
+      query = query.range((currentPlatesPage - 1) * PAGE_SIZE, currentPlatesPage * PAGE_SIZE - 1);
 
-      const { data, count, error: platesError } = await query;
-      if (platesError) throw platesError;
-      setPlates(data as Plate[]);
-      if (count !== null) setTotalPlatesPages(Math.ceil(count / PAGE_SIZE));
+      const timeoutPromise = new Promise<{ data: null; count: null; error: Error }>((resolve) =>
+        setTimeout(() => resolve({ data: null, count: null, error: new Error('Request timeout') }), 15000)
+      );
+
+      const { data, count, error: platesErr } = (await Promise.race([query, timeoutPromise])) as any;
+      if (platesErr) throw platesErr;
+
+      if (currentRequestId === platesRequestIdRef.current) {
+        if (data) {
+          setPlates(data as Plate[]);
+          if (count !== null && count !== undefined) setTotalPlatesPages(Math.ceil(count / PAGE_SIZE));
+
+          const isDefaultPlates = currentPlatesPage === 1 && !region && !series && !number;
+          if (isDefaultPlates && data.length > 0) {
+            AsyncStorage.setItem(HOME_PLATES_CACHE_KEY, JSON.stringify(data)).catch(() => {});
+          }
+        }
+      }
     } catch (err) {
-      console.error(err);
+      console.error('Error fetching plates:', err);
+      if (currentRequestId === platesRequestIdRef.current) {
+        if (retryCount < 1) {
+          setTimeout(() => {
+            fetchPlates(isRefresh, retryCount + 1);
+          }, 1200);
+          return;
+        }
+        if (plates.length === 0) setPlatesError('Nömrələri yükləmək mümkün olmadı.');
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (currentRequestId === platesRequestIdRef.current) {
+        setPlatesLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
@@ -255,30 +365,73 @@ export default function HomeScreen() {
   }, [showToast]);
 
   useEffect(() => {
+    // 1. Immediately load cache on cold start
+    AsyncStorage.getItem(HOME_LISTINGS_CACHE_KEY).then((cached) => {
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setListings((prev) => (prev.length === 0 ? parsed : prev));
+            setListingsLoading(false);
+          }
+        } catch (e) {}
+      }
+    }).catch(() => {});
+
+    AsyncStorage.getItem(HOME_PLATES_CACHE_KEY).then((cached) => {
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setPlates((prev) => (prev.length === 0 ? parsed : prev));
+          }
+        } catch (e) {}
+      }
+    }).catch(() => {});
+
     loadFavorites();
-    fetchPlates();
     fetchActiveCompetition();
+
+    const sub = DeviceEventEmitter.addListener('scroll_to_top_home', () => {
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    });
+    return () => sub.remove();
   }, []);
 
   useEffect(() => {
     setPage(1);
-    setPlatesPage(1);
-  }, [selectedBrand, selectedModel, advancedFilters, activeFilterType, plateSearchRegion, plateSearchSeries, plateSearchNumber]);
+  }, [selectedBrand, selectedModel, advancedFilters, activeFilterType]);
 
   useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      if (activeTopTab === 'transport') fetchListings();
-      else fetchPlates();
-    }, 500);
-    return () => clearTimeout(delayDebounceFn);
-  }, [page, platesPage, selectedBrand, selectedModel, activeTopTab, advancedFilters, activeFilterType, plateSearchRegion, plateSearchSeries, plateSearchNumber]);
+    setPlatesPage(1);
+  }, [plateSearchRegion, plateSearchSeries, plateSearchNumber]);
+
+  // When filters or page change for Transport, fetch listings
+  useEffect(() => {
+    if (activeTopTab === 'transport') {
+      const delayDebounceFn = setTimeout(() => {
+        fetchListings();
+      }, 250);
+      return () => clearTimeout(delayDebounceFn);
+    }
+  }, [page, selectedBrand, selectedModel, activeTopTab, advancedFilters, activeFilterType]);
+
+  // When filters or page change for Plates, fetch plates
+  useEffect(() => {
+    if (activeTopTab === 'plates') {
+      const delayDebounceFn = setTimeout(() => {
+        fetchPlates();
+      }, 250);
+      return () => clearTimeout(delayDebounceFn);
+    }
+  }, [platesPage, plateSearchRegion, plateSearchSeries, plateSearchNumber, activeTopTab]);
 
   useFocusEffect(
     useCallback(() => {
       loadFavorites();
-      if (activeTopTab === 'transport') fetchListings();
-      else fetchPlates();
-    }, [activeTopTab])
+      // Notice: We only reload favorites on focus.
+      // We do NOT re-fetch listings or reset state on focus when navigating back from details.
+    }, [])
   );
 
   const onRefresh = useCallback(() => {
@@ -316,10 +469,9 @@ export default function HomeScreen() {
     const eventName = 'apply_filters_home';
     const sub = DeviceEventEmitter.addListener(eventName, (filters) => {
       setAdvancedFilters(filters);
-      fetchListings(true);
       sub.remove();
     });
-    router.push({ pathname: '/filter', params: { eventName } });
+    router.push({ pathname: '/filter', params: { eventName, initialFilters: JSON.stringify(advancedFilters) } });
   };
 
   const handleResetSearch = () => {
@@ -493,7 +645,14 @@ export default function HomeScreen() {
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={[styles.competitionTitle, { color: colors.text }]}>{activeCompetition.title || 'Böyük Yarışma Başladı!'}</Text>
-                  <Text style={[styles.competitionSubtitle, { color: colors.textSecondary }]}>Hədiyyələr qazanmaq üçün dərhal qatıl.</Text>
+                  {activeCompetition.slogan ? (
+                    <Text style={[styles.competitionSubtitle, { color: colors.textSecondary, marginTop: 2 }]}>
+                      {activeCompetition.slogan}
+                    </Text>
+                  ) : null}
+                  <Text style={[styles.competitionSubtitle, { color: colors.textSecondary, marginTop: 2, fontSize: 11 }]}>
+                    İştirakçı: {activeCompetition.max_participants || 0}
+                  </Text>
                 </View>
                 <View style={[styles.competitionAction, { backgroundColor: colors.primary }]}>
                   <Text style={{ color: '#FFF', fontFamily: 'RethinkSans_700Bold', fontSize: 12 }}>Qatıl</Text>
@@ -643,13 +802,49 @@ export default function HomeScreen() {
     return null;
   }, [activeTopTab, favorites, handleToggleFavorite, router, settings]);
 
-  const renderEmpty = () => (
-    <View style={styles.emptyState}>
-      <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-        {activeTopTab === 'transport' ? 'Elan tapılmadı.' : 'Nömrə tapılmadı.'}
-      </Text>
-    </View>
-  );
+  const isLoading = activeTopTab === 'transport' ? listingsLoading : platesLoading;
+  const currentError = activeTopTab === 'transport' ? error : platesError;
+  const currentData = activeTopTab === 'transport' ? listings : plates;
+
+  const renderEmptyOrError = () => {
+    if (isLoading && currentData.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <ActivityIndicator size="large" color={colors.primary} style={{ marginBottom: 12 }} />
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+            {activeTopTab === 'transport' ? 'Elanlar yüklənir...' : 'Nömrələr yüklənir...'}
+          </Text>
+        </View>
+      );
+    }
+
+    if (currentError && currentData.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <AlertCircle size={44} color="#FF3B30" style={{ marginBottom: 12 }} />
+          <Text style={[styles.emptyText, { color: colors.text, marginBottom: 16, textAlign: 'center' }]}>
+            {currentError}
+          </Text>
+          <TouchableOpacity
+            style={[styles.retryBtn, { backgroundColor: colors.primary }]}
+            onPress={() => (activeTopTab === 'transport' ? fetchListings(true) : fetchPlates(true))}
+            activeOpacity={0.8}
+          >
+            <RefreshCw size={16} color="#FFF" style={{ marginRight: 8 }} />
+            <Text style={styles.retryBtnText}>Yenidən cəhd et</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.emptyState}>
+        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+          {activeTopTab === 'transport' ? 'Axtarışa uyğun elan tapılmadı.' : 'Axtarışa uyğun nömrə tapılmadı.'}
+        </Text>
+      </View>
+    );
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -713,7 +908,7 @@ export default function HomeScreen() {
         columnWrapperStyle={activeTopTab === 'plates' ? styles.grid : undefined}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 }]}
         ListHeaderComponent={renderHeader}
-        ListEmptyComponent={!loading ? renderEmpty : null}
+        ListEmptyComponent={renderEmptyOrError}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
@@ -724,8 +919,10 @@ export default function HomeScreen() {
         removeClippedSubviews={true}
         ListFooterComponent={
           <View style={{ paddingBottom: 40 }}>
-            {loading && !refreshing ? <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 20 }} /> : null}
-            {!loading && (activeTopTab === 'transport' ? totalPages > 1 : totalPlatesPages > 1) && (
+            {isLoading && currentData.length > 0 && !refreshing ? (
+              <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 20 }} />
+            ) : null}
+            {!isLoading && (activeTopTab === 'transport' ? totalPages > 1 : totalPlatesPages > 1) && (
               <Pagination
                 currentPage={activeTopTab === 'transport' ? page : platesPage}
                 totalPages={activeTopTab === 'transport' ? totalPages : totalPlatesPages}
@@ -739,6 +936,9 @@ export default function HomeScreen() {
           </View>
         }
       />
+
+      {/* Live Chat Floating Button */}
+      {activeTopTab === 'transport' && <FloatingChatButton />}
     </View>
   );
 }
@@ -925,6 +1125,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 0
   },
-  emptyState: { width: '100%', alignItems: 'center', marginTop: 50 },
+  emptyState: { width: '100%', alignItems: 'center', marginTop: 50, paddingHorizontal: 20 },
   emptyText: { fontSize: 16, fontFamily: 'RethinkSans_500Medium' },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  retryBtnText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontFamily: 'RethinkSans_700Bold',
+  },
 });

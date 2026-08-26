@@ -34,6 +34,7 @@ import { useSettings } from '../../contexts/SettingsContext';
 import { PlateVisual } from '../../components/PlateVisual';
 import * as Clipboard from 'expo-clipboard';
 import { useToast } from '../../contexts/ToastContext';
+import LoadingAnimation from '../../components/LoadingAnimation';
 
 export default function PlateDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -70,7 +71,9 @@ export default function PlateDetailScreen() {
   };
 
   const handleShare = async () => {
-    const message = `Naxavto-da bu nömrəyə bax: ${plate.region}-${plate.series}-${plate.number} - ${plate.price} AZN`;
+    const shareUrl = `https://naxavto.com/plate/${plate.short_id || plate.id}`;
+    const baseMessage = `Naxavto-da bu nömrəyə bax: ${plate.region}-${plate.series}-${plate.number} - ${plate.price} AZN`;
+    const message = Platform.OS === 'ios' ? baseMessage : `${baseMessage}\n${shareUrl}`;
 
     try {
       if (Platform.OS === 'web') {
@@ -78,7 +81,7 @@ export default function PlateDetailScreen() {
           await navigator.share({
             title: 'Naxavto',
             text: message,
-            url: window.location.href,
+            url: shareUrl,
           });
         } else {
           Alert.alert('Paylaşım', 'Bu brauzer paylaşımı dəstəkləmir.');
@@ -86,6 +89,7 @@ export default function PlateDetailScreen() {
       } else {
         await Share.share({
           message,
+          url: shareUrl, // iOS support
         });
       }
     } catch (error: any) {
@@ -118,13 +122,7 @@ export default function PlateDetailScreen() {
   if (adminPhones.length === 0 && settings.phone) adminPhones.push(settings.phone);
   if (adminPhones.length === 0) adminPhones.push('+994 50 123 45 67'); // Default fallback
 
-  if (loading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
+  if (loading) return <LoadingAnimation />;
 
   if (!plate) {
     return (

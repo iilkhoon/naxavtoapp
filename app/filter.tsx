@@ -125,7 +125,7 @@ export default function FilterScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const { eventName } = useLocalSearchParams();
+  const { eventName, initialFilters } = useLocalSearchParams();
   
   const [loading, setLoading] = useState(true);
   
@@ -165,6 +165,29 @@ export default function FilterScreen() {
 
   useEffect(() => {
     fetchOptions();
+    if (initialFilters) {
+      try {
+        const parsed = JSON.parse(initialFilters as string);
+        if (parsed.minPrice) setMinPrice(String(parsed.minPrice));
+        if (parsed.maxPrice) setMaxPrice(String(parsed.maxPrice));
+        if (parsed.minYear) setMinYear(String(parsed.minYear));
+        if (parsed.maxYear) setMaxYear(String(parsed.maxYear));
+        if (parsed.minMileage) setMinMileage(String(parsed.minMileage));
+        if (parsed.maxMileage) setMaxMileage(String(parsed.maxMileage));
+        if (parsed.minEngine) setMinEngine(String(parsed.minEngine));
+        if (parsed.maxEngine) setMaxEngine(String(parsed.maxEngine));
+        if (parsed.city) setCity(String(parsed.city));
+        if (parsed.bodyType) setBodyType(String(parsed.bodyType));
+        if (parsed.fuelType) setFuelType(String(parsed.fuelType));
+        if (parsed.gearbox) setGearbox(String(parsed.gearbox));
+        if (parsed.transmission) setTransmission(String(parsed.transmission));
+        if (parsed.color) setColor(String(parsed.color));
+        if (parsed.market) setMarket(String(parsed.market));
+        if (parsed.isNew !== undefined) setIsNew(!!parsed.isNew);
+        if (parsed.isCredit !== undefined) setIsCredit(!!parsed.isCredit);
+        if (parsed.isBarter !== undefined) setIsBarter(!!parsed.isBarter);
+      } catch (e) {}
+    }
   }, []);
 
   const fetchOptions = async () => {

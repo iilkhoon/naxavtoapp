@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image, useWindowDimensions } from 'react-native';
-import { Sun, Moon, Plus, Menu, X, Home, Heart, ArrowLeftRight, Phone, Calculator } from 'lucide-react-native';
+import { Sun, Moon, Plus, Menu, X, Home, Heart, ArrowLeftRight, Phone, Calculator, User } from 'lucide-react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useTheme } from '../contexts/ThemeContext';
 import { useSettings } from '../contexts/SettingsContext';
+import { useAuth } from '../contexts/AuthContext';
 
 export function WebHeader() {
     const router = useRouter();
     const pathname = usePathname();
     const { colors, isDark, toggleTheme } = useTheme();
     const { settings } = useSettings();
+    const { user } = useAuth();
     const { width } = useWindowDimensions();
     const isMobile = width < 768;
     const [menuOpen, setMenuOpen] = useState(false);
@@ -94,6 +96,18 @@ export function WebHeader() {
 
                         {!isMobile && (
                             <TouchableOpacity
+                                onPress={() => router.push('/my-loans' as any)}
+                                style={[styles.loginBtn, { borderColor: colors.border }]}
+                            >
+                                <User size={18} color={colors.text} />
+                                <Text style={[styles.loginBtnText, { color: colors.text }]}>
+                                    {user ? 'Kreditlərim' : 'Giriş'}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+
+                        {!isMobile && (
+                            <TouchableOpacity
                                 onPress={() => router.push('/add-listing' as any)}
                                 style={[styles.addBtn, { backgroundColor: colors.primary }]}
                             >
@@ -142,6 +156,17 @@ export function WebHeader() {
                             </TouchableOpacity>
                         );
                     })}
+                    {/* Login/Credit Panel button inside mobile menu */}
+                    <TouchableOpacity
+                        style={[styles.mobileLoginBtn, { borderColor: colors.border }]}
+                        onPress={() => handleNav('/my-loans')}
+                    >
+                        <User size={18} color={colors.text} />
+                        <Text style={[styles.mobileLoginBtnText, { color: colors.text }]}>
+                            {user ? 'Kredit Paneli' : 'Giriş Et'}
+                        </Text>
+                    </TouchableOpacity>
+
                     {/* Elan ver button inside mobile menu */}
                     <TouchableOpacity
                         style={[styles.mobileAddBtn, { backgroundColor: colors.primary }]}
@@ -263,7 +288,35 @@ const styles = StyleSheet.create({
         gap: 8,
         paddingVertical: 14,
         borderRadius: 16,
-        marginTop: 8,
+        marginTop: 4,
         marginBottom: 8,
+    },
+    loginBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 20,
+        borderWidth: 1,
+        gap: 8,
+    },
+    loginBtnText: {
+        fontFamily: 'RethinkSans_700Bold',
+        fontSize: 14,
+    },
+    mobileLoginBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        paddingVertical: 14,
+        borderRadius: 16,
+        borderWidth: 1,
+        marginTop: 8,
+        marginBottom: 4,
+    },
+    mobileLoginBtnText: {
+        fontFamily: 'RethinkSans_700Bold',
+        fontSize: 16,
     },
 });

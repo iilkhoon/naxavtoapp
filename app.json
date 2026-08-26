@@ -2,7 +2,7 @@
   "expo": {
     "name": "Naxçıvan Avto",
     "slug": "naxcivan-avto",
-    "version": "1.0.7",
+    "version": "1.2.3",
     "orientation": "portrait",
     "icon": "./icons/android-icon.png",
     "scheme": "naxcivan-avto",
@@ -16,15 +16,21 @@
         "backgroundColor": "#121212"
       }
     },
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
+      "icon": "./icons/ios-icon.png",
       "supportsTablet": true,
       "bundleIdentifier": "com.naxavtoapp.novoloji",
+      "associatedDomains": [
+        "applinks:naxavto.com"
+      ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
+      "edgeToEdge": true,
+      "icon": "./icons/android-icon.png",
       "package": "com.naxavtoapp.novoloji",
       "adaptiveIcon": {
         "foregroundImage": "./icons/android-icon.png",
@@ -32,11 +38,34 @@
       },
       "softwareKeyboardLayoutMode": "pan",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 9
+      "versionCode": 12,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "naxavto.com",
+              "pathPrefix": "/listing"
+            },
+            {
+              "scheme": "https",
+              "host": "naxavto.com",
+              "pathPrefix": "/plate"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "bundler": "metro",
-      "output": "static"
+      "output": "static",
+      "favicon": "./icons/android-icon.png"
     },
     "plugins": [
       "expo-router",
@@ -45,18 +74,22 @@
         "expo-build-properties",
         {
           "android": {
-            "compileSdkVersion": 35,
-            "targetSdkVersion": 35,
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
             "minSdkVersion": 24,
-            "buildToolsVersion": "35.0.0",
+            "buildToolsVersion": "36.0.0",
+            "r8FullMode": true,
             "enableShrinkResourcesInReleaseBuilds": true,
-            "enableProguardInReleaseBuilds": true
+            "enableProguardInReleaseBuilds": true,
+            "enableMinifyInReleaseBuilds": true,
+            "resizeableActivity": true
           },
           "ios": {
             "deploymentTarget": "15.1"
           }
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
@@ -68,6 +101,12 @@
       "eas": {
         "projectId": "38110a1a-4c6a-4e2a-840a-8abfc3baa335"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/38110a1a-4c6a-4e2a-840a-8abfc3baa335"
     }
   }
 }

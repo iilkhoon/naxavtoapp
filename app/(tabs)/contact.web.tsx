@@ -5,14 +5,16 @@ import {
 } from 'react-native';
 import {
     Phone, Mail, MapPin, MessageCircle, Instagram, Video,
-    Globe, ChevronRight
+    Globe, ChevronRight, CreditCard
 } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { WebFooter } from '../../components/WebFooter.web';
 
 export default function WebContactScreen() {
+    const router = useRouter();
     const { colors, isDark } = useTheme();
     const { settings } = useSettings();
     const { width } = useWindowDimensions();
@@ -71,6 +73,23 @@ export default function WebContactScreen() {
                 <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
                     Sualınız varsa, bizimlə əlaqə saxlayın — ən qısa zamanda cavab verərik.
                 </Text>
+            </View>
+
+            {/* Kreditlərim Banner */}
+            <View style={[styles.pageWrap, { paddingBottom: 0, paddingTop: isMobile ? 16 : 32 }]}>
+              <TouchableOpacity
+                style={[styles.loanBanner, { backgroundColor: colors.card, borderColor: '#00C7BE' }]}
+                onPress={() => router.push('/my-loans' as any)}
+              >
+                <View style={[styles.loanBannerIcon, { backgroundColor: 'rgba(0,199,190,0.12)' }]}>
+                  <CreditCard size={28} color="#00C7BE" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.loanBannerTitle, { color: colors.text }]}>Kreditlərim</Text>
+                  <Text style={[styles.loanBannerDesc, { color: colors.textSecondary }]}>Ödəniş planı, qalan borc və kredit məlumatları</Text>
+                </View>
+                <ChevronRight size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
             </View>
 
             <View style={[styles.pageWrap, isMobile && { paddingHorizontal: 16, paddingTop: 20 }]}>
@@ -350,6 +369,32 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         borderRadius: 14,
         alignSelf: 'flex-start',
+    },
+    loanBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 20,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderLeftWidth: 4,
+        gap: 16,
+        cursor: 'pointer' as any,
+    },
+    loanBannerIcon: {
+        width: 56,
+        height: 56,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loanBannerTitle: {
+        fontSize: 18,
+        fontFamily: 'RethinkSans_800ExtraBold',
+        marginBottom: 4,
+    },
+    loanBannerDesc: {
+        fontSize: 14,
+        fontFamily: 'RethinkSans_400Regular',
     },
 
 });

@@ -3,7 +3,19 @@
     "public": "dist",
     "ignore": [
       "firebase.json",
-      "**/.*"
+      "**/.*",
+      "!**/.well-known/**"
+    ],
+    "headers": [
+      {
+        "source": "/.well-known/apple-app-site-association",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ]
+      }
     ],
     "rewrites": [
       {

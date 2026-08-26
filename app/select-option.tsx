@@ -22,6 +22,7 @@ import {
   Fuel, Settings, Zap, Globe, Palette, MapPin, Layers,
   Truck, Bus, Car, ArrowLeft
 } from 'lucide-react-native';
+import LoadingAnimation from '../components/LoadingAnimation';
 import { REGIONS } from '../constants/Regions';
 import { MotiView } from 'moti';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -317,11 +318,8 @@ export default function SelectOptionScreen() {
         </View>
       </View>
 
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      ) : (
+      {loading && <LoadingAnimation />}
+      {!loading && (
         <ScrollView
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 20 }]}
           showsVerticalScrollIndicator={false}

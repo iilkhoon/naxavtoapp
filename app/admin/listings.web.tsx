@@ -8,6 +8,7 @@ import {
     RefreshCw, ChevronRight, ArrowLeft
 } from 'lucide-react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { formatDate } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -225,7 +226,7 @@ export default function WebAdminListings() {
                                 const p = item as Plate;
                                 const title = iscar ? `${c.make} ${c.model} ${c.year}` : `${p.region} ${p.series} ${p.number}`;
                                 const price = `${item.price} ₼`;
-                                const date = new Date(item.created_at || '').toLocaleDateString('az-AZ');
+                                const date = formatDate(item.created_at || '');
                                 return (
                                     <View key={item.id} style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border }]}>
                                         {/* Thumbnail / Icon */}

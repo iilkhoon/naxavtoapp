@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
-  TouchableOpacity, 
-  TextInput, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  TextInput,
   Alert,
   ActivityIndicator,
   Platform,
@@ -18,6 +18,7 @@ import { SelectionModal } from '../../components/SelectionModal';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { MotiView } from 'moti';
+import LoadingAnimation from '../../components/LoadingAnimation';
 
 export default function ModelsScreen() {
   const router = useRouter();
@@ -58,7 +59,7 @@ export default function ModelsScreen() {
         .select('*')
         .eq('brand_id', brandId)
         .order('name');
-      
+
       if (error) throw error;
       setModels(data || []);
     } catch (error) {
@@ -83,13 +84,13 @@ export default function ModelsScreen() {
     try {
       const { error } = await supabase
         .from('models')
-        .insert({ 
+        .insert({
           name: newModel.trim(),
-          brand_id: selectedBrand.id 
+          brand_id: selectedBrand.id
         });
 
       if (error) throw error;
-      
+
       setNewModel('');
       fetchModels(selectedBrand.id);
     } catch (error: any) {
@@ -101,70 +102,70 @@ export default function ModelsScreen() {
 
   const performDelete = async (id: string) => {
     try {
-        const { error } = await supabase
+      const { error } = await supabase
         .from('models')
         .delete()
         .eq('id', id);
-        
-        if (error) throw error;
-        if (selectedBrand) fetchModels(selectedBrand.id);
+
+      if (error) throw error;
+      if (selectedBrand) fetchModels(selectedBrand.id);
     } catch (error: any) {
-        Alert.alert('Xəta', error.message);
+      Alert.alert('Xəta', error.message);
     }
   };
 
   const handleDeleteModel = async (id: string, name: string) => {
     if (Platform.OS === 'web') {
-        if (window.confirm(`"${name}" modelini silmək istədiyinizə əminsiniz?`)) {
-            performDelete(id);
-        }
+      if (window.confirm(`"${name}" modelini silmək istədiyinizə əminsiniz?`)) {
+        performDelete(id);
+      }
     } else {
-        Alert.alert(
-          'Sil',
-          `"${name}" modelini silmək istədiyinizə əminsiniz?`,
-          [
-            { text: 'Ləğv et', style: 'cancel' },
-            { 
-              text: 'Sil', 
-              style: 'destructive',
-              onPress: () => performDelete(id)
-            }
-          ]
-        );
+      Alert.alert(
+        'Sil',
+        `"${name}" modelini silmək istədiyinizə əminsiniz?`,
+        [
+          { text: 'Ləğv et', style: 'cancel' },
+          {
+            text: 'Sil',
+            style: 'destructive',
+            onPress: () => performDelete(id)
+          }
+        ]
+      );
     }
   };
 
   const renderItem = ({ item, index }: { item: any, index: number }) => (
     <MotiView
-        from={{ opacity: 0, translateY: 10 }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={{ delay: index * 30 }}
+      from={{ opacity: 0, translateY: 10 }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{ delay: index * 30 }}
     >
-        <View style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.itemLeft}>
-                <View style={[styles.iconContainer, { backgroundColor: isDark ? '#333' : '#F3F4F6' }]}>
-                    <Layers size={20} color={colors.textSecondary} />
-                </View>
-                <Text style={[styles.itemText, { color: colors.text }]}>{item.name}</Text>
-            </View>
-            <TouchableOpacity 
-                onPress={() => handleDeleteModel(item.id, item.name)}
-                style={[styles.deleteButton, { backgroundColor: 'rgba(255, 59, 48, 0.1)' }]}
-            >
-                <Trash2 size={18} color="#FF3B30" />
-            </TouchableOpacity>
+      <View style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.itemLeft}>
+          <View style={[styles.iconContainer, { backgroundColor: isDark ? '#333' : '#F3F4F6' }]}>
+            <Layers size={20} color={colors.textSecondary} />
+          </View>
+          <Text style={[styles.itemText, { color: colors.text }]}>{item.name}</Text>
         </View>
+        <TouchableOpacity
+          onPress={() => handleDeleteModel(item.id, item.name)}
+          style={[styles.deleteButton, { backgroundColor: 'rgba(255, 59, 48, 0.1)' }]}
+        >
+          <Trash2 size={18} color="#FF3B30" />
+        </TouchableOpacity>
+      </View>
     </MotiView>
   );
 
   return (
-    <KeyboardAvoidingView 
-        style={[styles.container, { backgroundColor: colors.background }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <ArrowLeft size={24} color={colors.text} />
+          <ArrowLeft size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.text }]}>Modellər</Text>
         <View style={{ width: 24 }} />
@@ -172,7 +173,7 @@ export default function ModelsScreen() {
 
       <View style={styles.selectionSection}>
         <Text style={[styles.label, { color: colors.textSecondary }]}>Marka seçin:</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.brandSelector, { backgroundColor: colors.card, borderColor: colors.border }]}
           onPress={() => setShowBrandModal(true)}
         >
@@ -184,7 +185,7 @@ export default function ModelsScreen() {
       </View>
 
       {loading && !refreshing ? (
-        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 20 }} />
+        <LoadingAnimation fullScreen={false} size={120} />
       ) : (
         <FlatList
           data={models}
@@ -196,12 +197,12 @@ export default function ModelsScreen() {
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-                <Layers size={40} color={colors.border} />
-                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                {selectedBrand 
-                    ? 'Bu marka üçün model tapılmadı' 
-                    : 'Zəhmət olmasa əvvəlcə marka seçin'}
-                </Text>
+              <Layers size={40} color={colors.border} />
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                {selectedBrand
+                  ? 'Bu marka üçün model tapılmadı'
+                  : 'Zəhmət olmasa əvvəlcə marka seçin'}
+              </Text>
             </View>
           }
         />
@@ -209,26 +210,26 @@ export default function ModelsScreen() {
 
       {selectedBrand && (
         <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
-            <View style={styles.inputRow}>
-                <TextInput
-                    style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-                    placeholder="Yeni model adı..."
-                    placeholderTextColor={colors.placeholder}
-                    value={newModel}
-                    onChangeText={setNewModel}
-                />
-                <TouchableOpacity 
-                    style={[styles.addButton, { backgroundColor: colors.primary }, (!newModel.trim() || adding) && styles.disabledButton]}
-                    onPress={handleAddModel}
-                    disabled={!newModel.trim() || adding}
-                >
-                    {adding ? (
-                        <ActivityIndicator color="#FFF" size="small" />
-                    ) : (
-                        <Plus size={24} color="#FFF" />
-                    )}
-                </TouchableOpacity>
-            </View>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+              placeholder="Yeni model adı..."
+              placeholderTextColor={colors.placeholder}
+              value={newModel}
+              onChangeText={setNewModel}
+            />
+            <TouchableOpacity
+              style={[styles.addButton, { backgroundColor: colors.primary }, (!newModel.trim() || adding) && styles.disabledButton]}
+              onPress={handleAddModel}
+              disabled={!newModel.trim() || adding}
+            >
+              {adding ? (
+                <ActivityIndicator color="#FFF" size="small" />
+              ) : (
+                <Plus size={24} color="#FFF" />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
