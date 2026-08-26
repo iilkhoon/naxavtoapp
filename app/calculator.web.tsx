@@ -3,11 +3,12 @@ import {
     View, Text, StyleSheet, TouchableOpacity, TextInput,
     ScrollView, useWindowDimensions, Platform
 } from 'react-native';
-import { RefreshCcw, Banknote, CreditCard, Calendar, Percent } from 'lucide-react-native';
+import { RefreshCcw, Banknote, CreditCard, Calendar, Percent, Send } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../contexts/ThemeContext';
 import { WebHeader } from '../components/WebHeader.web';
 import { WebFooter } from '../components/WebFooter.web';
+import { CreditApplicationModal } from '../components/CreditApplicationModal';
 
 export default function WebCalculatorScreen() {
     const { colors, isDark } = useTheme();
@@ -18,6 +19,7 @@ export default function WebCalculatorScreen() {
     const [initialPayment, setInitialPayment] = useState('');
     const [rate, setRate] = useState('21');
     const [months, setMonths] = useState('36');
+    const [showApplyModal, setShowApplyModal] = useState(false);
 
     const [monthlyPayment, setMonthlyPayment] = useState(0);
     const [totalInterest, setTotalInterest] = useState(0);
@@ -239,11 +241,34 @@ export default function WebCalculatorScreen() {
                                         <Text style={[styles.breakdownLabel, { color: colors.text, fontFamily: 'RethinkSans_700Bold' }]}>Ümumi Geri Ödəniş</Text>
                                         <Text style={[styles.breakdownValue, { color: colors.primary, fontFamily: 'RethinkSans_800ExtraBold' }]}>{totalPayment.toFixed(0)} ₼</Text>
                                     </View>
+
+                                    <TouchableOpacity
+                                        style={styles.applyBtnWrap}
+                                        onPress={() => setShowApplyModal(true)}
+                                        activeOpacity={0.85}
+                                    >
+                                        <LinearGradient
+                                            colors={[colors.primary, '#FF9500']}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 0 }}
+                                            style={styles.calcApplyBtn}
+                                        >
+                                            <Send size={18} color="#FFF" style={{ marginRight: 8 }} />
+                                            <Text style={styles.calcApplyBtnText}>Bu Şərtlərlə Kreditə Müraciət Et</Text>
+                                        </LinearGradient>
+                                    </TouchableOpacity>
                                 </View>
                             )}
                         </View>
                     </View>
                 </View>
+
+                <CreditApplicationModal
+                    visible={showApplyModal}
+                    onClose={() => setShowApplyModal(false)}
+                    carTitle={price ? `${parseFloat(price).toLocaleString()} AZN Krediti` : 'Avtomobil Krediti'}
+                    carPrice={parseFloat(price) || undefined}
+                />
 
                 <WebFooter />
             </ScrollView>
@@ -461,6 +486,22 @@ const styles = StyleSheet.create({
     },
     breakdownValue: {
         fontSize: 14,
+        fontFamily: 'RethinkSans_700Bold',
+    },
+    applyBtnWrap: {
+        marginTop: 20,
+    },
+    calcApplyBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 50,
+        borderRadius: 14,
+        cursor: 'pointer' as any,
+    },
+    calcApplyBtnText: {
+        color: '#FFF',
+        fontSize: 15,
         fontFamily: 'RethinkSans_700Bold',
     },
 });

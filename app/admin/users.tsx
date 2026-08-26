@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView,
-    ActivityIndicator, TouchableOpacity, TextInput, SafeAreaView
+    ActivityIndicator, TouchableOpacity, TextInput
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
     Users, Search, ArrowLeft, ChevronRight, UserPlus, Shield
 } from 'lucide-react-native';

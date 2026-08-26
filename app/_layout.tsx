@@ -27,7 +27,7 @@ import { usePushNotifications } from '../hooks/usePushNotifications';
 import { InstagramPopup } from '../components/InstagramPopup';
 import { WebSideBanners } from '../components/WebSideBanners';
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 // Apply default font globally using defaultProps
 const applyGlobalFont = () => {

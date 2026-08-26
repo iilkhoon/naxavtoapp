@@ -10,9 +10,9 @@ import {
   Share,
   Platform,
   ScrollView,
-  Alert,
-  Image
+  Alert
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import {
   ArrowLeft,
@@ -51,18 +51,47 @@ export default function PlateDetailScreen() {
   }, [id]);
 
   const fetchPlateDetails = async () => {
-    try {
-      // Increment views
-      supabase.rpc('increment_plate_views', { row_id: id }).then();
+    if (!id) {
+      setLoading(false);
+      return;
+    }
 
-      const { data, error } = await supabase
+    try {
+      const cleanId = String(id).trim();
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
+
+      const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
+        setTimeout(() => resolve({ data: null, error: new Error('Request timeout') }), 10000)
+      );
+
+      const mainQuery = supabase
         .from('plates')
         .select('*')
-        .eq('id', id)
-        .single();
+        .eq(isUuid ? 'id' : 'short_id', cleanId)
+        .maybeSingle();
 
-      if (error) throw error;
-      setPlate(data);
+      const { data, error } = (await Promise.race([mainQuery, timeoutPromise])) as any;
+
+      let resultData = data;
+      if (!resultData && !isUuid) {
+        try {
+          const { data: fallbackData } = await supabase
+            .from('plates')
+            .select('*')
+            .eq('id', cleanId)
+            .maybeSingle();
+          resultData = fallbackData;
+        } catch (e) {}
+      }
+
+      if (resultData) {
+        setPlate(resultData);
+        if (resultData.id) {
+          supabase.rpc('increment_plate_views', { row_id: resultData.id }).then(() => {}, () => {});
+        }
+      } else {
+        setPlate(null);
+      }
     } catch (error) {
       console.error('Error fetching plate:', error);
     } finally {
@@ -71,6 +100,7 @@ export default function PlateDetailScreen() {
   };
 
   const handleShare = async () => {
+    if (!plate) return;
     const shareUrl = `https://naxavto.com/plate/${plate.short_id || plate.id}`;
     const baseMessage = `Naxavto-da bu nömrəyə bax: ${plate.region}-${plate.series}-${plate.number} - ${plate.price} AZN`;
     const message = Platform.OS === 'ios' ? baseMessage : `${baseMessage}\n${shareUrl}`;
@@ -122,15 +152,55 @@ export default function PlateDetailScreen() {
   if (adminPhones.length === 0 && settings.phone) adminPhones.push(settings.phone);
   if (adminPhones.length === 0) adminPhones.push('+994 50 123 45 67'); // Default fallback
 
-  if (loading) return <LoadingAnimation />;
+  if (loading && !plate) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={[styles.header, { backgroundColor: colors.background }]}>
+          <TouchableOpacity
+            style={[styles.iconButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+          >
+            <ArrowLeft size={24} color={colors.text} />
+          </TouchableOpacity>
+        </View>
+        <LoadingAnimation />
+      </View>
+    );
+  }
 
   if (!plate) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.text }}>Nömrə tapılmadı</Text>
-        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 20 }}>
-          <Text style={{ color: colors.primary }}>Geri qayıt</Text>
-        </TouchableOpacity>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={[styles.header, { backgroundColor: colors.background }]}>
+          <TouchableOpacity
+            style={[styles.iconButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+          >
+            <ArrowLeft size={24} color={colors.text} />
+          </TouchableOpacity>
+        </View>
+        <View style={[styles.loadingContainer, { backgroundColor: colors.background, marginTop: -60 }]}>
+          <Text style={{ color: colors.text, fontSize: 18, fontFamily: 'RethinkSans_700Bold', marginBottom: 8 }}>Nömrə tapılmadı</Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 14, fontFamily: 'RethinkSans_400Regular', textAlign: 'center', marginBottom: 20 }}>
+            Bu nömrə silinmiş və ya deaktiv edilmiş ola bilər.
+          </Text>
+          <TouchableOpacity
+            onPress={() => { setLoading(true); fetchPlateDetails(); }}
+            style={{ backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, marginBottom: 12 }}
+            activeOpacity={0.8}
+          >
+            <Text style={{ color: '#FFF', fontFamily: 'RethinkSans_700Bold' }}>Yenidən cəhd et</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.back()} style={{ padding: 8 }}>
+            <Text style={{ color: colors.textSecondary, fontFamily: 'RethinkSans_600SemiBold' }}>Geri qayıt</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -232,7 +302,7 @@ export default function PlateDetailScreen() {
                 <Image
                   source={{ uri: logoUrl || 'https://via.placeholder.com/50' }}
                   style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: isDark ? 'transparent' : '#F8F9FA' }}
-                  resizeMode="contain"
+                  contentFit="contain"
                 />
                 <View style={{ position: 'absolute', bottom: 0, right: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: '#4CD964', borderWidth: 2, borderColor: '#FFF' }} />
               </View>

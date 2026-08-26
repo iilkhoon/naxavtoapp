@@ -10,11 +10,12 @@ import {
   KeyboardAvoidingView,
   StatusBar
 } from 'react-native';
-import { RefreshCcw, Banknote, CreditCard, ArrowLeft, Calendar, Percent } from 'lucide-react-native';
+import { RefreshCcw, Banknote, CreditCard, ArrowLeft, Calendar, Percent, Send } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
+import { CreditApplicationModal } from '../components/CreditApplicationModal';
 
 export default function CalculatorScreen() {
   const router = useRouter();
@@ -23,6 +24,8 @@ export default function CalculatorScreen() {
   const params = useLocalSearchParams();
   
   const initialPriceParam = params.initialPrice ? params.initialPrice.toString() : '';
+  const carIdParam = params.carId ? params.carId.toString() : '';
+  const carTitleParam = params.carTitle ? params.carTitle.toString() : '';
   
   const [price, setPrice] = useState(initialPriceParam);
   const [initialPayment, setInitialPayment] = useState('');
@@ -33,6 +36,7 @@ export default function CalculatorScreen() {
   const [totalInterest, setTotalInterest] = useState(0);
   const [totalPayment, setTotalPayment] = useState(0);
   const [principalAmount, setPrincipalAmount] = useState(0);
+  const [showApplyModal, setShowApplyModal] = useState(false);
 
   useEffect(() => {
     calculateLoan();
@@ -255,8 +259,33 @@ export default function CalculatorScreen() {
                 </View>
               </View>
 
+              {/* Apply for Credit Button */}
+              <TouchableOpacity 
+                style={styles.applyBtnWrap}
+                onPress={() => setShowApplyModal(true)}
+                activeOpacity={0.85}
+              >
+                <LinearGradient
+                  colors={[colors.primary, '#FF9500']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.calcApplyBtn}
+                >
+                  <Send size={18} color="#FFF" style={{ marginRight: 8 }} />
+                  <Text style={styles.calcApplyBtnText}>Bu Şərtlərlə Kreditə Müraciət Et</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
             </View>
           </ScrollView>
+
+          <CreditApplicationModal
+            visible={showApplyModal}
+            onClose={() => setShowApplyModal(false)}
+            carId={carIdParam || null}
+            carTitle={carTitleParam || (price ? `${parseFloat(price).toLocaleString()} AZN Krediti` : 'Avtomobil Krediti')}
+            carPrice={parseFloat(price) || undefined}
+          />
         </View>
     </KeyboardAvoidingView>
   );
@@ -435,5 +464,26 @@ const styles = StyleSheet.create({
   monthText: {
     fontSize: 13,
     fontFamily: 'RethinkSans_600SemiBold',
+  },
+  applyBtnWrap: {
+    marginTop: 16,
+    marginBottom: 10,
+  },
+  calcApplyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 54,
+    borderRadius: 16,
+    shadowColor: '#FF9500',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  calcApplyBtnText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontFamily: 'RethinkSans_700Bold',
   },
 });

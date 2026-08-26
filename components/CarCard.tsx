@@ -83,13 +83,14 @@ export const CarCard = memo(({
 
   return (
     <View style={styles.container}>
-      <AnimatedPressable
+      <TouchableOpacity
         style={[
           styles.card,
           {
             backgroundColor: colors.card,
           }
         ]}
+        activeOpacity={0.88}
         onPress={() => onPress && onPress(id)}
       >
         {/* Image Section */}
@@ -111,6 +112,7 @@ export const CarCard = memo(({
               activeOpacity={0.7}
               onPress={(e) => { e.stopPropagation(); onToggleFavorite && onToggleFavorite(id); }}
               style={styles.heartButtonWrapper}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               {/* Replaced BlurView with simple translucent View for performance */}
               <View style={[styles.heartBlur, { backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.7)' }]}>
@@ -154,7 +156,7 @@ export const CarCard = memo(({
             {location}, {displayDate}
           </Text>
         </View>
-      </AnimatedPressable>
+      </TouchableOpacity>
     </View>
   );
 });

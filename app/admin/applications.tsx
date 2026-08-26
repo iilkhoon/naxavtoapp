@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView,
-    ActivityIndicator, TouchableOpacity, TextInput, SafeAreaView,
-    Modal, Platform, Dimensions, Alert
+    ActivityIndicator, TouchableOpacity, TextInput,
+    Modal, Platform, Linking, RefreshControl, Alert
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image as ExpoImage } from 'expo-image';
 import {
     FileText, Search, ArrowLeft, ChevronRight, CheckCircle2, XCircle, Trash2,
-    Briefcase, DollarSign, Calendar, Fingerprint, Phone, User, Info, MapPin
+    Briefcase, DollarSign, Calendar, Fingerprint, Phone, User, Info, Copy,
+    ExternalLink, PhoneCall, RefreshCw, Clock
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
@@ -14,6 +17,9 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
 import { MotiView } from 'moti';
 import { formatDate } from '../../lib/utils';
+import * as Clipboard from 'expo-clipboard';
+
+type FilterStatus = 'all' | 'pending' | 'approved' | 'rejected';
 
 export default function AdminApplications() {
     const router = useRouter();
@@ -21,8 +27,10 @@ export default function AdminApplications() {
     const { showToast } = useToast();
 
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [applications, setApplications] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
     const [filteredApps, setFilteredApps] = useState<any[]>([]);
     
     // Detailed Review Modal State
@@ -30,28 +38,8 @@ export default function AdminApplications() {
     const [reviewModalVisible, setReviewModalVisible] = useState(false);
     const [updating, setUpdating] = useState(false);
 
-    useEffect(() => {
-        fetchApplications();
-    }, []);
-
-    useEffect(() => {
-        if (!searchQuery) {
-            setFilteredApps(applications);
-            return;
-        }
-
-        const query = searchQuery.toLowerCase();
-        const filtered = applications.filter(app => 
-            (app.full_name?.toLowerCase().includes(query)) || 
-            (app.fin_code?.toLowerCase().includes(query)) ||
-            (app.listings?.make?.toLowerCase().includes(query)) ||
-            (app.listings?.model?.toLowerCase().includes(query))
-        );
-        setFilteredApps(filtered);
-    }, [searchQuery, applications]);
-
-    const fetchApplications = async () => {
-        setLoading(true);
+    const fetchApplications = useCallback(async (isRefresh = false) => {
+        if (!isRefresh) setLoading(true);
         try {
             const { data, error } = await supabase
                 .from('credit_applications')
@@ -64,19 +52,71 @@ export default function AdminApplications() {
                         year,
                         price,
                         currency,
-                        image_url
+                        image_url,
+                        images
                     )
                 `)
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
             setApplications(data || []);
-            setFilteredApps(data || []);
         } catch (e: any) {
+            console.error('Fetch applications error:', e);
             showToast('Müraciətlər yüklənərkən xəta: ' + e.message, 'error');
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
+    }, [showToast]);
+
+    useEffect(() => {
+        fetchApplications();
+
+        // Realtime subscription for incoming credit applications
+        const channel = supabase
+            .channel('admin_credit_applications')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'credit_applications' },
+                () => {
+                    fetchApplications(true);
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [fetchApplications]);
+
+    useEffect(() => {
+        let result = [...applications];
+
+        // Status filter
+        if (statusFilter !== 'all') {
+            result = result.filter(app => (app.status || 'pending') === statusFilter);
+        }
+
+        // Search query
+        if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase().trim();
+            result = result.filter(app => 
+                (app.full_name && app.full_name.toLowerCase().includes(q)) || 
+                (app.father_name && app.father_name.toLowerCase().includes(q)) ||
+                (app.fin_code && app.fin_code.toLowerCase().includes(q)) ||
+                (app.phone && app.phone.toLowerCase().includes(q)) ||
+                (app.workplace && app.workplace.toLowerCase().includes(q)) ||
+                (app.listings?.make && app.listings.make.toLowerCase().includes(q)) ||
+                (app.listings?.model && app.listings.model.toLowerCase().includes(q))
+            );
+        }
+
+        setFilteredApps(result);
+    }, [searchQuery, statusFilter, applications]);
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchApplications(true);
     };
 
     const updateStatus = async (appId: string, status: 'approved' | 'rejected') => {
@@ -91,7 +131,6 @@ export default function AdminApplications() {
             
             showToast(status === 'approved' ? 'Müraciət təsdiqləndi!' : 'Müraciət rədd edildi!', 'success');
             
-            // Update local state
             setApplications(prev => prev.map(app => app.id === appId ? { ...app, status } : app));
             if (selectedApp && selectedApp.id === appId) {
                 setSelectedApp({ ...selectedApp, status });
@@ -106,7 +145,7 @@ export default function AdminApplications() {
     const deleteApplication = async (appId: string) => {
         Alert.alert(
             'Müraciəti Sil',
-            'Bu müraciəti silmək istədiyinizdən əminsiniz? Bu əməliyyat geri qaytarıla bilməz.',
+            'Bu müraciəti silmək istədiyinizdən əminsiniz?',
             [
                 { text: 'Ləğv et', style: 'cancel' },
                 {
@@ -134,63 +173,181 @@ export default function AdminApplications() {
         );
     };
 
+    const handleCall = (phoneNumber: string) => {
+        if (!phoneNumber) return;
+        Linking.openURL(`tel:${phoneNumber}`);
+    };
+
+    const handleCopy = async (text: string, label: string) => {
+        if (!text) return;
+        await Clipboard.setStringAsync(text);
+        showToast(`${label} kopyalandı`, 'success');
+    };
+
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'approved':
-                return { label: 'Təsdiqlənib', color: '#34C759', bg: 'rgba(52,199,89,0.1)' };
+                return { label: 'Təsdiqlənib', color: '#34C759', bg: 'rgba(52,199,89,0.12)' };
             case 'rejected':
-                return { label: 'Rədd edilib', color: '#FF3B30', bg: 'rgba(255,59,48,0.1)' };
+                return { label: 'Rədd edilib', color: '#FF3B30', bg: 'rgba(255,59,48,0.12)' };
             default:
-                return { label: 'Gözləyir', color: '#FF9500', bg: 'rgba(255,149,0,0.1)' };
+                return { label: 'Gözləyir', color: '#FF9500', bg: 'rgba(255,149,0,0.12)' };
         }
     };
+
+    const pendingCount = applications.filter(a => (a.status || 'pending') === 'pending').length;
+    const approvedCount = applications.filter(a => a.status === 'approved').length;
+    const rejectedCount = applications.filter(a => a.status === 'rejected').length;
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: colors.border }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                     <ArrowLeft size={24} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>Kredit Müraciətləri</Text>
-                <View style={{ width: 40 }} />
+                <View style={styles.headerTitleWrap}>
+                    <Text style={[styles.headerTitle, { color: colors.text }]}>Kredit Müraciətləri</Text>
+                    <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
+                        Cəmi: {applications.length} müraciət
+                    </Text>
+                </View>
+                <TouchableOpacity onPress={() => fetchApplications(true)} style={styles.refreshBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <RefreshCw size={20} color={colors.primary} />
+                </TouchableOpacity>
             </View>
 
-            {/* Search */}
+            {/* Search Bar */}
             <View style={styles.searchSection}>
                 <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Search size={20} color={colors.textSecondary} />
+                    <Search size={18} color={colors.textSecondary} />
                     <TextInput
                         style={[styles.searchInput, { color: colors.text }]}
-                        placeholder="Müştəri adı və ya FİN kod ilə axtar..."
+                        placeholder="Ad, Soyad, FİN, Tel və ya Model ilə axtar..."
                         placeholderTextColor={colors.placeholder}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                     />
+                    {searchQuery.length > 0 && (
+                        <TouchableOpacity onPress={() => setSearchQuery('')}>
+                            <XCircle size={18} color={colors.textSecondary} />
+                        </TouchableOpacity>
+                    )}
                 </View>
+            </View>
+
+            {/* Status Filter Tabs */}
+            <View style={styles.filterTabsWrapper}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterTabs}>
+                    <TouchableOpacity
+                        style={[
+                            styles.filterTab,
+                            { backgroundColor: colors.card, borderColor: colors.border },
+                            statusFilter === 'all' && { backgroundColor: colors.primary, borderColor: colors.primary }
+                        ]}
+                        onPress={() => setStatusFilter('all')}
+                    >
+                        <Text style={[
+                            styles.filterTabText,
+                            { color: colors.textSecondary },
+                            statusFilter === 'all' && { color: '#FFF', fontFamily: 'RethinkSans_700Bold' }
+                        ]}>
+                            Hamısı ({applications.length})
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[
+                            styles.filterTab,
+                            { backgroundColor: colors.card, borderColor: colors.border },
+                            statusFilter === 'pending' && { backgroundColor: '#FF9500', borderColor: '#FF9500' }
+                        ]}
+                        onPress={() => setStatusFilter('pending')}
+                    >
+                        <Clock size={14} color={statusFilter === 'pending' ? '#FFF' : '#FF9500'} style={{ marginRight: 4 }} />
+                        <Text style={[
+                            styles.filterTabText,
+                            { color: colors.textSecondary },
+                            statusFilter === 'pending' && { color: '#FFF', fontFamily: 'RethinkSans_700Bold' }
+                        ]}>
+                            Gözləyir ({pendingCount})
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[
+                            styles.filterTab,
+                            { backgroundColor: colors.card, borderColor: colors.border },
+                            statusFilter === 'approved' && { backgroundColor: '#34C759', borderColor: '#34C759' }
+                        ]}
+                        onPress={() => setStatusFilter('approved')}
+                    >
+                        <CheckCircle2 size={14} color={statusFilter === 'approved' ? '#FFF' : '#34C759'} style={{ marginRight: 4 }} />
+                        <Text style={[
+                            styles.filterTabText,
+                            { color: colors.textSecondary },
+                            statusFilter === 'approved' && { color: '#FFF', fontFamily: 'RethinkSans_700Bold' }
+                        ]}>
+                            Təsdiqlənib ({approvedCount})
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[
+                            styles.filterTab,
+                            { backgroundColor: colors.card, borderColor: colors.border },
+                            statusFilter === 'rejected' && { backgroundColor: '#FF3B30', borderColor: '#FF3B30' }
+                        ]}
+                        onPress={() => setStatusFilter('rejected')}
+                    >
+                        <XCircle size={14} color={statusFilter === 'rejected' ? '#FFF' : '#FF3B30'} style={{ marginRight: 4 }} />
+                        <Text style={[
+                            styles.filterTabText,
+                            { color: colors.textSecondary },
+                            statusFilter === 'rejected' && { color: '#FFF', fontFamily: 'RethinkSans_700Bold' }
+                        ]}>
+                            Rədd edilib ({rejectedCount})
+                        </Text>
+                    </TouchableOpacity>
+                </ScrollView>
             </View>
 
             {loading ? (
                 <View style={styles.center}>
                     <ActivityIndicator size="large" color={colors.primary} />
+                    <Text style={{ color: colors.textSecondary, marginTop: 12, fontFamily: 'RethinkSans_500Medium' }}>
+                        Müraciətlər yüklənir...
+                    </Text>
                 </View>
             ) : (
-                <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+                <ScrollView 
+                    contentContainerStyle={styles.list} 
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+                    }
+                >
                     {filteredApps.length === 0 ? (
                         <View style={styles.empty}>
-                            <FileText size={48} color={colors.border} />
-                            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Müraciət tapılmadı</Text>
+                            <FileText size={56} color={colors.border} />
+                            <Text style={[styles.emptyTitle, { color: colors.text }]}>Müraciət Tapılmadı</Text>
+                            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                                {searchQuery ? 'Axtarışa uyğun heç bir kredit müraciəti tapılmadı.' : 'Hazırda bu kateqoriyada müraciət yoxdur.'}
+                            </Text>
                         </View>
                     ) : (
                         filteredApps.map((app, index) => {
                             const badge = getStatusBadge(app.status);
-                            const carName = app.listings ? `${app.listings.make} ${app.listings.model}` : 'Bilinməyən Avtomobil';
+                            const car = app.listings;
+                            const carName = car ? `${car.make} ${car.model}` : 'Bilinməyən Avtomobil';
+                            const carImg = car?.image_url || (Array.isArray(car?.images) && car.images[0]) || null;
+
                             return (
                                 <MotiView
                                     key={app.id}
                                     from={{ opacity: 0, translateY: 10 }}
                                     animate={{ opacity: 1, translateY: 0 }}
-                                    transition={{ delay: index * 50 }}
+                                    transition={{ delay: index * 40 }}
                                 >
                                     <TouchableOpacity 
                                         style={[styles.appCard, { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -198,43 +355,85 @@ export default function AdminApplications() {
                                             setSelectedApp(app);
                                             setReviewModalVisible(true);
                                         }}
+                                        activeOpacity={0.88}
                                     >
+                                        {/* Car and Status Header */}
                                         <View style={styles.appCardHeader}>
-                                            <Text style={[styles.carName, { color: colors.text }]} numberOfLines={1}>
-                                                🚗 {carName} {app.listings ? `(${app.listings.year})` : ''}
-                                            </Text>
+                                            {carImg && (
+                                                <ExpoImage
+                                                    source={{ uri: carImg }}
+                                                    style={styles.carThumb}
+                                                    contentFit="cover"
+                                                    transition={200}
+                                                />
+                                            )}
+                                            <View style={{ flex: 1, marginRight: 8 }}>
+                                                <Text style={[styles.carName, { color: colors.text }]} numberOfLines={1}>
+                                                    {carName} {car?.year ? `(${car.year})` : ''}
+                                                </Text>
+                                                {car?.price && (
+                                                    <Text style={[styles.carPrice, { color: colors.primary }]}>
+                                                        {car.price.toLocaleString()} {car.currency || 'AZN'}
+                                                    </Text>
+                                                )}
+                                            </View>
                                             <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
                                                 <Text style={[styles.statusText, { color: badge.color }]}>{badge.label}</Text>
                                             </View>
                                         </View>
 
-                                        <View style={[styles.divider, { backgroundColor: colors.border, marginVertical: 10 }]} />
+                                        <View style={[styles.divider, { backgroundColor: colors.border, marginVertical: 12 }]} />
 
+                                        {/* Applicant Info */}
                                         <View style={styles.appCardBody}>
-                                            <Text style={[styles.applicantName, { color: colors.text }]}>
-                                                👤 {app.full_name} {app.father_name ? `${app.father_name}` : ''}
-                                            </Text>
+                                            <View style={styles.applicantHeaderRow}>
+                                                <Text style={[styles.applicantName, { color: colors.text }]}>
+                                                    👤 {app.full_name} {app.father_name ? `(${app.father_name})` : ''}
+                                                </Text>
+                                            </View>
+
                                             <View style={styles.infoGrid}>
-                                                <Text style={[styles.infoItem, { color: colors.textSecondary }]}>
-                                                    💳 FİN: <Text style={{ color: colors.text, fontWeight: 'bold' }}>{app.fin_code}</Text>
-                                                </Text>
-                                                <Text style={[styles.infoItem, { color: colors.textSecondary }]}>
-                                                    📞 Tel: <Text style={{ color: colors.text }}>{app.phone}</Text>
-                                                </Text>
-                                                <Text style={[styles.infoItem, { color: colors.textSecondary }]}>
-                                                    💼 İş: <Text style={{ color: colors.text }} numberOfLines={1}>{app.workplace}</Text>
-                                                </Text>
-                                                <Text style={[styles.infoItem, { color: colors.textSecondary }]}>
-                                                    💰 Qazanc: <Text style={{ color: '#34C759', fontWeight: 'bold' }}>{Number(app.monthly_income).toLocaleString()} ₼</Text>
-                                                </Text>
+                                                <View style={styles.infoGridCol}>
+                                                    <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>FİN Kod:</Text>
+                                                    <TouchableOpacity onPress={() => handleCopy(app.fin_code, 'FİN kod')} style={styles.inlineCopy}>
+                                                        <Text style={[styles.infoValue, { color: colors.text, letterSpacing: 1 }]}>{app.fin_code}</Text>
+                                                        <Copy size={12} color={colors.primary} style={{ marginLeft: 4 }} />
+                                                    </TouchableOpacity>
+                                                </View>
+
+                                                <View style={styles.infoGridCol}>
+                                                    <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Telefon:</Text>
+                                                    <TouchableOpacity onPress={() => handleCall(app.phone)} style={styles.inlineCopy}>
+                                                        <Text style={[styles.infoValue, { color: '#007AFF' }]}>{app.phone}</Text>
+                                                        <PhoneCall size={12} color="#007AFF" style={{ marginLeft: 4 }} />
+                                                    </TouchableOpacity>
+                                                </View>
+
+                                                <View style={styles.infoGridCol}>
+                                                    <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Aylıq Qazanc:</Text>
+                                                    <Text style={[styles.infoValue, { color: '#34C759', fontWeight: 'bold' }]}>
+                                                        {Number(app.monthly_income || 0).toLocaleString()} ₼
+                                                    </Text>
+                                                </View>
+
+                                                <View style={styles.infoGridCol}>
+                                                    <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>İş Yeri:</Text>
+                                                    <Text style={[styles.infoValue, { color: colors.text }]} numberOfLines={1}>
+                                                        {app.workplace || '-'}
+                                                    </Text>
+                                                </View>
                                             </View>
                                         </View>
                                         
-                                        <View style={styles.cardFooter}>
+                                        {/* Card Footer */}
+                                        <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
                                             <Text style={[styles.dateText, { color: colors.textSecondary }]}>
                                                 📅 {formatDate(app.created_at, { showMonthName: true })}
                                             </Text>
-                                            <ChevronRight size={16} color={colors.textSecondary} />
+                                            <View style={styles.cardFooterRight}>
+                                                <Text style={[styles.detailsLinkText, { color: colors.primary }]}>Ətraflı Bax</Text>
+                                                <ChevronRight size={16} color={colors.primary} />
+                                            </View>
                                         </View>
                                     </TouchableOpacity>
                                 </MotiView>
@@ -244,12 +443,13 @@ export default function AdminApplications() {
                 </ScrollView>
             )}
 
-            {/* Detailed Review Modal (BottomSheet Style) */}
+            {/* Detailed Review BottomSheet Modal */}
             <Modal
                 visible={reviewModalVisible}
                 transparent={true}
                 animationType="slide"
                 onRequestClose={() => setReviewModalVisible(false)}
+                statusBarTranslucent={true}
             >
                 <View style={styles.modalOverlay}>
                     <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={() => setReviewModalVisible(false)} />
@@ -263,36 +463,37 @@ export default function AdminApplications() {
                             <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
                                 <View style={{ flex: 1 }}>
                                     <Text style={[styles.modalTitle, { color: colors.text }]}>Müraciət Detalları</Text>
-                                    <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }}>
-                                        Müraciət ID: {selectedApp.id.substring(0, 8).toUpperCase()}
+                                    <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                                        Tarix: {formatDate(selectedApp.created_at, { showMonthName: true })}
                                     </Text>
                                 </View>
                                 <TouchableOpacity onPress={() => setReviewModalVisible(false)} style={[styles.iconBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#F3F4F6' }]}>
-                                    <XCircle size={24} color={colors.text} />
+                                    <XCircle size={22} color={colors.text} />
                                 </TouchableOpacity>
                             </View>
 
                             <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}>
                                 {/* Car Header Info */}
-                                <View style={[styles.detailSection, { backgroundColor: colors.background, borderRadius: 16, padding: 16 }]}>
-                                    <Text style={[styles.sectionTitle, { color: colors.text }]}>🚗 Avtomobil Məlumatları</Text>
+                                <View style={[styles.detailSection, { backgroundColor: isDark ? '#1C1C1E' : '#F9F9FB', borderColor: colors.border, borderWidth: 1 }]}>
+                                    <Text style={[styles.sectionTitle, { color: colors.text }]}>🚗 Seçilmiş Avtomobil</Text>
                                     {selectedApp.listings ? (
-                                        <View style={{ marginTop: 10, gap: 4 }}>
-                                            <Text style={{ color: colors.text, fontSize: 17, fontFamily: 'RethinkSans_800ExtraBold' }}>
+                                        <View style={{ marginTop: 10, gap: 6 }}>
+                                            <Text style={{ color: colors.text, fontSize: 18, fontFamily: 'RethinkSans_800ExtraBold' }}>
                                                 {selectedApp.listings.make} {selectedApp.listings.model} ({selectedApp.listings.year})
                                             </Text>
-                                            <Text style={{ color: colors.primary, fontSize: 18, fontFamily: 'RethinkSans_800ExtraBold', marginTop: 4 }}>
-                                                Qiymət: {selectedApp.listings.price.toLocaleString()} {selectedApp.listings.currency}
+                                            <Text style={{ color: colors.primary, fontSize: 20, fontFamily: 'RethinkSans_800ExtraBold' }}>
+                                                {selectedApp.listings.price.toLocaleString()} {selectedApp.listings.currency || 'AZN'}
                                             </Text>
                                             <TouchableOpacity 
-                                                style={{ marginTop: 8 }}
+                                                style={styles.carLinkBtn}
                                                 onPress={() => {
                                                     setReviewModalVisible(false);
                                                     router.push(`/listing/${selectedApp.listings.id}` as any);
                                                 }}
                                             >
-                                                <Text style={{ color: '#007AFF', fontSize: 14, fontFamily: 'RethinkSans_700Bold', textDecorationLine: 'underline' }}>
-                                                    Avtomobil elanına get →
+                                                <ExternalLink size={14} color="#007AFF" style={{ marginRight: 6 }} />
+                                                <Text style={{ color: '#007AFF', fontSize: 13, fontFamily: 'RethinkSans_700Bold' }}>
+                                                    Avtomobil elanına keçid et →
                                                 </Text>
                                             </TouchableOpacity>
                                         </View>
@@ -308,9 +509,9 @@ export default function AdminApplications() {
                                     <View style={styles.detailRow}>
                                         <User size={18} color={colors.textSecondary} />
                                         <View style={styles.detailTextContainer}>
-                                            <Text style={{ color: colors.textSecondary, fontSize: 11 }}>AD, SOYAD və ATA ADI</Text>
-                                            <Text style={{ color: colors.text, fontSize: 15, fontFamily: 'RethinkSans_700Bold' }}>
-                                                {selectedApp.full_name} {selectedApp.father_name}
+                                            <Text style={{ color: colors.textSecondary, fontSize: 11, fontFamily: 'RethinkSans_500Medium' }}>AD, SOYAD və ATA ADI</Text>
+                                            <Text style={{ color: colors.text, fontSize: 16, fontFamily: 'RethinkSans_700Bold' }}>
+                                                {selectedApp.full_name} {selectedApp.father_name ? `(${selectedApp.father_name})` : ''}
                                             </Text>
                                         </View>
                                     </View>
@@ -318,18 +519,21 @@ export default function AdminApplications() {
                                     <View style={styles.detailRow}>
                                         <Fingerprint size={18} color={colors.textSecondary} />
                                         <View style={styles.detailTextContainer}>
-                                            <Text style={{ color: colors.textSecondary, fontSize: 11 }}>FİN KOD</Text>
-                                            <Text style={{ color: colors.text, fontSize: 15, fontFamily: 'RethinkSans_700Bold', letterSpacing: 1 }}>
-                                                {selectedApp.fin_code}
-                                            </Text>
+                                            <Text style={{ color: colors.textSecondary, fontSize: 11, fontFamily: 'RethinkSans_500Medium' }}>FİN KOD</Text>
+                                            <TouchableOpacity onPress={() => handleCopy(selectedApp.fin_code, 'FİN kod')} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                <Text style={{ color: colors.text, fontSize: 16, fontFamily: 'RethinkSans_700Bold', letterSpacing: 1 }}>
+                                                    {selectedApp.fin_code}
+                                                </Text>
+                                                <Copy size={14} color={colors.primary} style={{ marginLeft: 6 }} />
+                                            </TouchableOpacity>
                                         </View>
                                     </View>
 
                                     <View style={styles.detailRow}>
                                         <Calendar size={18} color={colors.textSecondary} />
                                         <View style={styles.detailTextContainer}>
-                                            <Text style={{ color: colors.textSecondary, fontSize: 11 }}>DOĞUM TARİXİ</Text>
-                                            <Text style={{ color: colors.text, fontSize: 15, fontFamily: 'RethinkSans_700Bold' }}>
+                                            <Text style={{ color: colors.textSecondary, fontSize: 11, fontFamily: 'RethinkSans_500Medium' }}>DOĞUM TARİXİ</Text>
+                                            <Text style={{ color: colors.text, fontSize: 16, fontFamily: 'RethinkSans_700Bold' }}>
                                                 {formatDate(selectedApp.birth_date)}
                                             </Text>
                                         </View>
@@ -338,9 +542,9 @@ export default function AdminApplications() {
                                     <View style={styles.detailRow}>
                                         <Briefcase size={18} color={colors.textSecondary} />
                                         <View style={styles.detailTextContainer}>
-                                            <Text style={{ color: colors.textSecondary, fontSize: 11 }}>İŞLƏDİYİ YER</Text>
-                                            <Text style={{ color: colors.text, fontSize: 15, fontFamily: 'RethinkSans_600SemiBold' }}>
-                                                {selectedApp.workplace}
+                                            <Text style={{ color: colors.textSecondary, fontSize: 11, fontFamily: 'RethinkSans_500Medium' }}>İŞ YERİ / FƏALİYYƏT</Text>
+                                            <Text style={{ color: colors.text, fontSize: 16, fontFamily: 'RethinkSans_600SemiBold' }}>
+                                                {selectedApp.workplace || '-'}
                                             </Text>
                                         </View>
                                     </View>
@@ -348,9 +552,9 @@ export default function AdminApplications() {
                                     <View style={styles.detailRow}>
                                         <DollarSign size={18} color={colors.textSecondary} />
                                         <View style={styles.detailTextContainer}>
-                                            <Text style={{ color: colors.textSecondary, fontSize: 11 }}>AYLIQ QAZANC</Text>
-                                            <Text style={{ color: '#34C759', fontSize: 17, fontFamily: 'RethinkSans_800ExtraBold' }}>
-                                                {Number(selectedApp.monthly_income).toLocaleString()} Borcsuz / ₼
+                                            <Text style={{ color: colors.textSecondary, fontSize: 11, fontFamily: 'RethinkSans_500Medium' }}>AYLIQ QAZANC</Text>
+                                            <Text style={{ color: '#34C759', fontSize: 18, fontFamily: 'RethinkSans_800ExtraBold' }}>
+                                                {Number(selectedApp.monthly_income || 0).toLocaleString()} ₼
                                             </Text>
                                         </View>
                                     </View>
@@ -358,17 +562,20 @@ export default function AdminApplications() {
                                     <View style={styles.detailRow}>
                                         <Phone size={18} color={colors.textSecondary} />
                                         <View style={styles.detailTextContainer}>
-                                            <Text style={{ color: colors.textSecondary, fontSize: 11 }}>MOBİL NÖMRƏ</Text>
-                                            <Text style={{ color: colors.text, fontSize: 15, fontFamily: 'RethinkSans_700Bold' }}>
-                                                {selectedApp.phone}
-                                            </Text>
+                                            <Text style={{ color: colors.textSecondary, fontSize: 11, fontFamily: 'RethinkSans_500Medium' }}>MOBİL NÖMRƏ</Text>
+                                            <TouchableOpacity onPress={() => handleCall(selectedApp.phone)} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                <Text style={{ color: '#007AFF', fontSize: 16, fontFamily: 'RethinkSans_700Bold' }}>
+                                                    {selectedApp.phone}
+                                                </Text>
+                                                <PhoneCall size={14} color="#007AFF" style={{ marginLeft: 6 }} />
+                                            </TouchableOpacity>
                                         </View>
                                     </View>
 
                                     <View style={styles.detailRow}>
                                         <Info size={18} color={colors.textSecondary} />
                                         <View style={styles.detailTextContainer}>
-                                            <Text style={{ color: colors.textSecondary, fontSize: 11 }}>MÜRACİƏT STATUSU</Text>
+                                            <Text style={{ color: colors.textSecondary, fontSize: 11, fontFamily: 'RethinkSans_500Medium' }}>STATUS</Text>
                                             <Text style={{ 
                                                 color: getStatusBadge(selectedApp.status).color, 
                                                 fontSize: 15, 
@@ -381,35 +588,52 @@ export default function AdminApplications() {
                                 </View>
                             </ScrollView>
 
-                            {/* Action Buttons */}
+                            {/* Quick Action Footer Buttons */}
                             <View style={[styles.modalActions, { borderTopColor: colors.border }]}>
                                 <TouchableOpacity 
-                                    style={[styles.actionButton, { backgroundColor: '#FF3B3015', borderColor: '#FF3B30', borderWidth: 1 }]}
-                                    onPress={() => deleteApplication(selectedApp.id)}
+                                    style={[styles.callActionBtn, { backgroundColor: '#007AFF' }]}
+                                    onPress={() => handleCall(selectedApp.phone)}
                                 >
-                                    <Trash2 size={20} color="#FF3B30" />
-                                    <Text style={{ color: '#FF3B30', fontFamily: 'RethinkSans_700Bold', marginLeft: 6 }}>Sil</Text>
+                                    <Phone size={18} color="#FFF" />
+                                    <Text style={styles.callActionBtnText}>Zəng et</Text>
                                 </TouchableOpacity>
 
-                                {selectedApp.status === 'pending' && (
-                                    <View style={{ flex: 1, flexDirection: 'row', gap: 10 }}>
+                                <TouchableOpacity 
+                                    style={[styles.deleteActionBtn, { backgroundColor: '#FF3B3015', borderColor: '#FF3B30', borderWidth: 1 }]}
+                                    onPress={() => deleteApplication(selectedApp.id)}
+                                >
+                                    <Trash2 size={18} color="#FF3B30" />
+                                </TouchableOpacity>
+
+                                {selectedApp.status === 'pending' ? (
+                                    <View style={{ flex: 1, flexDirection: 'row', gap: 8 }}>
                                         <TouchableOpacity 
-                                            style={[styles.actionButton, { backgroundColor: '#FF3B30', flex: 1 }]}
+                                            style={[styles.statusBtn, { backgroundColor: '#FF3B30', flex: 1 }]}
                                             disabled={updating}
                                             onPress={() => updateStatus(selectedApp.id, 'rejected')}
                                         >
-                                            <XCircle size={20} color="#FFF" />
-                                            <Text style={{ color: '#FFF', fontFamily: 'RethinkSans_700Bold', marginLeft: 6 }}>Rədd et</Text>
+                                            <XCircle size={16} color="#FFF" />
+                                            <Text style={styles.statusBtnText}>Rədd et</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity 
-                                            style={[styles.actionButton, { backgroundColor: '#34C759', flex: 1 }]}
+                                            style={[styles.statusBtn, { backgroundColor: '#34C759', flex: 1 }]}
                                             disabled={updating}
                                             onPress={() => updateStatus(selectedApp.id, 'approved')}
                                         >
-                                            <CheckCircle2 size={20} color="#FFF" />
-                                            <Text style={{ color: '#FFF', fontFamily: 'RethinkSans_700Bold', marginLeft: 6 }}>Təsdiqlə</Text>
+                                            <CheckCircle2 size={16} color="#FFF" />
+                                            <Text style={styles.statusBtnText}>Təsdiqlə</Text>
                                         </TouchableOpacity>
                                     </View>
+                                ) : (
+                                    <TouchableOpacity 
+                                        style={[styles.statusBtn, { backgroundColor: selectedApp.status === 'approved' ? '#FF3B30' : '#34C759', flex: 1 }]}
+                                        disabled={updating}
+                                        onPress={() => updateStatus(selectedApp.id, selectedApp.status === 'approved' ? 'rejected' : 'approved')}
+                                    >
+                                        <Text style={styles.statusBtnText}>
+                                            {selectedApp.status === 'approved' ? 'Rədd et kimi dəyiş' : 'Təsdiqlə kimi dəyiş'}
+                                        </Text>
+                                    </TouchableOpacity>
                                 )}
                             </View>
                         </View>
@@ -422,28 +646,82 @@ export default function AdminApplications() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1 },
-    backBtn: { padding: 4 },
-    headerTitle: { fontSize: 18, fontFamily: 'RethinkSans_700Bold' },
-    searchSection: { padding: 16 },
-    searchBar: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 1, gap: 10 },
-    searchInput: { flex: 1, fontSize: 15, fontFamily: 'RethinkSans_500Medium' },
-    center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    list: { padding: 16, gap: 14 },
-    empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 120, gap: 12 },
-    emptyText: { fontSize: 16, fontFamily: 'RethinkSans_500Medium' },
-    appCard: { borderRadius: 20, borderWidth: 1, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-    appCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    carName: { fontSize: 16, fontFamily: 'RethinkSans_800ExtraBold', flex: 1, marginRight: 8 },
-    statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+    header: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        justifyContent: 'space-between', 
+        paddingHorizontal: 16, 
+        paddingVertical: 12, 
+        borderBottomWidth: 1 
+    },
+    backBtn: { padding: 6 },
+    refreshBtn: { padding: 6 },
+    headerTitleWrap: { alignItems: 'center' },
+    headerTitle: { fontSize: 18, fontFamily: 'RethinkSans_800ExtraBold' },
+    headerSubtitle: { fontSize: 12, fontFamily: 'RethinkSans_500Medium', marginTop: 2 },
+    searchSection: { paddingHorizontal: 16, paddingTop: 12 },
+    searchBar: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        paddingHorizontal: 14, 
+        height: 48,
+        borderRadius: 14, 
+        borderWidth: 1, 
+        gap: 10 
+    },
+    searchInput: { flex: 1, fontSize: 14, fontFamily: 'RethinkSans_500Medium' },
+    filterTabsWrapper: { paddingVertical: 10 },
+    filterTabs: { paddingHorizontal: 16, gap: 8, flexDirection: 'row' },
+    filterTab: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        paddingHorizontal: 14, 
+        paddingVertical: 8, 
+        borderRadius: 12, 
+        borderWidth: 1 
+    },
+    filterTabText: { fontSize: 13, fontFamily: 'RethinkSans_600SemiBold' },
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+    list: { padding: 16, gap: 14, paddingBottom: 60 },
+    empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80, gap: 8 },
+    emptyTitle: { fontSize: 18, fontFamily: 'RethinkSans_700Bold' },
+    emptyText: { fontSize: 14, fontFamily: 'RethinkSans_400Regular', textAlign: 'center', paddingHorizontal: 32 },
+    appCard: { 
+        borderRadius: 20, 
+        borderWidth: 1, 
+        padding: 16, 
+        shadowColor: '#000', 
+        shadowOffset: { width: 0, height: 2 }, 
+        shadowOpacity: 0.05, 
+        shadowRadius: 8, 
+        elevation: 2 
+    },
+    appCardHeader: { flexDirection: 'row', alignItems: 'center' },
+    carThumb: { width: 48, height: 48, borderRadius: 10, marginRight: 12 },
+    carName: { fontSize: 16, fontFamily: 'RethinkSans_800ExtraBold' },
+    carPrice: { fontSize: 14, fontFamily: 'RethinkSans_700Bold', marginTop: 2 },
+    statusBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
     statusText: { fontSize: 11, fontFamily: 'RethinkSans_700Bold' },
     divider: { height: 1 },
-    appCardBody: { gap: 8 },
-    applicantName: { fontSize: 15, fontFamily: 'RethinkSans_700Bold', marginBottom: 4 },
+    appCardBody: { gap: 10 },
+    applicantHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    applicantName: { fontSize: 15, fontFamily: 'RethinkSans_700Bold' },
     infoGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 },
-    infoItem: { width: '50%', fontSize: 13, fontFamily: 'RethinkSans_500Medium' },
-    cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 10, borderTopWidth: 0.5, borderTopColor: 'rgba(150,150,150,0.15)' },
+    infoGridCol: { width: '50%' },
+    infoLabel: { fontSize: 11, fontFamily: 'RethinkSans_500Medium', marginBottom: 2 },
+    infoValue: { fontSize: 13, fontFamily: 'RethinkSans_700Bold' },
+    inlineCopy: { flexDirection: 'row', alignItems: 'center' },
+    cardFooter: { 
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        marginTop: 12, 
+        paddingTop: 10, 
+        borderTopWidth: 0.5 
+    },
+    cardFooterRight: { flexDirection: 'row', alignItems: 'center' },
     dateText: { fontSize: 12, fontFamily: 'RethinkSans_500Medium' },
+    detailsLinkText: { fontSize: 12, fontFamily: 'RethinkSans_700Bold', marginRight: 4 },
     
     // BottomSheet Modal
     modalOverlay: {
@@ -457,18 +735,19 @@ const styles = StyleSheet.create({
     modalContent: {
         width: '100%',
         maxHeight: '90%',
-        borderTopLeftRadius: 32,
-        borderTopRightRadius: 32,
+        maxWidth: 580,
+        alignSelf: 'center',
+        borderTopLeftRadius: 28,
+        borderTopRightRadius: 28,
         overflow: 'hidden',
     },
     handleContainer: {
         alignItems: 'center',
-        paddingTop: 12,
-        paddingBottom: 8,
-        width: '100%',
+        paddingTop: 10,
+        paddingBottom: 6,
     },
     handle: {
-        width: 48,
+        width: 44,
         height: 5,
         borderRadius: 3,
     },
@@ -476,13 +755,13 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 24,
-        paddingBottom: 16,
-        paddingTop: 8,
+        paddingHorizontal: 20,
+        paddingBottom: 14,
+        paddingTop: 6,
         borderBottomWidth: 1,
     },
     modalTitle: {
-        fontSize: 20,
+        fontSize: 18,
         fontFamily: 'RethinkSans_800ExtraBold',
     },
     iconBtn: {
@@ -493,38 +772,71 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     modalBody: {
-        padding: 24,
-        gap: 16,
+        padding: 20,
+        paddingBottom: 30,
     },
     detailSection: {
-        paddingVertical: 4,
+        borderRadius: 16,
+        padding: 16,
     },
     sectionTitle: {
-        fontSize: 16,
-        fontFamily: 'RethinkSans_800ExtraBold',
+        fontSize: 14,
+        fontFamily: 'RethinkSans_700Bold',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    carLinkBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 6,
     },
     detailRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 14,
-        marginBottom: 16,
+        marginBottom: 14,
+        gap: 12,
     },
     detailTextContainer: {
         flex: 1,
-        gap: 2,
     },
     modalActions: {
         flexDirection: 'row',
-        padding: 20,
-        borderTopWidth: 1,
+        padding: 16,
         gap: 10,
+        borderTopWidth: 1,
     },
-    actionButton: {
-        height: 52,
-        borderRadius: 16,
+    callActionBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: 16,
-    }
+        height: 48,
+        borderRadius: 14,
+        gap: 6,
+    },
+    callActionBtnText: {
+        color: '#FFF',
+        fontSize: 14,
+        fontFamily: 'RethinkSans_700Bold',
+    },
+    deleteActionBtn: {
+        width: 48,
+        height: 48,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    statusBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 48,
+        borderRadius: 14,
+        gap: 6,
+    },
+    statusBtnText: {
+        color: '#FFF',
+        fontSize: 14,
+        fontFamily: 'RethinkSans_700Bold',
+    },
 });

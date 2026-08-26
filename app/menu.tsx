@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Platform, ScrollView, RefreshControl, Dimensions, StatusBar, Image as RNImage } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView, RefreshControl, Dimensions, StatusBar, Image as RNImage } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { X, LogOut, CarFront, Layers, Settings, Palette, FileText, AlertCircle, Hash, Crown, ChevronRight, TrendingUp, ShieldCheck, UserPlus, Bell, Zap, PieChart, Gift, MessageSquare, CreditCard, Users } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';

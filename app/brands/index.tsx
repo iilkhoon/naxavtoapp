@@ -10,9 +10,9 @@ import {
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
-  Image,
   RefreshControl
 } from 'react-native';
+import { Image } from 'expo-image';
 import { supabase } from '../../lib/supabase';
 import { Trash2, Plus, ArrowLeft, Search, CarFront } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
@@ -137,7 +137,7 @@ export default function BrandsScreen() {
               <Image
                 source={{ uri: item.logo_url }}
                 style={styles.brandLogo}
-                resizeMode="contain"
+                contentFit="contain"
               />
             ) : (
               <CarFront size={24} color={colors.textSecondary} />

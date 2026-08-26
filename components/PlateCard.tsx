@@ -39,8 +39,9 @@ export const PlateCard = ({
       transition={{ delay: Math.min(index * 50, 300), type: 'spring' }}
       style={styles.container}
     >
-      <AnimatedPressable
+      <TouchableOpacity
         onPress={onPress}
+        activeOpacity={0.88}
         style={[
           styles.card,
           {
@@ -82,7 +83,7 @@ export const PlateCard = ({
             Naxçıvan
           </Text>
         </View>
-      </AnimatedPressable>
+      </TouchableOpacity>
     </MotiView>
   );
 };

@@ -46,6 +46,7 @@ export default function ListingDetailScreen() {
 
     const [listing, setListing] = useState<Listing | null>(null);
     const [loading, setLoading] = useState(true);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const scrollViewRef = React.useRef<ScrollView>(null);
     const [isFavorite, setIsFavorite] = useState(false);
     const [activeSlide, setActiveSlide] = useState(0);
@@ -59,25 +60,30 @@ export default function ListingDetailScreen() {
     useEffect(() => {
         if (listingId) {
             setLoading(true);
+            setErrorMessage(null);
             scrollViewRef.current?.scrollTo({ x: 0, y: 0, animated: false });
 
-            // Run all fetches effectively
-            Promise.all([
-                fetchListingDetails(),
-                checkFavoriteStatus(),
-                fetchRandomListings()
-            ]).catch(console.error);
+            fetchListingDetails();
+            checkFavoriteStatus();
+        } else {
+            setLoading(false);
+            setErrorMessage('Elan identifikatorı tapılmadı.');
         }
     }, [listingId]);
 
-    const fetchRandomListings = async () => {
+    const fetchRandomListings = async (excludeId?: string) => {
         try {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('listings')
                 .select('*')
-                .neq('id', listingId)
+                .eq('status', 'approved')
                 .limit(10);
 
+            if (excludeId) {
+                query = query.neq('id', excludeId);
+            }
+
+            const { data, error } = await query;
             if (error) throw error;
 
             if (data && data.length > 0) {
@@ -90,42 +96,90 @@ export default function ListingDetailScreen() {
     };
 
     const fetchListingDetails = async () => {
+        if (!listingId) {
+            setLoading(false);
+            setErrorMessage('Elan tapılmadı.');
+            return;
+        }
+
         try {
-            // Increment views
-            supabase.rpc('increment_listing_views', { row_id: listingId }).then();
+            setErrorMessage(null);
+            const cleanId = String(listingId).trim();
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
 
-            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(listingId);
+            // Timeout promise (10s)
+            const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
+                setTimeout(() => resolve({ data: null, error: new Error('Request timeout') }), 10000)
+            );
 
-            const { data, error } = await supabase
+            const mainQuery = supabase
                 .from('listings')
                 .select('*')
-                .eq(isUuid ? 'id' : 'short_id', listingId)
-                .single();
-            if (error) throw error;
-            setListing(data as Listing);
+                .eq(isUuid ? 'id' : 'short_id', cleanId)
+                .maybeSingle();
 
-            if (data.features && data.features.length > 0) {
-                const { data: featuresData } = await supabase
+            const { data, error } = (await Promise.race([mainQuery, timeoutPromise])) as any;
+
+            let resultData = data;
+            // Fallback: If not found by short_id, try by id (or vice versa)
+            if (!resultData && !isUuid) {
+                try {
+                    const { data: fallbackData } = await supabase
+                        .from('listings')
+                        .select('*')
+                        .eq('id', cleanId)
+                        .maybeSingle();
+                    resultData = fallbackData;
+                } catch (e) {}
+            }
+
+            if (error && !resultData) throw error;
+
+            if (!resultData) {
+                setListing(null);
+                setErrorMessage('Elan tapılmadı və ya silinib.');
+                setLoading(false);
+                return;
+            }
+
+            setListing(resultData as Listing);
+
+            // Safe view count increment with actual UUID
+            if (resultData.id) {
+                supabase.rpc('increment_listing_views', { row_id: resultData.id }).then(() => {}, () => {});
+            }
+
+            if (resultData.features && Array.isArray(resultData.features) && resultData.features.length > 0) {
+                supabase
                     .from('car_features')
                     .select('name, category')
-                    .in('name', data.features);
-
-                if (featuresData) {
-                    setFeatureCategories(featuresData);
-                }
+                    .in('name', resultData.features)
+                    .then(
+                        ({ data: featuresData }) => {
+                            if (featuresData) setFeatureCategories(featuresData);
+                        },
+                        () => {}
+                    );
             }
-            setLoading(false);
+
+            if (resultData.id) {
+                fetchRandomListings(resultData.id);
+            }
         } catch (error) {
-            console.error(error);
+            console.error('Listing detail fetch error:', error);
+            setErrorMessage('Məlumatları yükləmək mümkün olmadı. İnternet bağlantınızı yoxlayın.');
+        } finally {
             setLoading(false);
         }
     };
 
     const checkFavoriteStatus = async () => {
         if (!listingId) return;
-        const favorites = await getFavorites();
-        setFavoriteIds(favorites);
-        setIsFavorite(favorites.includes(listingId));
+        try {
+            const favorites = await getFavorites();
+            setFavoriteIds(favorites);
+            setIsFavorite(favorites.includes(String(listingId)));
+        } catch (e) {}
     };
 
     const handleToggleFavorite = async (idToToggle?: any) => {
@@ -248,8 +302,75 @@ export default function ListingDetailScreen() {
         }
     };
 
-    if (loading) return <LoadingAnimation />;
-    if (!listing) return <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}><Text style={{ color: colors.text, fontFamily: 'RethinkSans_500Medium' }}>Elan tapılmadı</Text></View>;
+    if (loading && !listing) {
+        return (
+            <View style={[styles.container, { backgroundColor: colors.background }]}>
+                <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+                <Stack.Screen options={{ headerShown: false }} />
+                <View style={[styles.fallbackHeader, { paddingTop: insets.top + 10 }]}>
+                    <TouchableOpacity
+                        style={[styles.backIconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+                        onPress={() => router.back()}
+                        activeOpacity={0.8}
+                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    >
+                        <ArrowLeft size={22} color={colors.text} />
+                    </TouchableOpacity>
+                </View>
+                <LoadingAnimation />
+            </View>
+        );
+    }
+
+    if (!listing) {
+        return (
+            <View style={[styles.container, { backgroundColor: colors.background }]}>
+                <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+                <Stack.Screen options={{ headerShown: false }} />
+                <View style={[styles.fallbackHeader, { paddingTop: insets.top + 10 }]}>
+                    <TouchableOpacity
+                        style={[styles.backIconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+                        onPress={() => router.back()}
+                        activeOpacity={0.8}
+                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    >
+                        <ArrowLeft size={22} color={colors.text} />
+                    </TouchableOpacity>
+                    <Text style={[styles.fallbackHeaderTitle, { color: colors.text }]}>Elan Detalları</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+
+                <View style={styles.errorContainer}>
+                    <Info size={54} color={colors.primary} style={{ marginBottom: 16 }} />
+                    <Text style={[styles.errorTitle, { color: colors.text }]}>
+                        {errorMessage || 'Elan tapılmadı'}
+                    </Text>
+                    <Text style={[styles.errorSubtitle, { color: colors.textSecondary }]}>
+                        Bu elan silinmiş, deaktiv edilmiş və ya internet bağlantınızda fasilə yaranmış ola bilər.
+                    </Text>
+                    <View style={styles.errorActionRow}>
+                        <TouchableOpacity
+                            style={[styles.retryButton, { backgroundColor: colors.primary }]}
+                            onPress={() => {
+                                setLoading(true);
+                                fetchListingDetails();
+                            }}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={styles.retryButtonText}>Yenidən cəhd et</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.backButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+                            onPress={() => router.back()}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={[styles.backButtonText, { color: colors.text }]}>Geri qayıt</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        );
+    }
 
     const SpecItem = ({ icon: Icon, label, value }: any) => (
         <View style={[styles.specItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -270,6 +391,27 @@ export default function ListingDetailScreen() {
             <StatusBar barStyle="light-content" />
             <Stack.Screen options={{ headerShown: false }} />
 
+            {/* Sticky Floating Header Action Buttons */}
+            <View style={[styles.headerOverlay, { paddingTop: insets.top + 10 }]} pointerEvents="box-none">
+                <TouchableOpacity style={styles.blurBtn} onPress={() => router.back()} activeOpacity={0.8}>
+                    <BlurView intensity={45} tint="dark" style={styles.blurContent}>
+                        <ArrowLeft size={22} color="#FFF" />
+                    </BlurView>
+                </TouchableOpacity>
+                <View style={styles.rightActions} pointerEvents="box-none">
+                    <TouchableOpacity style={styles.blurBtn} onPress={handleShare} activeOpacity={0.8}>
+                        <BlurView intensity={45} tint="dark" style={styles.blurContent}>
+                            <Share2 size={20} color="#FFF" />
+                        </BlurView>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.blurBtn} onPress={handleToggleFavorite} activeOpacity={0.8}>
+                        <BlurView intensity={45} tint="dark" style={styles.blurContent}>
+                            <Heart size={20} color={isFavorite ? "#FF3B30" : "#FFF"} fill={isFavorite ? "#FF3B30" : "transparent"} />
+                        </BlurView>
+                    </TouchableOpacity>
+                </View>
+            </View>
+
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 160 }} bounces={false}>
                 <View style={styles.imageContainer}>
                     <ScrollView
@@ -286,7 +428,10 @@ export default function ListingDetailScreen() {
                             <TouchableOpacity
                                 key={index}
                                 activeOpacity={0.95}
-                                onPress={() => setIsViewerVisible(true)}
+                                onPress={() => {
+                                    setActiveSlide(index);
+                                    setIsViewerVisible(true);
+                                }}
                                 style={{ width, height: '100%', position: 'relative' }}
                             >
                                 <ExpoImage
@@ -310,26 +455,6 @@ export default function ListingDetailScreen() {
                             </TouchableOpacity>
                         ))}
                     </ScrollView>
-
-                    <View style={[styles.headerOverlay, { paddingTop: insets.top + 10 }]}>
-                        <TouchableOpacity style={styles.blurBtn} onPress={() => router.back()}>
-                            <BlurView intensity={30} tint="dark" style={styles.blurContent}>
-                                <ArrowLeft size={24} color="#FFF" />
-                            </BlurView>
-                        </TouchableOpacity>
-                        <View style={styles.rightActions}>
-                            <TouchableOpacity style={styles.blurBtn} onPress={handleShare}>
-                                <BlurView intensity={30} tint="dark" style={styles.blurContent}>
-                                    <Share2 size={22} color="#FFF" />
-                                </BlurView>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.blurBtn} onPress={handleToggleFavorite}>
-                                <BlurView intensity={30} tint="dark" style={styles.blurContent}>
-                                    <Heart size={22} color={isFavorite ? "#FF3B30" : "#FFF"} fill={isFavorite ? "#FF3B30" : "transparent"} />
-                                </BlurView>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
 
                     {galleryImages.length > 1 && (
                         <View style={styles.paginationWrapper}>
@@ -612,13 +737,17 @@ export default function ListingDetailScreen() {
             </ScrollView >
 
             <BlurView intensity={90} tint="dark" style={[styles.footer, { paddingBottom: insets.bottom + 10, borderColor: 'rgba(255,255,255,0.1)', gap: 10 }]}>
-                <TouchableOpacity style={[styles.calcButton, { backgroundColor: 'rgba(255,255,255,0.1)' }]} onPress={() => setShowCalculator(true)}>
-                    <Calculator size={24} color="#FFF" />
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.applyButton, { backgroundColor: '#FF9500' }]} onPress={() => setShowApplication(true)}>
-                    <Percent size={18} color="#FFF" style={{ marginRight: 6 }} />
-                    <Text style={styles.applyButtonText}>Müraciət et</Text>
-                </TouchableOpacity>
+                {listing.is_credit && (
+                    <TouchableOpacity style={[styles.calcButton, { backgroundColor: 'rgba(255,255,255,0.1)' }]} onPress={() => setShowCalculator(true)}>
+                        <Calculator size={24} color="#FFF" />
+                    </TouchableOpacity>
+                )}
+                {listing.is_credit && (
+                    <TouchableOpacity style={[styles.applyButton, { backgroundColor: '#FF9500' }]} onPress={() => setShowApplication(true)}>
+                        <Percent size={18} color="#FFF" style={{ marginRight: 6 }} />
+                        <Text style={styles.applyButtonText}>Müraciət et</Text>
+                    </TouchableOpacity>
+                )}
                 <TouchableOpacity style={[styles.callButton, { backgroundColor: colors.primary }]} onPress={() => handleCall(adminPhones[0])}>
                     <Phone size={18} color="#FFF" style={{ marginRight: 6 }} />
                     <Text style={styles.callButtonText}>Zəng et</Text>
@@ -655,10 +784,10 @@ const styles = StyleSheet.create({
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     imageContainer: { height: height * 0.45, width: '100%', position: 'relative' },
     image: { width: '100%', height: '100%' },
-    headerOverlay: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, zIndex: 10 },
-    rightActions: { flexDirection: 'row', gap: 12 },
-    blurBtn: { borderRadius: 20, overflow: 'hidden' },
-    blurContent: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.2)' },
+    headerOverlay: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, zIndex: 100 },
+    rightActions: { flexDirection: 'row', gap: 10 },
+    blurBtn: { borderRadius: 22, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 6 },
+    blurContent: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' },
     paginationWrapper: { position: 'absolute', bottom: 30, left: 0, right: 0, alignItems: 'center', zIndex: 10 },
     paginationContainer: { flexDirection: 'row', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.3)' },
     dot: { height: 6, borderRadius: 3 },
@@ -739,5 +868,75 @@ const styles = StyleSheet.create({
         fontFamily: 'RethinkSans_400Regular',
         textAlign: 'center',
         opacity: 0.5,
+    },
+    fallbackHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingBottom: 12,
+        zIndex: 10,
+    },
+    fallbackHeaderTitle: {
+        fontSize: 17,
+        fontFamily: 'RethinkSans_700Bold',
+    },
+    backIconBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+    },
+    errorContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 32,
+        marginTop: -60,
+    },
+    errorTitle: {
+        fontSize: 20,
+        fontFamily: 'RethinkSans_700Bold',
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    errorSubtitle: {
+        fontSize: 14,
+        fontFamily: 'RethinkSans_400Regular',
+        textAlign: 'center',
+        lineHeight: 22,
+        marginBottom: 24,
+    },
+    errorActionRow: {
+        flexDirection: 'row',
+        gap: 12,
+        width: '100%',
+        maxWidth: 320,
+    },
+    retryButton: {
+        flex: 1,
+        height: 48,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    retryButtonText: {
+        color: '#FFF',
+        fontSize: 14,
+        fontFamily: 'RethinkSans_700Bold',
+    },
+    backButton: {
+        flex: 1,
+        height: 48,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+    },
+    backButtonText: {
+        fontSize: 14,
+        fontFamily: 'RethinkSans_600SemiBold',
     },
 });

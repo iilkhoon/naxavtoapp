@@ -62,30 +62,65 @@ export default function WebListingDetail() {
     }, [listingId]);
 
     const fetchAll = async () => {
+        if (!listingId) {
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         try {
-            // Increment views
-            supabase.rpc('increment_listing_views', { row_id: listingId }).then();
+            const cleanId = String(listingId).trim();
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
 
-            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(listingId);
+            const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
+                setTimeout(() => resolve({ data: null, error: new Error('Request timeout') }), 10000)
+            );
 
-            const { data } = await supabase
+            const mainQuery = supabase
                 .from('listings')
                 .select('*')
-                .eq(isUuid ? 'id' : 'short_id', listingId)
-                .single();
-            if (data) {
-                setListing(data as Listing);
-                if (data.features?.length > 0) {
-                    const { data: featData } = await supabase
-                        .from('car_features').select('name, category').in('name', data.features);
-                    if (featData) setFeatureCategories(featData);
+                .eq(isUuid ? 'id' : 'short_id', cleanId)
+                .maybeSingle();
+
+            const { data, error } = (await Promise.race([mainQuery, timeoutPromise])) as any;
+
+            let resultData = data;
+            if (!resultData && !isUuid) {
+                try {
+                    const { data: fallbackData } = await supabase
+                        .from('listings')
+                        .select('*')
+                        .eq('id', cleanId)
+                        .maybeSingle();
+                    resultData = fallbackData;
+                } catch (e) {}
+            }
+
+            if (resultData) {
+                setListing(resultData as Listing);
+                if (resultData.id) {
+                    supabase.rpc('increment_listing_views', { row_id: resultData.id }).then(() => {}, () => {});
                 }
+                if (resultData.features?.length > 0) {
+                    supabase
+                        .from('car_features').select('name, category').in('name', resultData.features)
+                        .then(
+                            ({ data: featData }) => {
+                                if (featData) setFeatureCategories(featData);
+                            },
+                            () => {}
+                        );
+                }
+            } else {
+                setListing(null);
             }
             const favs = await getFavorites();
-            setIsFavorite(favs.includes(listingId));
-        } catch (e) { console.error(e); }
-        setLoading(false);
+            setIsFavorite(favs.includes(cleanId));
+        } catch (e) {
+            console.error('Web listing fetch error:', e);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const galleryImages = useMemo(() => {
@@ -337,12 +372,14 @@ export default function WebListingDetail() {
                                     </View>
                                 </View>
                                 <View style={{ height: 1, backgroundColor: colors.border, marginBottom: 16 }} />
-                                <TouchableOpacity
-                                    style={[styles.callBtn, { backgroundColor: '#FF9500', paddingVertical: 12, borderRadius: 12, marginBottom: 16 }]}
-                                    onPress={() => setShowApplication(true)}
-                                >
-                                    <Text style={[styles.callBtnText, { fontSize: 14, fontFamily: 'RethinkSans_700Bold' }]}>Kredit üçün Müraciət et</Text>
-                                </TouchableOpacity>
+                                {listing.is_credit && (
+                                    <TouchableOpacity
+                                        style={[styles.callBtn, { backgroundColor: '#FF9500', paddingVertical: 12, borderRadius: 12, marginBottom: 16 }]}
+                                        onPress={() => setShowApplication(true)}
+                                    >
+                                        <Text style={[styles.callBtnText, { fontSize: 14, fontFamily: 'RethinkSans_700Bold' }]}>Kredit üçün Müraciət et</Text>
+                                    </TouchableOpacity>
+                                )}
                                 <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 12, fontFamily: 'RethinkSans_500Medium' }}>Əlaqə Nömrələri:</Text>
                                 {adminPhones.map((phone, i) => (
                                     <TouchableOpacity
@@ -506,12 +543,14 @@ export default function WebListingDetail() {
                                         </View>
                                     </View>
                                     <View style={{ height: 1, backgroundColor: colors.border, marginBottom: 16 }} />
-                                    <TouchableOpacity
-                                        style={[styles.callBtn, { backgroundColor: '#FF9500', marginBottom: 16 }]}
-                                        onPress={() => setShowApplication(true)}
-                                    >
-                                        <Text style={[styles.callBtnText, { fontFamily: 'RethinkSans_700Bold' }]}>Kredit üçün Müraciət et</Text>
-                                    </TouchableOpacity>
+                                    {listing.is_credit && (
+                                        <TouchableOpacity
+                                            style={[styles.callBtn, { backgroundColor: '#FF9500', marginBottom: 16 }]}
+                                            onPress={() => setShowApplication(true)}
+                                        >
+                                            <Text style={[styles.callBtnText, { fontFamily: 'RethinkSans_700Bold' }]}>Kredit üçün Müraciət et</Text>
+                                        </TouchableOpacity>
+                                    )}
                                     <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 12, fontFamily: 'RethinkSans_500Medium' }}>Əlaqə Nömrələri:</Text>
                                     {adminPhones.map((phone, i) => (
                                         <TouchableOpacity

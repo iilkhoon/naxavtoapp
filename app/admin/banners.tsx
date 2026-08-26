@@ -10,7 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
 import { compressImage } from '../../utils/imageOptimizer';
 import { AppSetting } from '../../types';
-import { Image } from 'react-native';
+import { Image } from 'expo-image';
 
 const InputField = ({ item, colors, onChange }: { item: AppSetting, colors: any, onChange: (key: string, value: string) => void }) => {
     return (
@@ -34,7 +34,7 @@ const ImageUploader = ({ item, icon: Icon, colors, onUpload, onRemove, uploading
         <Text style={[styles.label, { color: colors.textSecondary }]}>{item.label}</Text>
         <View style={[styles.imageUploadContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.imagePreviewWrapper}>
-                {item.value ? (<Image source={{ uri: item.value }} style={styles.previewImage} resizeMode="contain" />) : (<View style={[styles.placeholderImage, { backgroundColor: colors.background }]}>{Icon ? <Icon size={24} color={colors.textSecondary} /> : <ImageIcon size={24} color={colors.textSecondary} />}</View>)}
+                {item.value ? (<Image source={{ uri: item.value }} style={styles.previewImage} contentFit="contain" />) : (<View style={[styles.placeholderImage, { backgroundColor: colors.background }]}>{Icon ? <Icon size={24} color={colors.textSecondary} /> : <ImageIcon size={24} color={colors.textSecondary} />}</View>)}
             </View>
             <View style={{ flexDirection: 'row', gap: 8 }}>
                 {item.value ? (

@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, ActivityIndicator, Platform, Dimensions, useWindowDimensions, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Platform, Dimensions, useWindowDimensions, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { CarCard } from '../../components/CarCard';
 import { supabase } from '../../lib/supabase';
 import { getFavorites, toggleFavorite } from '../../lib/favorites';

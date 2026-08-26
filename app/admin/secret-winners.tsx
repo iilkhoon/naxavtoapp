@@ -2,8 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
     ActivityIndicator, Alert, TextInput, ScrollView, Modal,
-    Dimensions, StatusBar, Platform, SafeAreaView
+    Dimensions, StatusBar, Platform
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Trophy, Check, X, Search, User, Crown, Star, Trash2 } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';

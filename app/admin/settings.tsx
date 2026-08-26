@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Image, Switch } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Switch } from 'react-native';
+import { Image } from 'expo-image';
 import { supabase } from '../../lib/supabase';
 import { Save, ArrowLeft, Phone, Globe, Mail, MapPin, Instagram, Video, Image as ImageIcon, Upload, UserPlus, ChevronRight, Moon, Sun, ArrowUpLeft, ArrowUpRight, ArrowDownLeft, ArrowDownRight, Crosshair } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
@@ -28,7 +29,7 @@ const ImageUploader = ({ item, icon: Icon, colors, onUpload, uploading }: any) =
         <Text style={[styles.label, { color: colors.textSecondary }]}>{item.label}</Text>
         <View style={[styles.imageUploadContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.imagePreviewWrapper}>
-                {item.value ? (<Image source={{ uri: item.value }} style={styles.previewImage} resizeMode="contain" />) : (<View style={[styles.placeholderImage, { backgroundColor: colors.background }]}>{Icon ? <Icon size={24} color={colors.textSecondary} /> : <ImageIcon size={24} color={colors.textSecondary} />}</View>)}
+                {item.value ? (<Image source={{ uri: item.value }} style={styles.previewImage} contentFit="contain" />) : (<View style={[styles.placeholderImage, { backgroundColor: colors.background }]}>{Icon ? <Icon size={24} color={colors.textSecondary} /> : <ImageIcon size={24} color={colors.textSecondary} />}</View>)}
             </View>
             <TouchableOpacity style={[styles.uploadButton, { backgroundColor: colors.primary }]} onPress={() => onUpload(item.key)} disabled={uploading}>
                 {uploading ? (<ActivityIndicator color="#FFF" size="small" />) : (<Text style={styles.uploadText}>{item.value ? 'Dəyişdir' : 'Yüklə'}</Text>)}

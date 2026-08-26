@@ -8,12 +8,12 @@ import {
   TextInput,
   ActivityIndicator,
   DeviceEventEmitter,
-  Image,
   ScrollView,
   Platform,
   KeyboardAvoidingView,
   StatusBar
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
@@ -173,7 +173,7 @@ export default function SelectOptionScreen() {
 
     if (item.logo_url) {
       return (
-        <Image source={{ uri: item.logo_url }} style={styles.logo} resizeMode="contain" />
+        <Image source={{ uri: item.logo_url }} style={styles.logo} contentFit="contain" />
       );
     }
 
@@ -210,7 +210,7 @@ export default function SelectOptionScreen() {
       >
         <View style={[styles.popularIconContainer, { backgroundColor: isDark ? '#333' : '#F8F9FA' }]}>
           {item.logo_url ? (
-            <Image source={{ uri: item.logo_url }} style={styles.popularLogo} resizeMode="contain" />
+            <Image source={{ uri: item.logo_url }} style={styles.popularLogo} contentFit="contain" />
           ) : (
             <CarFront size={24} color={colors.textSecondary} />
           )}

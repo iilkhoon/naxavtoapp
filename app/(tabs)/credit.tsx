@@ -1,22 +1,26 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Platform, ActivityIndicator, RefreshControl, Linking
+  TextInput, Platform, ActivityIndicator, RefreshControl, Linking,
+  KeyboardAvoidingView
 } from 'react-native';
 import {
   CreditCard, Calendar, Hash, Car, CheckCircle, Clock,
   AlertTriangle, ChevronDown, ChevronUp, LogOut, Plus,
-  Phone, User, FileText, Send, Shield
+  Phone, User, FileText, Send, Shield, Briefcase, DollarSign,
+  Fingerprint, CheckCircle2, Sparkles, ChevronRight, AlertCircle
 } from 'lucide-react-native';
-import { useFocusEffect } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MotiView } from 'moti';
 import { formatDate } from '../../lib/utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 
 // Handle notifications when app is active
 Notifications.setNotificationHandler({
@@ -32,9 +36,27 @@ Notifications.setNotificationHandler({
 const CREDIT_SESSION_KEY = 'nax_credit_session';
 
 export default function CreditScreen() {
+  const router = useRouter();
   const { colors, isDark } = useTheme();
   const { showToast } = useToast();
+  const { session } = useAuth();
 
+  // Active top tab: 'apply' (Kreditə Müraciət) vs 'account' (Kredit Hesabım)
+  const [activeTab, setActiveTab] = useState<'apply' | 'account'>('apply');
+
+  // Application Form States
+  const [appFullName, setAppFullName] = useState('');
+  const [appFatherName, setAppFatherName] = useState('');
+  const [appFinCode, setAppFinCode] = useState('');
+  const [appBirthDate, setAppBirthDate] = useState('');
+  const [appWorkplace, setAppWorkplace] = useState('');
+  const [appMonthlyIncome, setAppMonthlyIncome] = useState('');
+  const [appPhone, setAppPhone] = useState('');
+  const [appErrorMessage, setAppErrorMessage] = useState<string | null>(null);
+  const [appSubmitting, setAppSubmitting] = useState(false);
+  const [appSubmitted, setAppSubmitted] = useState(false);
+
+  // Loan Account (Existing Client) States
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -48,6 +70,28 @@ export default function CreditScreen() {
   const [expandedDetails, setExpandedDetails] = useState<string | null>(null);
   const [customerInfo, setCustomerInfo] = useState<any>(null);
 
+  // Auto-fill account details if logged in
+  useEffect(() => {
+    const fetchAuthAccount = async () => {
+      if (session?.user?.id) {
+        try {
+          const { data } = await supabase
+            .from('accounts')
+            .select('*')
+            .eq('id', session.user.id)
+            .maybeSingle();
+          if (data) {
+            if (data.full_name && !appFullName) setAppFullName(data.full_name);
+            if (data.phone && !appPhone) setAppPhone(data.phone);
+          }
+        } catch (e) {
+          console.log(e);
+        }
+      }
+    };
+    fetchAuthAccount();
+  }, [session]);
+
   // Check saved session on mount
   useEffect(() => {
     checkSession();
@@ -55,9 +99,9 @@ export default function CreditScreen() {
 
   const checkSession = async () => {
     try {
-      const session = await AsyncStorage.getItem(CREDIT_SESSION_KEY);
-      if (session) {
-        const { fin, birth } = JSON.parse(session);
+      const savedSession = await AsyncStorage.getItem(CREDIT_SESSION_KEY);
+      if (savedSession) {
+        const { fin, birth } = JSON.parse(savedSession);
         setFinCode(fin);
         setBirthDate(birth);
         setIsLoggedIn(true);
@@ -124,14 +168,11 @@ export default function CreditScreen() {
 
   const setupNotifications = async (loansData: any[], allSchedules: Record<string, any[]>) => {
     try {
-      // Clear previously scheduled test/interval notifications
       if ((window as any).notifInterval) {
         clearInterval((window as any).notifInterval);
       }
-      // Clear all OS level scheduled notifications to reset state
       await Notifications.cancelAllScheduledNotificationsAsync();
 
-      // Permissions
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
       if (existingStatus !== 'granted') {
@@ -140,7 +181,6 @@ export default function CreditScreen() {
       }
       
       if (finalStatus !== 'granted') {
-        console.log('Notification permissions not granted');
         return;
       }
 
@@ -153,13 +193,12 @@ export default function CreditScreen() {
         });
       }
 
-      // Fetch and save Expo Push Token for real push notification
       let pushToken = '';
       try {
         const tokenData = await Notifications.getExpoPushTokenAsync();
         pushToken = tokenData.data;
       } catch (tokenErr) {
-        console.log("Could not get push token for real push", tokenErr);
+        console.log("Push token error", tokenErr);
       }
 
       if (pushToken && loansData.length > 0) {
@@ -168,13 +207,11 @@ export default function CreditScreen() {
           if (!currentNotes.includes(`[PUSH_TOKEN:${pushToken}]`)) {
             currentNotes = currentNotes.replace(/\[PUSH_TOKEN:ExponentPushToken\[.*?\]\]/g, '').trim();
             currentNotes = `${currentNotes}\n[PUSH_TOKEN:${pushToken}]`.trim();
-            // Fire and forget updating the token
             supabase.from('loan_accounts').update({ notes: currentNotes }).eq('id', loan.id).then();
           }
         }
       }
 
-      // Find if user has overdue payments or upcoming today
       let overdueAmount = 0;
       let nextDueAmount = 0;
       let isOverdue = false;
@@ -183,14 +220,12 @@ export default function CreditScreen() {
       const todayStr = new Date().toISOString().split('T')[0];
 
       Object.values(allSchedules).forEach((loanSchedule) => {
-        // Find overdue
         const overdues = loanSchedule.filter((s: any) => s.status === 'overdue');
         if (overdues.length > 0) {
           isOverdue = true;
           overdues.forEach((s: any) => overdueAmount += (Number(s.amount) - Number(s.paid_amount || 0)));
         }
 
-        // Find due today
         const pendings = loanSchedule.filter((s: any) => s.status === 'pending');
         if (pendings.length > 0) {
           const nextPending = pendings[0];
@@ -210,37 +245,130 @@ export default function CreditScreen() {
           ? `Sizin ${targetAmount.toLocaleString('az-AZ')} ₼ gecikmiş ödənişiniz var! Xahiş edirik dərhal ödəniş edin.`
           : `Bu gün üçün ${targetAmount.toLocaleString('az-AZ')} ₼ ödənişiniz var. Xahiş edirik ödənişi gecikdirməyin.`;
 
-        // Schedule daily at 10:00, 14:00, 18:00
         const triggerHours = [10, 14, 18];
         
         for (const hour of triggerHours) {
           await Notifications.scheduleNotificationAsync({
-            content: {
-              title,
-              body,
-              sound: true,
-            },
-            trigger: { 
-              hour, 
-              minute: 0, 
-              repeats: true 
-            } as any, 
+            content: { title, body, sound: true },
+            trigger: { hour, minute: 0, repeats: true } as any, 
           });
         }
-        console.log("Scheduled daily alarms for overdue/due today.");
       }
     } catch (err) {
       console.log('Setup Notifications Error:', err);
     }
   };
 
-  // Clean interval on unmount
-  useEffect(() => {
-    return () => {
-      if ((window as any).notifInterval) clearInterval((window as any).notifInterval);
-    };
-  }, []);
+  // =================== APPLY FOR CREDIT HANDLER ===================
+  const handleApplySubmit = async () => {
+    setAppErrorMessage(null);
 
+    if (!appFullName.trim()) {
+      setAppErrorMessage('Lütfən ad və soyadınızı daxil edin');
+      return;
+    }
+    if (!appFinCode.trim()) {
+      setAppErrorMessage('Lütfən FİN kodunuzu daxil edin');
+      return;
+    }
+    if (!appPhone.trim()) {
+      setAppErrorMessage('Lütfən əlaqə üçün mobil nömrənizi daxil edin');
+      return;
+    }
+
+    setAppSubmitting(true);
+
+    try {
+      // Parse birth date flexibly
+      let dbBirthDate: string | null = null;
+      if (appBirthDate.trim()) {
+        const cleaned = appBirthDate.trim().replace(/[^0-9]/g, '');
+        if (cleaned.length === 8) {
+          const day = cleaned.substring(0, 2);
+          const month = cleaned.substring(2, 4);
+          const year = cleaned.substring(4, 8);
+          dbBirthDate = `${year}-${month}-${day}`;
+        } else {
+          const parts = appBirthDate.trim().replace(/[\/\-]/g, '.').split('.');
+          if (parts.length === 3 && parts[0].length <= 2 && parts[2].length === 4) {
+            dbBirthDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+          }
+        }
+      }
+
+      let parsedIncome: number | null = null;
+      if (appMonthlyIncome.trim()) {
+        const inc = parseFloat(appMonthlyIncome.replace(',', '.').trim());
+        if (!isNaN(inc)) parsedIncome = inc;
+      }
+
+      const insertData = {
+        full_name: appFullName.trim(),
+        father_name: appFatherName.trim() || null,
+        fin_code: appFinCode.trim().toUpperCase(),
+        birth_date: dbBirthDate,
+        workplace: appWorkplace.trim() || null,
+        monthly_income: parsedIncome,
+        phone: appPhone.trim(),
+        status: 'pending',
+        account_id: session?.user?.id || null,
+        car_id: null
+      };
+
+      console.log('[Credit Tab] Submitting application to Supabase:', insertData);
+
+      const { data, error } = await supabase
+        .from('credit_applications')
+        .insert(insertData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[Credit Tab] Supabase insert error:', error);
+        throw error;
+      }
+
+      console.log('[Credit Tab] Inserted successfully:', data);
+
+      setAppSubmitted(true);
+      showToast('Kredit müraciətiniz uğurla qəbul edildi!', 'success');
+
+      // Clear fields
+      setAppFullName('');
+      setAppFatherName('');
+      setAppFinCode('');
+      setAppBirthDate('');
+      setAppWorkplace('');
+      setAppMonthlyIncome('');
+      setAppPhone('');
+      setAppErrorMessage(null);
+
+    } catch (e: any) {
+      console.error('Credit Application Submit Error:', e);
+      const msg = e?.message || 'Xəta baş verdi. Xahiş edirik yenidən cəhd edin.';
+      setAppErrorMessage(msg);
+      showToast('Müraciət xətası: ' + msg, 'error');
+    } finally {
+      setAppSubmitting(false);
+    }
+  };
+
+  // Formatting helpers
+  const handleAppFinChange = (text: string) => {
+    const cleaned = text.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 7);
+    setAppFinCode(cleaned);
+  };
+
+  const handleAppBirthChange = (text: string) => {
+    const nums = text.replace(/[^0-9]/g, '');
+    let formatted = '';
+    if (nums.length > 0) formatted += nums.substring(0, 2);
+    if (nums.length > 2) formatted += '.' + nums.substring(2, 4);
+    if (nums.length > 4) formatted += '.' + nums.substring(4, 8);
+    setAppBirthDate(formatted);
+  };
+
+  // =================== EXISTING LOANS LOGIN ===================
   const handleLogin = async () => {
     if (finCode.length < 5) {
       showToast('FIN kod minimum 5 simvol olmalıdır', 'error');
@@ -253,7 +381,6 @@ export default function CreditScreen() {
 
     setLoginLoading(true);
     try {
-      // Convert DD.MM.YYYY to YYYY-MM-DD
       const parts = birthDate.split('.');
       const formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
 
@@ -266,12 +393,11 @@ export default function CreditScreen() {
       if (error) throw error;
 
       if (!data || data.length === 0) {
-        showToast('Bu FIN kod və doğum tarixi ilə kredit tapılmadı', 'error');
+        showToast('Bu FIN kod və doğum tarixi ilə aktiv kredit tapılmadı', 'error');
         setLoginLoading(false);
         return;
       }
 
-      // Save session
       await AsyncStorage.setItem(CREDIT_SESSION_KEY, JSON.stringify({
         fin: finCode.toUpperCase(),
         birth: formattedDate
@@ -298,20 +424,6 @@ export default function CreditScreen() {
     setBirthDate('');
   };
 
-  const handleFinInput = (text: string) => {
-    const cleaned = text.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (cleaned.length <= 7) setFinCode(cleaned);
-  };
-
-  const handleBirthInput = (text: string) => {
-    const nums = text.replace(/[^0-9]/g, '');
-    let formatted = '';
-    if (nums.length > 0) formatted += nums.substring(0, 2);
-    if (nums.length > 2) formatted += '.' + nums.substring(2, 4);
-    if (nums.length > 4) formatted += '.' + nums.substring(4, 8);
-    setBirthDate(formatted);
-  };
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'paid': return '#34C759';
@@ -335,7 +447,6 @@ export default function CreditScreen() {
     }
   };
 
-
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'paid': return <CheckCircle size={16} color="#34C759" />;
@@ -353,495 +464,920 @@ export default function CreditScreen() {
     );
   }
 
-  // =================== LOGIN SCREEN ===================
-  if (!isLoggedIn) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <ScrollView
-          contentContainerStyle={styles.loginScroll}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <MotiView
-            from={{ opacity: 0, translateY: 30 }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={{ type: 'timing', duration: 600 }}
-            style={styles.loginContainer}
-          >
-            {/* Logo / Icon */}
-            <View style={[styles.loginIconWrap, { backgroundColor: colors.primary + '15' }]}>
-              <CreditCard size={48} color={colors.primary} />
-            </View>
-
-            <Text style={[styles.loginTitle, { color: colors.text }]}>Kredit Hesabım</Text>
-            <Text style={[styles.loginSubtitle, { color: colors.textSecondary }]}>
-              FIN kodunuz və doğum tarixiniz ilə kredit məlumatlarınıza baxın
-            </Text>
-
-            {/* FIN Code Input */}
-            <View style={styles.loginField}>
-              <Text style={[styles.loginLabel, { color: colors.text }]}>
-                <Hash size={14} color={colors.primary} /> FIN Kod
-              </Text>
-              <View style={[styles.loginInput, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <TextInput
-                  style={[styles.loginInputText, { color: colors.text }]}
-                  value={finCode}
-                  onChangeText={handleFinInput}
-                  placeholder="Məs: 1A2B3C4"
-                  placeholderTextColor={colors.placeholder}
-                  autoCapitalize="characters"
-                  maxLength={7}
-                  blurOnSubmit={false}
-                  returnKeyType="next"
-                />
-                <View style={[styles.charCounter, { backgroundColor: isDark ? '#333' : '#F0F0F0' }]}>
-                  <Text style={[styles.charCounterText, { color: colors.textSecondary }]}>{finCode.length}/7</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Birth Date Input */}
-            <View style={styles.loginField}>
-              <Text style={[styles.loginLabel, { color: colors.text }]}>
-                <Calendar size={14} color={colors.primary} /> Doğum Tarixi
-              </Text>
-              <View style={[styles.loginInput, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <TextInput
-                  style={[styles.loginInputText, { color: colors.text }]}
-                  value={birthDate}
-                  onChangeText={handleBirthInput}
-                  placeholder="GG.AA.İİİİ"
-                  placeholderTextColor={colors.placeholder}
-                  keyboardType="number-pad"
-                  maxLength={10}
-                  blurOnSubmit={false}
-                  returnKeyType="done"
-                />
-              </View>
-            </View>
-
-            {/* Login Button */}
-            <TouchableOpacity
-              style={[styles.loginBtn, { backgroundColor: colors.primary, opacity: loginLoading ? 0.6 : 1 }]}
-              onPress={handleLogin}
-              disabled={loginLoading}
-            >
-              {loginLoading ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <>
-                  <Shield size={20} color="#FFF" />
-                  <Text style={styles.loginBtnText}>Daxil Ol</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            {/* Info Box */}
-            <View style={[styles.infoBox, { backgroundColor: isDark ? '#1c2a3d' : '#EFF6FF' }]}>
-              <Text style={[styles.infoBoxText, { color: colors.textSecondary }]}>
-                🔒 Məlumatlarınız təhlükəsizdir. FIN kodunuz yalnız kredit hesabınıza giriş üçün istifadə olunur.
-              </Text>
-            </View>
-          </MotiView>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  // =================== DASHBOARD (LOGGED IN) ===================
-  const totalLoans = loans.length;
-  const activeLoans = loans.filter(l => l.status === 'active').length;
-  const allScheduleItems = Object.values(schedules).flat();
-  const totalPaid = allScheduleItems.reduce((sum: number, s: any) => sum + Number(s.paid_amount || 0), 0);
-  const totalDebt = allScheduleItems
-    .filter((s: any) => s.status !== 'paid')
-    .reduce((sum: number, s: any) => sum + (Number(s.amount) - Number(s.paid_amount || 0)), 0);
-  const overdueCount = allScheduleItems.filter((s: any) => s.status === 'overdue').length;
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* Premium Header */}
-      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <View style={styles.headerLeft}>
-          <View style={[styles.avatarBox, { backgroundColor: colors.primary + '15' }]}>
-            <User size={20} color={colors.primary} />
-          </View>
-          <View>
-            <Text style={[styles.headerGreeting, { color: colors.primary, fontFamily: 'RethinkSans_800ExtraBold', fontSize: 18 }]}>Kredit Hesabım</Text>
-            <Text style={[styles.headerName, { color: colors.text, fontSize: 13, fontFamily: 'RethinkSans_600SemiBold', marginTop: 2 }]}>
-              {customerInfo?.name} {customerInfo?.surname}
-            </Text>
-          </View>
+      {/* Top Header */}
+      <View style={[styles.mainHeader, { borderBottomColor: colors.border }]}>
+        <View>
+          <Text style={[styles.mainHeaderTitle, { color: colors.text }]}>Kredit Mərkəzi</Text>
+          <Text style={[styles.mainHeaderSubtitle, { color: colors.textSecondary }]}>Naxçıvan Avto Kredit Xidmətləri</Text>
         </View>
-        <TouchableOpacity
-          style={[styles.logoutBtn, { backgroundColor: isDark ? '#2c1c1c' : '#FFF0F0' }]}
-          onPress={handleLogout}
-          activeOpacity={0.7}
+        <TouchableOpacity 
+          style={[styles.calcHeaderBtn, { backgroundColor: `${colors.primary}15` }]}
+          onPress={() => router.push('/calculator' as any)}
         >
-          <LogOut size={16} color="#FF3B30" />
+          <Text style={{ color: colors.primary, fontSize: 13, fontFamily: 'RethinkSans_700Bold' }}>Hesabla 📊</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.dashScroll}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              const session = { fin: finCode, birth: birthDate };
-              fetchLoans(session.fin, session.birth);
-            }}
-            tintColor={colors.primary}
-          />
-        }
-      >
-        {/* Simplified Financial Summary Card */}
-        <MotiView
-          from={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
-        >
-          <Text style={[styles.summaryTitle, { color: colors.textSecondary }]}>Maliyyə Xülasəsi</Text>
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryCol}>
-              <Text style={[styles.summaryVal, { color: '#34C759' }]}>{totalPaid.toLocaleString('az-AZ')} ₼</Text>
-              <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>Ödənilən cəmi</Text>
-            </View>
-            <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
-            <View style={styles.summaryCol}>
-              <Text style={[styles.summaryVal, { color: '#FF3B30' }]}>{Math.max(0, totalDebt).toLocaleString('az-AZ')} ₼</Text>
-              <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>Qalan borc</Text>
-            </View>
-          </View>
+      {/* Segmented Tab Switcher */}
+      <View style={styles.tabSwitcherWrap}>
+        <View style={[styles.tabSwitcher, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <TouchableOpacity
+            style={[
+              styles.tabBtn,
+              activeTab === 'apply' && [styles.tabBtnActive, { backgroundColor: colors.primary }]
+            ]}
+            onPress={() => setActiveTab('apply')}
+          >
+            <Send size={15} color={activeTab === 'apply' ? '#FFF' : colors.textSecondary} style={{ marginRight: 6 }} />
+            <Text style={[
+              styles.tabBtnText,
+              { color: activeTab === 'apply' ? '#FFF' : colors.textSecondary },
+              activeTab === 'apply' && { fontFamily: 'RethinkSans_700Bold' }
+            ]}>
+              Kreditə Müraciət
+            </Text>
+          </TouchableOpacity>
 
-          {/* Simple Clean Progress Bar */}
-          {loans.length > 0 && (() => {
-            const loan = loans[0];
-            const loanSchedule = schedules[loan.id] || [];
-            const paidCount = loanSchedule.filter((s: any) => s.status === 'paid').length;
-            const progressPercent = loanSchedule.length > 0 ? (paidCount / loanSchedule.length) * 100 : 0;
-            return (
-              <View style={styles.summaryProgress}>
-                <View style={styles.progressTextRow}>
-                  <Text style={[styles.progressLbl, { color: colors.textSecondary }]}>
-                    Ödəniş faizi: {Math.round(progressPercent)}%
-                  </Text>
-                  <Text style={[styles.progressLbl, { color: colors.primary, fontFamily: 'RethinkSans_700Bold' }]}>
-                    {paidCount}/{loanSchedule.length} hissə
-                  </Text>
+          <TouchableOpacity
+            style={[
+              styles.tabBtn,
+              activeTab === 'account' && [styles.tabBtnActive, { backgroundColor: colors.primary }]
+            ]}
+            onPress={() => setActiveTab('account')}
+          >
+            <CreditCard size={15} color={activeTab === 'account' ? '#FFF' : colors.textSecondary} style={{ marginRight: 6 }} />
+            <Text style={[
+              styles.tabBtnText,
+              { color: activeTab === 'account' ? '#FFF' : colors.textSecondary },
+              activeTab === 'account' && { fontFamily: 'RethinkSans_700Bold' }
+            ]}>
+              Kredit Hesabım
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* ===================== TAB 1: APPLY FOR CREDIT ===================== */}
+      {activeTab === 'apply' && (
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+          style={{ flex: 1 }}
+        >
+          <ScrollView 
+            contentContainerStyle={styles.scrollContent} 
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Banner Promo */}
+            <LinearGradient
+              colors={[colors.primary, '#FF9500']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.promoCard}
+            >
+              <View style={styles.promoIcon}>
+                <Sparkles size={24} color="#FFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.promoTitle}>Sürətli və Sərfəli Avto Kredit</Text>
+                <Text style={styles.promoDesc}>
+                  Yalnız şəxsiyyət vəsiqəsi ilə 15 dəqiqə ərzində müraciət edin.
+                </Text>
+              </View>
+            </LinearGradient>
+
+            {appSubmitted ? (
+              <MotiView 
+                from={{ opacity: 0, scale: 0.9 }} 
+                animate={{ opacity: 1, scale: 1 }}
+                style={[styles.successBox, { backgroundColor: colors.card, borderColor: colors.border }]}
+              >
+                <View style={styles.successIconWrap}>
+                  <CheckCircle2 size={60} color="#34C759" />
                 </View>
-                <View style={[styles.summaryProgressBarTrack, { backgroundColor: colors.border }]}>
-                  <View style={[styles.summaryProgressBarFill, { width: `${progressPercent}%`, backgroundColor: '#34C759' }]} />
+                <Text style={[styles.successTitle, { color: colors.text }]}>Müraciətiniz Qəbul Olundu!</Text>
+                <Text style={[styles.successSubtitle, { color: colors.textSecondary }]}>
+                  Kredit mütəxəssislərimiz müraciətinizi nəzərdən keçirib tezliklə sizinlə əlaqə saxlayacaqlar.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.newAppBtn, { backgroundColor: colors.primary }]}
+                  onPress={() => setAppSubmitted(false)}
+                >
+                  <Text style={styles.newAppBtnText}>Yeni Müraciət Et</Text>
+                </TouchableOpacity>
+              </MotiView>
+            ) : (
+              <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={[styles.formTitle, { color: colors.text }]}>Müraciət Formu</Text>
+                <Text style={[styles.formSub, { color: colors.textSecondary }]}>Məlumatlarınızı daxil edin</Text>
+
+                {/* Error Banner */}
+                {appErrorMessage && (
+                  <View style={styles.errorBox}>
+                    <AlertCircle size={18} color="#FF3B30" style={{ marginRight: 8 }} />
+                    <Text style={styles.errorText}>{appErrorMessage}</Text>
+                  </View>
+                )}
+
+                {/* Ad Soyad */}
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.label, { color: colors.textSecondary }]}>Ad və Soyad *</Text>
+                  <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <User size={18} color={colors.textSecondary} style={styles.inputIcon} />
+                    <TextInput
+                      style={[styles.input, { color: colors.text }]}
+                      value={appFullName}
+                      onChangeText={(t) => { setAppErrorMessage(null); setAppFullName(t); }}
+                      placeholder="Məs: İlkin Rzayev"
+                      placeholderTextColor={colors.placeholder}
+                    />
+                  </View>
+                </View>
+
+                {/* Ata adı */}
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.label, { color: colors.textSecondary }]}>Ata adı</Text>
+                  <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <User size={18} color={colors.textSecondary} style={styles.inputIcon} />
+                    <TextInput
+                      style={[styles.input, { color: colors.text }]}
+                      value={appFatherName}
+                      onChangeText={setAppFatherName}
+                      placeholder="Məs: Əli oğlu"
+                      placeholderTextColor={colors.placeholder}
+                    />
+                  </View>
+                </View>
+
+                {/* FIN Kod & Doğum Tarixi */}
+                <View style={styles.row}>
+                  <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>FİN Kod *</Text>
+                    <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                      <Fingerprint size={18} color={colors.textSecondary} style={styles.inputIcon} />
+                      <TextInput
+                        style={[styles.input, { color: colors.text }]}
+                        value={appFinCode}
+                        onChangeText={handleAppFinChange}
+                        autoCapitalize="characters"
+                        maxLength={7}
+                        placeholder="7ABC123"
+                        placeholderTextColor={colors.placeholder}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>Doğum Tarixi</Text>
+                    <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                      <Calendar size={18} color={colors.textSecondary} style={styles.inputIcon} />
+                      <TextInput
+                        style={[styles.input, { color: colors.text }]}
+                        value={appBirthDate}
+                        onChangeText={handleAppBirthChange}
+                        placeholder="GG.AA.YYYY"
+                        placeholderTextColor={colors.placeholder}
+                        keyboardType="numeric"
+                        maxLength={10}
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                {/* Mobil Nömrə */}
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.label, { color: colors.textSecondary }]}>Mobil Nömrə *</Text>
+                  <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <Phone size={18} color={colors.textSecondary} style={styles.inputIcon} />
+                    <TextInput
+                      style={[styles.input, { color: colors.text }]}
+                      value={appPhone}
+                      onChangeText={setAppPhone}
+                      placeholder="Məs: +994 50 123 45 67"
+                      placeholderTextColor={colors.placeholder}
+                      keyboardType="phone-pad"
+                    />
+                  </View>
+                </View>
+
+                {/* İş Yeri */}
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.label, { color: colors.textSecondary }]}>İş Yeri / Fəaliyyət Sahəsi</Text>
+                  <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <Briefcase size={18} color={colors.textSecondary} style={styles.inputIcon} />
+                    <TextInput
+                      style={[styles.input, { color: colors.text }]}
+                      value={appWorkplace}
+                      onChangeText={setAppWorkplace}
+                      placeholder="Məs: Naxçıvan MMC"
+                      placeholderTextColor={colors.placeholder}
+                    />
+                  </View>
+                </View>
+
+                {/* Aylıq Qazanc */}
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.label, { color: colors.textSecondary }]}>Aylıq Qazanc (₼)</Text>
+                  <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <DollarSign size={18} color={colors.textSecondary} style={styles.inputIcon} />
+                    <TextInput
+                      style={[styles.input, { color: colors.text }]}
+                      value={appMonthlyIncome}
+                      onChangeText={setAppMonthlyIncome}
+                      placeholder="Məs: 1200"
+                      placeholderTextColor={colors.placeholder}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+
+                {/* Submit Button */}
+                <TouchableOpacity
+                  onPress={handleApplySubmit}
+                  disabled={appSubmitting}
+                  style={{ marginTop: 10 }}
+                  activeOpacity={0.85}
+                >
+                  <LinearGradient
+                    colors={[colors.primary, '#FF9500']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.submitBtn}
+                  >
+                    {appSubmitting ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <>
+                        <Send size={18} color="#FFF" style={{ marginRight: 8 }} />
+                        <Text style={styles.submitBtnText}>Müraciəti Göndər</Text>
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Features Info */}
+            <View style={styles.infoRowGrid}>
+              <View style={[styles.featureCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={styles.featureEmoji}>⚡</Text>
+                <Text style={[styles.featureTitle, { color: colors.text }]}>15 Dəqiqəyə Cavab</Text>
+                <Text style={[styles.featureDesc, { color: colors.textSecondary }]}>Müraciətiniz operativ yoxlanılır</Text>
+              </View>
+
+              <View style={[styles.featureCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={styles.featureEmoji}>📄</Text>
+                <Text style={[styles.featureTitle, { color: colors.text }]}>Tək Şəxsiyyət Vəsiqəsi</Text>
+                <Text style={[styles.featureDesc, { color: colors.textSecondary }]}>Əlavə arayış tələb olunmur</Text>
+              </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      )}
+
+      {/* ===================== TAB 2: MY LOAN ACCOUNT ===================== */}
+      {activeTab === 'account' && (
+        !isLoggedIn ? (
+          <ScrollView
+            contentContainerStyle={styles.loginScroll}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <MotiView
+              from={{ opacity: 0, translateY: 20 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              style={styles.loginContainer}
+            >
+              <View style={[styles.loginIconWrap, { backgroundColor: colors.primary + '15' }]}>
+                <CreditCard size={44} color={colors.primary} />
+              </View>
+
+              <Text style={[styles.loginTitle, { color: colors.text }]}>Kredit Hesabım</Text>
+              <Text style={[styles.loginSubtitle, { color: colors.textSecondary }]}>
+                Aktiv kreditlərinizə və ödəniş cədvəlinizə baxmaq üçün FİN kodunuz və doğum tarixinizlə daxil olun.
+              </Text>
+
+              {/* FIN Code Input */}
+              <View style={styles.loginField}>
+                <Text style={[styles.loginLabel, { color: colors.text }]}>
+                  <Hash size={14} color={colors.primary} /> FIN Kod
+                </Text>
+                <View style={[styles.loginInput, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <TextInput
+                    style={[styles.loginInputText, { color: colors.text }]}
+                    value={finCode}
+                    onChangeText={(val) => {
+                      const cleaned = val.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                      if (cleaned.length <= 7) setFinCode(cleaned);
+                    }}
+                    placeholder="Məs: 7ABC123"
+                    placeholderTextColor={colors.placeholder}
+                    autoCapitalize="characters"
+                    maxLength={7}
+                  />
+                  <View style={[styles.charCounter, { backgroundColor: isDark ? '#333' : '#F0F0F0' }]}>
+                    <Text style={[styles.charCounterText, { color: colors.textSecondary }]}>{finCode.length}/7</Text>
+                  </View>
                 </View>
               </View>
-            );
-          })()}
-        </MotiView>
 
-        {overdueCount > 0 && (
-          <MotiView
-            from={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            style={[styles.overdueAlert, { backgroundColor: 'rgba(255,59,48,0.08)' }]}
-          >
-            <AlertTriangle size={18} color="#FF3B30" />
-            <Text style={styles.overdueAlertText}>{overdueCount} gecikmiş ödənişiniz var!</Text>
-          </MotiView>
-        )}
+              {/* Birth Date Input */}
+              <View style={styles.loginField}>
+                <Text style={[styles.loginLabel, { color: colors.text }]}>
+                  <Calendar size={14} color={colors.primary} /> Doğum Tarixi
+                </Text>
+                <View style={[styles.loginInput, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <TextInput
+                    style={[styles.loginInputText, { color: colors.text }]}
+                    value={birthDate}
+                    onChangeText={(val) => {
+                      const nums = val.replace(/[^0-9]/g, '');
+                      let formatted = '';
+                      if (nums.length > 0) formatted += nums.substring(0, 2);
+                      if (nums.length > 2) formatted += '.' + nums.substring(2, 4);
+                      if (nums.length > 4) formatted += '.' + nums.substring(4, 8);
+                      setBirthDate(formatted);
+                    }}
+                    placeholder="GG.AA.YYYY"
+                    placeholderTextColor={colors.placeholder}
+                    keyboardType="number-pad"
+                    maxLength={10}
+                  />
+                </View>
+              </View>
 
-        {/* Loans */}
-        {loans.length === 0 ? (
-          <View style={styles.emptyLoans}>
-            <Car size={64} color={colors.textSecondary} />
-            <Text style={[styles.emptyText, { color: colors.text }]}>Aktiv kredit tapılmadı</Text>
-          </View>
-        ) : (
-          loans.map((loan, index) => {
-            const loanSchedule = schedules[loan.id] || [];
-            const loanPaid = loanSchedule.reduce((sum: number, s: any) => sum + Number(s.paid_amount || 0), 0);
-            const loanTotalWithInterest = Number(loan.loan_amount) * (1 + Number(loan.interest_rate) / 100);
-            const loanRemaining = Math.max(0, loanTotalWithInterest - loanPaid);
-            const paidCount = loanSchedule.filter((s: any) => s.status === 'paid').length;
-            const loanOverdue = loanSchedule.filter((s: any) => s.status === 'overdue').length;
-            const nextPayment = loanSchedule.find((s: any) => s.status === 'pending' || s.status === 'overdue');
-            const isExpanded = expandedLoan === loan.id;
-            const isDetailsExpanded = expandedDetails === loan.id;
-            const progressPercent = loanSchedule.length > 0 ? (paidCount / loanSchedule.length) * 100 : 0;
-            const maturityDate = loanSchedule.length > 0 ? loanSchedule[loanSchedule.length - 1].due_date : null;
-
-            return (
-              <MotiView
-                key={loan.id}
-                from={{ opacity: 0, translateY: 20 }}
-                animate={{ opacity: 1, translateY: 0 }}
-                transition={{ delay: index * 80, type: 'timing', duration: 400 }}
+              {/* Login Button */}
+              <TouchableOpacity
+                style={[styles.loginBtn, { backgroundColor: colors.primary, opacity: loginLoading ? 0.6 : 1 }]}
+                onPress={handleLogin}
+                disabled={loginLoading}
               >
-                <View style={[styles.loanCard, { backgroundColor: colors.card }]}>
-                  {/* Car Header */}
-                  <View style={styles.loanHeader}>
-                    <View style={[styles.carIcon, { backgroundColor: colors.primary + '15' }]}>
-                      <Car size={22} color={colors.primary} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.carName, { color: colors.text }]}>
-                        {loan.car_brand} {loan.car_model}
-                      </Text>
-                      <Text style={[styles.carYear, { color: colors.textSecondary }]}>
-                        {loan.car_year}{loan.car_plate ? ` • ${loan.car_plate}` : ''}
-                      </Text>
-                    </View>
-                    <View style={[styles.loanStatusBadge, { backgroundColor: getStatusColor(loan.status) + '15' }]}>
-                      <Text style={[styles.loanStatusText, { color: getStatusColor(loan.status) }]}>
-                        {getStatusText(loan.status)}
-                      </Text>
-                    </View>
-                  </View>
+                {loginLoading ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <Shield size={20} color="#FFF" />
+                    <Text style={styles.loginBtnText}>Daxil Ol</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </MotiView>
+          </ScrollView>
+        ) : (
+          /* Logged In Dashboard */
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.dashScroll}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => {
+                  setRefreshing(true);
+                  fetchLoans(finCode, birthDate);
+                }}
+                tintColor={colors.primary}
+              />
+            }
+          >
+            {/* User Greeting & Logout */}
+            <View style={[styles.userBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.userBarLeft}>
+                <View style={[styles.avatarCircle, { backgroundColor: `${colors.primary}15` }]}>
+                  <User size={20} color={colors.primary} />
+                </View>
+                <View>
+                  <Text style={[styles.userGreeting, { color: colors.text }]}>
+                    {customerInfo?.name} {customerInfo?.surname}
+                  </Text>
+                  <Text style={[styles.userFin, { color: colors.textSecondary }]}>
+                    FİN: {customerInfo?.fin}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+                <LogOut size={18} color="#FF3B30" />
+              </TouchableOpacity>
+            </View>
 
-                  {/* Clean Spec Summary */}
-                  <View style={styles.cleanSpecRow}>
-                    <View style={styles.cleanSpecCol}>
-                      <Text style={[styles.cleanSpecVal, { color: colors.text }]}>{Number(loan.monthly_payment).toLocaleString('az-AZ')} ₼</Text>
-                      <Text style={[styles.cleanSpecLbl, { color: colors.textSecondary }]}>Aylıq Ödəniş</Text>
-                    </View>
-                    <View style={styles.cleanSpecCol}>
-                      <Text style={[styles.cleanSpecVal, { color: colors.text }]}>{paidCount} / {loanSchedule.length}</Text>
-                      <Text style={[styles.cleanSpecLbl, { color: colors.textSecondary }]}>Ödənilmiş Hissə</Text>
-                    </View>
-                  </View>
+            {loans.length === 0 ? (
+              <View style={styles.emptyLoans}>
+                <Car size={56} color={colors.textSecondary} />
+                <Text style={[styles.emptyText, { color: colors.text }]}>Aktiv kredit tapılmadı</Text>
+              </View>
+            ) : (
+              loans.map((loan, idx) => {
+                const sched = schedules[loan.id] || [];
+                const paidCount = sched.filter(s => s.status === 'paid').length;
+                const overdueCount = sched.filter(s => s.status === 'overdue').length;
+                const isExpanded = expandedLoan === loan.id;
 
-                  {/* Collapsible Details Toggle */}
-                  <TouchableOpacity
-                    style={[styles.detailsToggle, { borderTopColor: colors.border }]}
-                    onPress={() => setExpandedDetails(isDetailsExpanded ? null : loan.id)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.detailsToggleText, { color: colors.textSecondary }]}>
-                      {isDetailsExpanded ? 'ℹ️ Detalları gizlə' : 'ℹ️ Ətraflı kredit məlumatları'}
-                    </Text>
-                    {isDetailsExpanded ? <ChevronUp size={16} color={colors.textSecondary} /> : <ChevronDown size={16} color={colors.textSecondary} />}
-                  </TouchableOpacity>
-
-                  {isDetailsExpanded && (
-                    <MotiView
-                      from={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      style={styles.detailsBox}
-                    >
-                      <View style={styles.detailRowGrid}>
-                        <View style={styles.detailGridCol}>
-                          <Text style={[styles.ldLabel, { color: colors.textSecondary }]}>Maşının Qiyməti</Text>
-                          <Text style={[styles.ldValue, { color: colors.text }]}>{Number(loan.total_price).toLocaleString('az-AZ')} ₼</Text>
-                        </View>
-                        <View style={styles.detailGridCol}>
-                          <Text style={[styles.ldLabel, { color: colors.textSecondary }]}>İlkin Ödəniş</Text>
-                          <Text style={[styles.ldValue, { color: colors.text }]}>{Number(loan.down_payment).toLocaleString('az-AZ')} ₼</Text>
-                        </View>
-                      </View>
-                      <View style={styles.detailRowGrid}>
-                        <View style={styles.detailGridCol}>
-                          <Text style={[styles.ldLabel, { color: colors.textSecondary }]}>İllik Faiz</Text>
-                          <Text style={[styles.ldValue, { color: colors.text }]}>{loan.interest_rate}%</Text>
-                        </View>
-                        {maturityDate && (
-                          <View style={styles.detailGridCol}>
-                            <Text style={[styles.ldLabel, { color: colors.textSecondary }]}>Bitmə Tarixi</Text>
-                            <Text style={[styles.ldValue, { color: colors.text }]}>{formatDate(maturityDate)}</Text>
-                          </View>
-                        )}
-                      </View>
-                    </MotiView>
-                  )}
-
-                  {/* Overdue Warning */}
-                  {loanOverdue > 0 && (
-                    <View style={[styles.loanOverdueWarn, { backgroundColor: 'rgba(255,59,48,0.07)' }]}>
-                      <AlertTriangle size={14} color="#FF3B30" />
-                      <Text style={styles.loanOverdueText}>{loanOverdue} ödəniş gecikib!</Text>
-                    </View>
-                  )}
-
-                  {/* Next Payment */}
-                  {nextPayment && loan.status === 'active' && (
-                    <View style={[styles.nextPayBox, {
-                      backgroundColor: nextPayment.status === 'overdue' ? 'rgba(255,59,48,0.06)' : 'rgba(0,122,255,0.06)',
-                      borderColor: nextPayment.status === 'overdue' ? '#FF3B30' : '#007AFF',
-                      borderWidth: 1,
-                    }]}>
-                      <Calendar size={16} color={nextPayment.status === 'overdue' ? '#FF3B30' : '#007AFF'} />
+                return (
+                  <View key={loan.id} style={[styles.loanCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <View style={styles.loanHeader}>
                       <View style={{ flex: 1 }}>
-                        <Text style={[styles.nextPayLabel, { color: nextPayment.status === 'overdue' ? '#FF3B30' : '#007AFF' }]}>
-                          {nextPayment.status === 'overdue' ? '⚠️ Gecikmiş' : '📅 Növbəti Ödəniş'}
+                        <Text style={[styles.loanCarName, { color: colors.text }]}>
+                          🚗 {loan.car_brand} {loan.car_model} ({loan.car_year})
                         </Text>
-                        <Text style={[styles.nextPayValue, { color: colors.text }]}>
-                          {Number(nextPayment.amount).toLocaleString('az-AZ')} ₼ – {formatDate(nextPayment.due_date)}
+                        <Text style={[styles.loanAmountText, { color: colors.primary }]}>
+                          Aylıq: {Number(loan.monthly_payment).toLocaleString()} ₼
+                        </Text>
+                      </View>
+                      <View style={[styles.statusBadge, { backgroundColor: getStatusColor(loan.status) + '15' }]}>
+                        <Text style={[styles.statusBadgeText, { color: getStatusColor(loan.status) }]}>
+                          {getStatusText(loan.status)}
                         </Text>
                       </View>
                     </View>
-                  )}
 
-                  {/* Toggle Schedule */}
-                  <TouchableOpacity
-                    style={[styles.toggleSchedule, { borderTopColor: colors.border }]}
-                    onPress={() => setExpandedLoan(isExpanded ? null : loan.id)}
-                  >
-                    <Text style={[styles.toggleText, { color: colors.primary }]}>💳 Ödəniş Planı</Text>
-                    {isExpanded ? <ChevronUp size={18} color={colors.primary} /> : <ChevronDown size={18} color={colors.primary} />}
-                  </TouchableOpacity>
+                    <View style={styles.loanProgressRow}>
+                      <Text style={[styles.progressLabel, { color: colors.textSecondary }]}>
+                        Ödənilmiş hissə: {paidCount} / {sched.length}
+                      </Text>
+                      {overdueCount > 0 && (
+                        <Text style={styles.overdueWarning}>
+                          ⚠️ {overdueCount} gecikmə
+                        </Text>
+                      )}
+                    </View>
 
-                  {isExpanded && (
-                    <View style={styles.scheduleList}>
-                      {loanSchedule.map((item: any) => {
-                        const daysLate = item.status === 'overdue'
-                          ? Math.floor((Date.now() - new Date(item.due_date).getTime()) / (1000 * 60 * 60 * 24))
-                          : 0;
+                    <TouchableOpacity 
+                      style={[styles.toggleSchedBtn, { borderTopColor: colors.border }]}
+                      onPress={() => setExpandedLoan(isExpanded ? null : loan.id)}
+                    >
+                      <Text style={[styles.toggleSchedText, { color: colors.primary }]}>
+                        {isExpanded ? 'Ödəniş Planını Gizlə' : 'Ödəniş Planına Bax'}
+                      </Text>
+                      {isExpanded ? <ChevronUp size={16} color={colors.primary} /> : <ChevronDown size={16} color={colors.primary} />}
+                    </TouchableOpacity>
 
-                        return (
-                          <View
-                            key={item.id}
-                            style={[
-                              styles.schedItem,
-                              { backgroundColor: isDark ? '#1a1a1e' : '#F8F8FA', borderColor: colors.border },
-                              item.status === 'overdue' && { backgroundColor: 'rgba(255,59,48,0.04)', borderColor: '#FF3B30', borderLeftWidth: 3 },
-                              item.status === 'paid' && { opacity: 0.6 }
-                            ]}
-                          >
+                    {isExpanded && (
+                      <View style={styles.schedList}>
+                        {sched.map((item) => (
+                          <View key={item.id} style={[styles.schedItem, { backgroundColor: colors.background, borderColor: colors.border }]}>
                             <View style={styles.schedItemLeft}>
                               {getStatusIcon(item.status)}
-                              <View>
-                                <Text style={[styles.schedInstNum, { color: colors.text }]}>Hissə #{item.installment_number}</Text>
-                                <Text style={[styles.schedDate, { color: colors.textSecondary }]}>
-                                  {formatDate(item.due_date)}
-                                  {daysLate > 0 && <Text style={{ color: '#FF3B30' }}> • {daysLate} gün gecikir</Text>}
-                                </Text>
+                              <View style={{ marginLeft: 8 }}>
+                                <Text style={[styles.schedNum, { color: colors.text }]}>Hissə #{item.installment_number}</Text>
+                                <Text style={[styles.schedDate, { color: colors.textSecondary }]}>{formatDate(item.due_date)}</Text>
                               </View>
                             </View>
-                            <View style={styles.schedItemRight}>
-                              <Text style={[styles.schedAmount, { color: getStatusColor(item.status) }]}>
-                                {Number(item.amount).toLocaleString('az-AZ')} ₼
-                              </Text>
-                              <Text style={[styles.schedStatus, { color: getStatusColor(item.status) }]}>
-                                {getStatusText(item.status)}
-                              </Text>
-                            </View>
+                            <Text style={[styles.schedAmount, { color: getStatusColor(item.status) }]}>
+                              {Number(item.amount).toLocaleString()} ₼
+                            </Text>
                           </View>
-                        );
-                      })}
-                    </View>
-                  )}
-                </View>
-              </MotiView>
-            );
-          })
-        )}
-
-        {/* Contact Info */}
-        <View style={[styles.contactCard, { backgroundColor: colors.card }]}>
-          <Text style={[styles.contactTitle, { color: colors.text }]}>📞 Əlaqə</Text>
-          <Text style={[styles.contactDesc, { color: colors.textSecondary }]}>
-            Ödəniş və ya kredit suallarınız üçün bizimlə əlaqə saxlayın.
-          </Text>
-        </View>
-      </ScrollView>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
+        )
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  // LOGIN STYLES
-  loginScroll: { padding: 24, paddingTop: 40, paddingBottom: 120 },
-  loginContainer: { alignItems: 'center' },
-  loginIconWrap: { width: 100, height: 100, borderRadius: 30, justifyContent: 'center', alignItems: 'center', marginBottom: 24 },
-  loginTitle: { fontSize: 26, fontFamily: 'RethinkSans_800ExtraBold', marginBottom: 10 },
-  loginSubtitle: { fontSize: 15, fontFamily: 'RethinkSans_400Regular', textAlign: 'center', lineHeight: 22, marginBottom: 32, paddingHorizontal: 10 },
-  loginField: { width: '100%', marginBottom: 20 },
-  loginLabel: { fontSize: 14, fontFamily: 'RethinkSans_700Bold', marginBottom: 8 },
-  loginInput: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 16, borderWidth: 1, gap: 10 },
-  loginInputText: { flex: 1, fontSize: 18, fontFamily: 'RethinkSans_700Bold', letterSpacing: 2 },
-  charCounter: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  charCounterText: { fontSize: 12, fontFamily: 'RethinkSans_600SemiBold' },
-  loginBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    width: '100%', padding: 18, borderRadius: 16, gap: 10, marginTop: 8,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 4,
+  mainHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
   },
-  loginBtnText: { color: '#FFF', fontSize: 17, fontFamily: 'RethinkSans_700Bold' },
-  infoBox: { width: '100%', padding: 16, borderRadius: 14, marginTop: 24 },
-  infoBoxText: { fontSize: 13, fontFamily: 'RethinkSans_500Medium', lineHeight: 20, textAlign: 'center' },
-  // DASHBOARD STYLES
-  header: { paddingVertical: 18, paddingHorizontal: 24, borderBottomWidth: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatarBox: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  headerGreeting: { fontSize: 18, fontFamily: 'RethinkSans_800ExtraBold', color: '#000' },
-  headerName: { fontSize: 13, fontFamily: 'RethinkSans_600SemiBold' },
-  logoutBtn: { width: 38, height: 38, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  dashScroll: { padding: 16, paddingBottom: 120 },
+  mainHeaderTitle: {
+    fontSize: 20,
+    fontFamily: 'RethinkSans_800ExtraBold',
+  },
+  mainHeaderSubtitle: {
+    fontSize: 12,
+    fontFamily: 'RethinkSans_500Medium',
+    marginTop: 2,
+  },
+  calcHeaderBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  tabSwitcherWrap: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  tabSwitcher: {
+    flexDirection: 'row',
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 4,
+  },
+  tabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  tabBtnActive: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  tabBtnText: {
+    fontSize: 13,
+    fontFamily: 'RethinkSans_600SemiBold',
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 40,
+    gap: 16,
+  },
+  promoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 20,
+    gap: 14,
+    shadowColor: '#FF9500',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  promoIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  promoTitle: {
+    color: '#FFF',
+    fontSize: 16,
+    fontFamily: 'RethinkSans_800ExtraBold',
+  },
+  promoDesc: {
+    color: '#FFF',
+    fontSize: 12,
+    fontFamily: 'RethinkSans_500Medium',
+    marginTop: 2,
+    opacity: 0.9,
+  },
+  formCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    padding: 18,
+    gap: 12,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    borderColor: '#FF3B30',
+    borderWidth: 1,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 4,
+  },
+  errorText: {
+    color: '#FF3B30',
+    fontSize: 13,
+    fontFamily: 'RethinkSans_600SemiBold',
+    flex: 1,
+  },
+  formTitle: {
+    fontSize: 17,
+    fontFamily: 'RethinkSans_800ExtraBold',
+  },
+  formSub: {
+    fontSize: 12,
+    fontFamily: 'RethinkSans_500Medium',
+    marginTop: -8,
+    marginBottom: 4,
+  },
+  inputGroup: {
+    marginBottom: 2,
+  },
+  label: {
+    fontSize: 12,
+    fontFamily: 'RethinkSans_600SemiBold',
+    marginBottom: 4,
+    marginLeft: 4,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 14,
+    height: 48,
+    paddingHorizontal: 14,
+  },
+  inputIcon: {
+    marginRight: 10,
+  },
+  input: {
+    flex: 1,
+    height: '100%',
+    fontSize: 14,
+    fontFamily: 'RethinkSans_600SemiBold',
+  },
+  row: {
+    flexDirection: 'row',
+  },
+  submitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 52,
+    borderRadius: 16,
+    shadowColor: '#FF9500',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  submitBtnText: {
+    color: '#FFF',
+    fontSize: 15,
+    fontFamily: 'RethinkSans_700Bold',
+  },
+  successBox: {
+    borderRadius: 22,
+    borderWidth: 1,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  successIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(52,199,89,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  successTitle: {
+    fontSize: 20,
+    fontFamily: 'RethinkSans_800ExtraBold',
+    textAlign: 'center',
+  },
+  successSubtitle: {
+    fontSize: 13,
+    fontFamily: 'RethinkSans_400Regular',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  newAppBtn: {
+    marginTop: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  newAppBtnText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontFamily: 'RethinkSans_700Bold',
+  },
+  infoRowGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  featureCard: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    textAlign: 'center',
+  },
+  featureEmoji: {
+    fontSize: 24,
+    marginBottom: 6,
+  },
+  featureTitle: {
+    fontSize: 13,
+    fontFamily: 'RethinkSans_700Bold',
+    textAlign: 'center',
+  },
+  featureDesc: {
+    fontSize: 11,
+    fontFamily: 'RethinkSans_400Regular',
+    textAlign: 'center',
+    marginTop: 2,
+  },
   
-  // SIMPLIFIED SUMMARY CARD
-  summaryCard: { borderRadius: 20, padding: 20, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 3 },
-  summaryTitle: { fontSize: 12, fontFamily: 'RethinkSans_700Bold', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 14 },
-  summaryRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  summaryCol: { flex: 1, alignItems: 'center' },
-  summaryDivider: { width: 1, height: 36, opacity: 0.5 },
-  summaryVal: { fontSize: 20, fontFamily: 'RethinkSans_800ExtraBold' },
-  summaryLbl: { fontSize: 11, fontFamily: 'RethinkSans_500Medium', marginTop: 2 },
-  summaryProgress: { borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', paddingTop: 14 },
-  progressTextRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  progressLbl: { fontSize: 12, fontFamily: 'RethinkSans_500Medium' },
-  summaryProgressBarTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
-  summaryProgressBarFill: { height: '100%', borderRadius: 3 },
-
-  overdueAlert: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 14, marginBottom: 16 },
-  overdueAlertText: { color: '#FF3B30', fontFamily: 'RethinkSans_700Bold', fontSize: 13 },
-  emptyLoans: { alignItems: 'center', paddingTop: 60, gap: 16 },
-  emptyText: { fontSize: 18, fontFamily: 'RethinkSans_700Bold' },
-
-  // LOAN CARD
-  loanCard: { borderRadius: 22, padding: 18, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 3 },
-  loanHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
-  carIcon: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-  carName: { fontSize: 16, fontFamily: 'RethinkSans_800ExtraBold' },
-  carYear: { fontSize: 12, fontFamily: 'RethinkSans_500Medium', marginTop: 2 },
-  loanStatusBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-  loanStatusText: { fontSize: 11, fontFamily: 'RethinkSans_700Bold' },
-
-  // CLEAN SPEC SUMMARY
-  cleanSpecRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.03)', paddingVertical: 14, marginBottom: 4 },
-  cleanSpecCol: { flex: 1, alignItems: 'center' },
-  cleanSpecVal: { fontSize: 17, fontFamily: 'RethinkSans_800ExtraBold' },
-  cleanSpecLbl: { fontSize: 11, fontFamily: 'RethinkSans_500Medium', marginTop: 2 },
-
-  // COLLAPSIBLE DETAILS
-  detailsToggle: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderTopWidth: 1, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.03)', marginBottom: 14 },
-  detailsToggleText: { fontSize: 12, fontFamily: 'RethinkSans_700Bold' },
-  detailsBox: { paddingHorizontal: 4, paddingBottom: 14, gap: 12 },
-  detailRowGrid: { flexDirection: 'row', justifyContent: 'space-between' },
-  detailGridCol: { width: '48%' },
-  ldLabel: { fontSize: 11, fontFamily: 'RethinkSans_500Medium', marginBottom: 2 },
-  ldValue: { fontSize: 14, fontFamily: 'RethinkSans_700Bold' },
-
-  loanOverdueWarn: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 10, marginBottom: 12 },
-  loanOverdueText: { color: '#FF3B30', fontFamily: 'RethinkSans_700Bold', fontSize: 12 },
-  nextPayBox: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, marginBottom: 14 },
-  nextPayLabel: { fontSize: 11, fontFamily: 'RethinkSans_700Bold', marginBottom: 2 },
-  nextPayValue: { fontSize: 13, fontFamily: 'RethinkSans_700Bold' },
-
-  toggleSchedule: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 14, borderTopWidth: 1 },
-  toggleText: { fontSize: 13, fontFamily: 'RethinkSans_700Bold' },
-  scheduleList: { gap: 6, marginTop: 12 },
-  schedItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 1 },
-  schedItemLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  schedInstNum: { fontSize: 13, fontFamily: 'RethinkSans_700Bold' },
-  schedDate: { fontSize: 11, fontFamily: 'RethinkSans_400Regular', marginTop: 1 },
-  schedItemRight: { alignItems: 'flex-end' },
-  schedAmount: { fontSize: 14, fontFamily: 'RethinkSans_700Bold' },
-  schedStatus: { fontSize: 10, fontFamily: 'RethinkSans_600SemiBold', marginTop: 1 },
-
-  // CONTACT
-  contactCard: { borderRadius: 16, padding: 18, marginBottom: 20 },
-  contactTitle: { fontSize: 15, fontFamily: 'RethinkSans_700Bold', marginBottom: 6 },
-  contactDesc: { fontSize: 12, fontFamily: 'RethinkSans_400Regular', lineHeight: 18 },
+  // Login & Dashboard styles
+  loginScroll: {
+    padding: 20,
+    paddingBottom: 60,
+  },
+  loginContainer: {
+    alignItems: 'center',
+  },
+  loginIconWrap: {
+    width: 84,
+    height: 84,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  loginTitle: {
+    fontSize: 22,
+    fontFamily: 'RethinkSans_800ExtraBold',
+    marginBottom: 6,
+  },
+  loginSubtitle: {
+    fontSize: 13,
+    fontFamily: 'RethinkSans_400Regular',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 24,
+    paddingHorizontal: 12,
+  },
+  loginField: {
+    width: '100%',
+    marginBottom: 16,
+  },
+  loginLabel: {
+    fontSize: 13,
+    fontFamily: 'RethinkSans_700Bold',
+    marginBottom: 6,
+  },
+  loginInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    height: 50,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  loginInputText: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: 'RethinkSans_700Bold',
+    letterSpacing: 1,
+  },
+  charCounter: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  charCounterText: {
+    fontSize: 11,
+    fontFamily: 'RethinkSans_600SemiBold',
+  },
+  loginBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    height: 52,
+    borderRadius: 14,
+    gap: 8,
+    marginTop: 8,
+  },
+  loginBtnText: {
+    color: '#FFF',
+    fontSize: 15,
+    fontFamily: 'RethinkSans_700Bold',
+  },
+  dashScroll: {
+    padding: 16,
+    gap: 14,
+    paddingBottom: 60,
+  },
+  userBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  userBarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  avatarCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  userGreeting: {
+    fontSize: 15,
+    fontFamily: 'RethinkSans_700Bold',
+  },
+  userFin: {
+    fontSize: 12,
+    fontFamily: 'RethinkSans_500Medium',
+  },
+  logoutBtn: {
+    padding: 8,
+  },
+  emptyLoans: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    gap: 12,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontFamily: 'RethinkSans_700Bold',
+  },
+  loanCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 16,
+    gap: 10,
+  },
+  loanHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  loanCarName: {
+    fontSize: 16,
+    fontFamily: 'RethinkSans_800ExtraBold',
+  },
+  loanAmountText: {
+    fontSize: 14,
+    fontFamily: 'RethinkSans_700Bold',
+    marginTop: 2,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontFamily: 'RethinkSans_700Bold',
+  },
+  loanProgressRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  progressLabel: {
+    fontSize: 12,
+    fontFamily: 'RethinkSans_500Medium',
+  },
+  overdueWarning: {
+    fontSize: 12,
+    color: '#FF3B30',
+    fontFamily: 'RethinkSans_700Bold',
+  },
+  toggleSchedBtn: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 10,
+    borderTopWidth: 0.5,
+  },
+  toggleSchedText: {
+    fontSize: 13,
+    fontFamily: 'RethinkSans_700Bold',
+  },
+  schedList: {
+    gap: 6,
+    marginTop: 6,
+  },
+  schedItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  schedItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  schedNum: {
+    fontSize: 12,
+    fontFamily: 'RethinkSans_700Bold',
+  },
+  schedDate: {
+    fontSize: 11,
+    fontFamily: 'RethinkSans_400Regular',
+  },
+  schedAmount: {
+    fontSize: 13,
+    fontFamily: 'RethinkSans_700Bold',
+  },
 });

@@ -197,6 +197,7 @@ export default function HomeScreen() {
 
   const fetchListings = async (isRefresh = false, retryCount = 0) => {
     const currentRequestId = ++listingsRequestIdRef.current;
+    let isRetrying = false;
     try {
       if ((!isRefresh && listings.length === 0) || (isRefresh && error)) {
         setListingsLoading(true);
@@ -276,6 +277,7 @@ export default function HomeScreen() {
       if (currentRequestId === listingsRequestIdRef.current) {
         // Auto-retry once on cold start / transient error
         if (retryCount < 1) {
+          isRetrying = true;
           setTimeout(() => {
             fetchListings(isRefresh, retryCount + 1);
           }, 1200);
@@ -284,7 +286,7 @@ export default function HomeScreen() {
         if (listings.length === 0) setError('Məlumatları yükləmək mümkün olmadı.');
       }
     } finally {
-      if (currentRequestId === listingsRequestIdRef.current) {
+      if (currentRequestId === listingsRequestIdRef.current && !isRetrying) {
         setListingsLoading(false);
         setRefreshing(false);
       }
@@ -293,6 +295,7 @@ export default function HomeScreen() {
 
   const fetchPlates = async (isRefresh = false, retryCount = 0) => {
     const currentRequestId = ++platesRequestIdRef.current;
+    let isRetrying = false;
     try {
       if ((!isRefresh && plates.length === 0) || (isRefresh && platesError)) setPlatesLoading(true);
       setPlatesError(null);
@@ -337,6 +340,7 @@ export default function HomeScreen() {
       console.error('Error fetching plates:', err);
       if (currentRequestId === platesRequestIdRef.current) {
         if (retryCount < 1) {
+          isRetrying = true;
           setTimeout(() => {
             fetchPlates(isRefresh, retryCount + 1);
           }, 1200);
@@ -345,7 +349,7 @@ export default function HomeScreen() {
         if (plates.length === 0) setPlatesError('Nömrələri yükləmək mümkün olmadı.');
       }
     } finally {
-      if (currentRequestId === platesRequestIdRef.current) {
+      if (currentRequestId === platesRequestIdRef.current && !isRetrying) {
         setPlatesLoading(false);
         setRefreshing(false);
       }
@@ -854,7 +858,12 @@ export default function HomeScreen() {
       <View style={[styles.headerContainer, { paddingTop: insets.top + 10, borderBottomColor: colors.border }]}>
         <View style={styles.logoContainer}>
           {logoUrl ? (
-            <ImageComponent source={{ uri: logoUrl }} style={styles.logoImage} resizeMode="contain" />
+            <ImageComponent 
+              source={{ uri: logoUrl }} 
+              style={styles.logoImage} 
+              contentFit="contain"
+              {...(Platform.OS === 'web' ? { resizeMode: 'contain' } : {})} 
+            />
           ) : (
             <View>
               <Text style={[styles.logoText, { color: colors.text }]}>NAXÇIVAN</Text>

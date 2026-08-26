@@ -9,9 +9,11 @@ import {
   Dimensions, 
   ScrollView,
   Platform,
-  ActivityIndicator
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Alert
 } from 'react-native';
-import { X, User, Briefcase, DollarSign, Phone, Calendar, Fingerprint, Send } from 'lucide-react-native';
+import { X, User, Briefcase, DollarSign, Phone, Calendar, Fingerprint, Send, CheckCircle2, AlertCircle } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
@@ -19,14 +21,14 @@ import { useToast } from '../contexts/ToastContext';
 import { supabase } from '../lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface CreditApplicationModalProps {
   visible: boolean;
   onClose: () => void;
-  carId: string;
-  carTitle: string;
-  carPrice: number;
+  carId?: string | null;
+  carTitle?: string;
+  carPrice?: number;
   carCurrency?: string;
 }
 
@@ -34,7 +36,7 @@ export const CreditApplicationModal = ({
   visible, 
   onClose, 
   carId, 
-  carTitle, 
+  carTitle = 'Avtomobil Krediti', 
   carPrice,
   carCurrency = 'AZN' 
 }: CreditApplicationModalProps) => {
@@ -51,94 +53,151 @@ export const CreditApplicationModal = ({
   const [monthlyIncome, setMonthlyIncome] = useState('');
   const [phone, setPhone] = useState('');
   
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
-  // Auto-fill fullName and phone if logged in
+  // Auto-fill account details if logged in
   useEffect(() => {
     const fetchAccountDetails = async () => {
       if (visible && session?.user?.id) {
         try {
-          const { data, error } = await supabase.from('accounts')
+          const { data } = await supabase
+            .from('accounts')
             .select('*')
             .eq('id', session.user.id)
-            .single();
+            .maybeSingle();
           
-          if (error) throw error;
           if (data) {
-            if (data.full_name) setFullName(data.full_name);
-            if (data.phone) setPhone(data.phone);
+            if (data.full_name && !fullName) setFullName(data.full_name);
+            if (data.phone && !phone) setPhone(data.phone);
           }
         } catch (err: any) {
           console.log('Error prefilling account details:', err);
         }
       }
     };
-    fetchAccountDetails();
+    if (visible) {
+      setSubmitted(false);
+      setErrorMessage(null);
+      fetchAccountDetails();
+    }
   }, [visible, session]);
 
+  // Smart formatting for Birth Date (GG.AA.YYYY)
+  const handleBirthDateChange = (text: string) => {
+    setErrorMessage(null);
+    const cleaned = text.replace(/[^0-9]/g, '');
+    let formatted = '';
+    if (cleaned.length > 0) formatted += cleaned.substring(0, 2);
+    if (cleaned.length >= 3) formatted += '.' + cleaned.substring(2, 4);
+    if (cleaned.length >= 5) formatted += '.' + cleaned.substring(4, 8);
+    setBirthDate(formatted);
+  };
+
+  // Smart formatting for FIN code (max 7 chars, uppercase alphanumeric)
+  const handleFinChange = (text: string) => {
+    setErrorMessage(null);
+    const cleaned = text.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 7);
+    setFinCode(cleaned);
+  };
+
   const handleSubmit = async () => {
+    setErrorMessage(null);
+
+    // Validation
     if (!fullName.trim()) {
-      showToast('Lütfən ad və soyadınızı daxil edin', 'error');
+      setErrorMessage('Lütfən ad və soyadınızı daxil edin');
       return;
     }
-    if (!fatherName.trim()) {
-      showToast('Lütfən ata adınızı daxil edin', 'error');
-      return;
-    }
-    if (finCode.trim().length !== 7) {
-      showToast('FIN kod tam olaraq 7 simvol olmalıdır', 'error');
-      return;
-    }
-    if (!birthDate.trim()) {
-      showToast('Lütfən doğum tarixinizi daxil edin', 'error');
-      return;
-    }
-
-    // Validate date format DD.MM.YYYY
-    const dateRegex = /^(\d{2})\.(\d{2})\.(\d{4})$/;
-    if (!dateRegex.test(birthDate.trim())) {
-      showToast('Doğum tarixi GG.AA.YYYY formatında olmalıdır', 'error');
-      return;
-    }
-
-    if (!workplace.trim()) {
-      showToast('Lütfən işlədiyiniz yeri daxil edin', 'error');
-      return;
-    }
-    if (!monthlyIncome.trim() || isNaN(Number(monthlyIncome))) {
-      showToast('Lütfən aylıq qazancınızı düzgün daxil edin', 'error');
+    if (!finCode.trim()) {
+      setErrorMessage('Lütfən FİN kodunuzu daxil edin');
       return;
     }
     if (!phone.trim()) {
-      showToast('Lütfən mobil nömrənizi daxil edin', 'error');
+      setErrorMessage('Lütfən əlaqə nömrənizi daxil edin');
       return;
     }
 
     setSubmitting(true);
 
     try {
-      // Format birthdate from DD.MM.YYYY to YYYY-MM-DD
-      const parts = birthDate.trim().split('.');
-      const dbBirthDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+      // Parse birth date safely
+      let dbBirthDate: string | null = null;
+      if (birthDate.trim()) {
+        const cleaned = birthDate.trim().replace(/[^0-9]/g, '');
+        if (cleaned.length === 8) {
+          const day = cleaned.substring(0, 2);
+          const month = cleaned.substring(2, 4);
+          const year = cleaned.substring(4, 8);
+          dbBirthDate = `${year}-${month}-${day}`;
+        } else {
+          const parts = birthDate.trim().replace(/[\/\-]/g, '.').split('.');
+          if (parts.length === 3 && parts[0].length <= 2 && parts[2].length === 4) {
+            dbBirthDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+          }
+        }
+      }
 
-      const { error } = await supabase
+      // Parse monthly income
+      let parsedIncome: number | null = null;
+      if (monthlyIncome.trim()) {
+        const inc = parseFloat(monthlyIncome.replace(',', '.').trim());
+        if (!isNaN(inc)) parsedIncome = inc;
+      }
+
+      // Resolve car UUID safely
+      let resolvedCarId: string | null = null;
+      if (carId) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(carId);
+        if (isUuid) {
+          resolvedCarId = carId;
+        } else {
+          try {
+            const { data: carData } = await supabase
+              .from('listings')
+              .select('id')
+              .eq('short_id', carId)
+              .maybeSingle();
+            if (carData?.id) {
+              resolvedCarId = carData.id;
+            }
+          } catch (e) {
+            console.log('Error resolving car ID:', e);
+          }
+        }
+      }
+
+      const insertPayload = {
+        car_id: resolvedCarId,
+        full_name: fullName.trim(),
+        father_name: fatherName.trim() || null,
+        fin_code: finCode.trim().toUpperCase(),
+        birth_date: dbBirthDate,
+        workplace: workplace.trim() || null,
+        monthly_income: parsedIncome,
+        phone: phone.trim(),
+        status: 'pending',
+        account_id: session?.user?.id || null
+      };
+
+      console.log('[Credit Application Modal] Submitting to Supabase:', insertPayload);
+
+      const { data, error } = await supabase
         .from('credit_applications')
-        .insert({
-          car_id: carId,
-          full_name: fullName.trim(),
-          father_name: fatherName.trim(),
-          fin_code: finCode.trim().toUpperCase(),
-          birth_date: dbBirthDate,
-          workplace: workplace.trim(),
-          monthly_income: parseFloat(monthlyIncome),
-          phone: phone.trim(),
-          status: 'pending',
-          account_id: session?.user?.id || null
-        });
+        .insert(insertPayload)
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[Credit Application Modal] Supabase error:', error);
+        throw error;
+      }
 
-      showToast('Kredit müraciətiniz uğurla göndərildi!', 'success');
+      console.log('[Credit Application Modal] Submitted successfully:', data);
+
+      setSubmitted(true);
+      showToast('Kredit müraciətiniz qəbul edildi!', 'success');
       
       // Reset form
       setFullName('');
@@ -148,10 +207,18 @@ export const CreditApplicationModal = ({
       setWorkplace('');
       setMonthlyIncome('');
       setPhone('');
-      
-      onClose();
+      setErrorMessage(null);
+
+      setTimeout(() => {
+        onClose();
+        setSubmitted(false);
+      }, 2200);
+
     } catch (e: any) {
-      showToast('Müraciət zamanı xəta baş verdi: ' + e.message, 'error');
+      console.error('[Credit Application Modal] Submission error:', e);
+      const msg = e?.message || 'Xəta baş verdi. Xahiş edirik yenidən cəhd edin.';
+      setErrorMessage(msg);
+      Alert.alert('Müraciət Xətası', msg);
     } finally {
       setSubmitting(false);
     }
@@ -165,7 +232,10 @@ export const CreditApplicationModal = ({
       onRequestClose={onClose}
       statusBarTranslucent={true}
     >
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.overlay}
+      >
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
         
         <View 
@@ -181,15 +251,16 @@ export const CreditApplicationModal = ({
             <View style={[styles.handle, { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' }]} />
           </View>
 
+          {/* Header */}
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
             <View style={styles.headerLeft}>
               <View style={[styles.iconCircle, { backgroundColor: `${colors.primary}15` }]}>
                 <Calendar size={20} color={colors.primary} />
               </View>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={[styles.title, { color: colors.text }]}>Kredit Müraciəti</Text>
-                <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                  {carTitle} • {carPrice.toLocaleString()} {carCurrency}
+                <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {carTitle} {carPrice ? `• ${carPrice.toLocaleString()} ${carCurrency}` : ''}
                 </Text>
               </View>
             </View>
@@ -198,150 +269,173 @@ export const CreditApplicationModal = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView 
-            contentContainerStyle={styles.content} 
-            keyboardShouldPersistTaps="handled" 
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.formContainer}>
-              
-              {/* Ad Soyad */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>Adı və Soyadı</Text>
-                <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                  <User size={18} color={colors.textSecondary} style={styles.inputIcon} />
-                  <TextInput 
-                    style={[styles.input, { color: colors.text }]}
-                    value={fullName}
-                    onChangeText={setFullName}
-                    placeholder="Məs: İlkin Rzayev"
-                    placeholderTextColor={colors.placeholder}
-                  />
-                </View>
+          {submitted ? (
+            <View style={styles.successContainer}>
+              <View style={styles.successIconCircle}>
+                <CheckCircle2 size={54} color="#34C759" />
               </View>
+              <Text style={[styles.successTitle, { color: colors.text }]}>Müraciətiniz Qəbul Edildi!</Text>
+              <Text style={[styles.successSubtitle, { color: colors.textSecondary }]}>
+                Məlumatlarınız Naxçıvan Avto kredit mütəxəssislərinə göndərildi. Tezliklə sizinlə əlaqə saxlanılacaq.
+              </Text>
+            </View>
+          ) : (
+            <ScrollView 
+              contentContainerStyle={styles.content} 
+              keyboardShouldPersistTaps="handled" 
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.formContainer}>
+                
+                {/* Error Banner */}
+                {errorMessage && (
+                  <View style={styles.errorBox}>
+                    <AlertCircle size={18} color="#FF3B30" style={{ marginRight: 8 }} />
+                    <Text style={styles.errorText}>{errorMessage}</Text>
+                  </View>
+                )}
 
-              {/* Ata adı */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>Ata adı</Text>
-                <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                  <User size={18} color={colors.textSecondary} style={styles.inputIcon} />
-                  <TextInput 
-                    style={[styles.input, { color: colors.text }]}
-                    value={fatherName}
-                    onChangeText={setFatherName}
-                    placeholder="Məs: Əli oğlu"
-                    placeholderTextColor={colors.placeholder}
-                  />
-                </View>
-              </View>
-
-              {/* FIN Kod & Doğum Tarixi */}
-              <View style={styles.row}>
-                <View style={[styles.inputGroup, { flex: 1, marginRight: 12 }]}>
-                  <Text style={[styles.label, { color: colors.textSecondary }]}>FİN Kod</Text>
+                {/* Ad Soyad */}
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.label, { color: colors.textSecondary }]}>Adı və Soyadı *</Text>
                   <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                    <Fingerprint size={18} color={colors.textSecondary} style={styles.inputIcon} />
+                    <User size={18} color={colors.textSecondary} style={styles.inputIcon} />
                     <TextInput 
                       style={[styles.input, { color: colors.text }]}
-                      value={finCode}
-                      onChangeText={(val) => setFinCode(val.substring(0, 7))}
-                      autoCapitalize="characters"
-                      placeholder="Məs: 7ABC123"
+                      value={fullName}
+                      onChangeText={(t) => { setErrorMessage(null); setFullName(t); }}
+                      placeholder="Məs: İlkin Rzayev"
                       placeholderTextColor={colors.placeholder}
                     />
                   </View>
                 </View>
 
-                <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={[styles.label, { color: colors.textSecondary }]}>Doğum Tarixi</Text>
+                {/* Ata adı */}
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.label, { color: colors.textSecondary }]}>Ata adı</Text>
                   <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                    <Calendar size={18} color={colors.textSecondary} style={styles.inputIcon} />
+                    <User size={18} color={colors.textSecondary} style={styles.inputIcon} />
                     <TextInput 
                       style={[styles.input, { color: colors.text }]}
-                      value={birthDate}
-                      onChangeText={setBirthDate}
-                      placeholder="GG.AA.YYYY"
+                      value={fatherName}
+                      onChangeText={(t) => { setErrorMessage(null); setFatherName(t); }}
+                      placeholder="Məs: Əli oğlu"
+                      placeholderTextColor={colors.placeholder}
+                    />
+                  </View>
+                </View>
+
+                {/* FIN Kod & Doğum Tarixi */}
+                <View style={styles.row}>
+                  <View style={[styles.inputGroup, { flex: 1, marginRight: 12 }]}>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>FİN Kod *</Text>
+                    <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                      <Fingerprint size={18} color={colors.textSecondary} style={styles.inputIcon} />
+                      <TextInput 
+                        style={[styles.input, { color: colors.text }]}
+                        value={finCode}
+                        onChangeText={handleFinChange}
+                        autoCapitalize="characters"
+                        maxLength={7}
+                        placeholder="7ABC123"
+                        placeholderTextColor={colors.placeholder}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>Doğum Tarixi</Text>
+                    <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                      <Calendar size={18} color={colors.textSecondary} style={styles.inputIcon} />
+                      <TextInput 
+                        style={[styles.input, { color: colors.text }]}
+                        value={birthDate}
+                        onChangeText={handleBirthDateChange}
+                        placeholder="GG.AA.YYYY"
+                        placeholderTextColor={colors.placeholder}
+                        keyboardType="numeric"
+                        maxLength={10}
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                {/* Mobil nömrə */}
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.label, { color: colors.textSecondary }]}>Mobil nömrə *</Text>
+                  <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <Phone size={18} color={colors.textSecondary} style={styles.inputIcon} />
+                    <TextInput 
+                      style={[styles.input, { color: colors.text }]}
+                      value={phone}
+                      onChangeText={(t) => { setErrorMessage(null); setPhone(t); }}
+                      placeholder="Məs: +994 50 123 45 67"
+                      placeholderTextColor={colors.placeholder}
+                      keyboardType="phone-pad"
+                    />
+                  </View>
+                </View>
+
+                {/* İş yeri */}
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.label, { color: colors.textSecondary }]}>İşlədiyiniz yer / Fəaliyyət</Text>
+                  <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <Briefcase size={18} color={colors.textSecondary} style={styles.inputIcon} />
+                    <TextInput 
+                      style={[styles.input, { color: colors.text }]}
+                      value={workplace}
+                      onChangeText={(t) => { setErrorMessage(null); setWorkplace(t); }}
+                      placeholder="Məs: Naxçıvan MMC"
+                      placeholderTextColor={colors.placeholder}
+                    />
+                  </View>
+                </View>
+
+                {/* Aylıq Qazanc */}
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.label, { color: colors.textSecondary }]}>Aylıq qazanc (₼)</Text>
+                  <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <DollarSign size={18} color={colors.textSecondary} style={styles.inputIcon} />
+                    <TextInput 
+                      style={[styles.input, { color: colors.text }]}
+                      value={monthlyIncome}
+                      onChangeText={(t) => { setErrorMessage(null); setMonthlyIncome(t); }}
+                      placeholder="Məs: 1500"
                       placeholderTextColor={colors.placeholder}
                       keyboardType="numeric"
                     />
                   </View>
                 </View>
-              </View>
 
-              {/* İş yeri */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>İşlədiyiniz yer</Text>
-                <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                  <Briefcase size={18} color={colors.textSecondary} style={styles.inputIcon} />
-                  <TextInput 
-                    style={[styles.input, { color: colors.text }]}
-                    value={workplace}
-                    onChangeText={setWorkplace}
-                    placeholder="Məs: Bakı Avto MMC"
-                    placeholderTextColor={colors.placeholder}
-                  />
-                </View>
-              </View>
-
-              {/* Aylıq Qazanc */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>Aylıq qazanc (₼)</Text>
-                <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                  <DollarSign size={18} color={colors.textSecondary} style={styles.inputIcon} />
-                  <TextInput 
-                    style={[styles.input, { color: colors.text }]}
-                    value={monthlyIncome}
-                    onChangeText={setMonthlyIncome}
-                    placeholder="Məs: 1500"
-                    placeholderTextColor={colors.placeholder}
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
-
-              {/* Mobil nömrə */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>Mobil nömrə</Text>
-                <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                  <Phone size={18} color={colors.textSecondary} style={styles.inputIcon} />
-                  <TextInput 
-                    style={[styles.input, { color: colors.text }]}
-                    value={phone}
-                    onChangeText={setPhone}
-                    placeholder="Məs: +994 50 123 45 67"
-                    placeholderTextColor={colors.placeholder}
-                    keyboardType="phone-pad"
-                  />
-                </View>
-              </View>
-
-              {/* Submit Button */}
-              <TouchableOpacity 
-                onPress={handleSubmit} 
-                disabled={submitting} 
-                style={{ marginTop: 12 }}
-              >
-                <LinearGradient
-                  colors={[colors.primary, '#FF9500']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.submitBtn}
+                {/* Submit Button */}
+                <TouchableOpacity 
+                  onPress={handleSubmit} 
+                  disabled={submitting} 
+                  style={{ marginTop: 8 }}
+                  activeOpacity={0.85}
                 >
-                  {submitting ? (
-                    <ActivityIndicator size="small" color="#FFF" />
-                  ) : (
-                    <>
-                      <Send size={18} color="#FFF" style={{ marginRight: 8 }} />
-                      <Text style={styles.submitBtnText}>Müraciət Et</Text>
-                    </>
-                  )}
-                </LinearGradient>
-              </TouchableOpacity>
+                  <LinearGradient
+                    colors={[colors.primary, '#FF9500']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.submitBtn}
+                  >
+                    {submitting ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <>
+                        <Send size={18} color="#FFF" style={{ marginRight: 8 }} />
+                        <Text style={styles.submitBtnText}>Müraciəti Göndər</Text>
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
 
-            </View>
-          </ScrollView>
+              </View>
+            </ScrollView>
+          )}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
@@ -357,6 +451,8 @@ const styles = StyleSheet.create({
   },
   container: {
     width: '100%',
+    maxWidth: 580,
+    alignSelf: 'center',
     height: '92%', 
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
@@ -422,7 +518,23 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   formContainer: {
-    gap: 16,
+    gap: 12,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    borderColor: '#FF3B30',
+    borderWidth: 1,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 4,
+  },
+  errorText: {
+    color: '#FF3B30',
+    fontSize: 13,
+    fontFamily: 'RethinkSans_600SemiBold',
+    flex: 1,
   },
   inputGroup: {
     marginBottom: 2,
@@ -438,7 +550,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderRadius: 16,
-    height: 54,
+    height: 52,
     paddingHorizontal: 16,
   },
   inputIcon: {
@@ -469,5 +581,32 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontFamily: 'RethinkSans_700Bold',
+  },
+  successContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  successIconCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: 'rgba(52,199,89,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  successTitle: {
+    fontSize: 22,
+    fontFamily: 'RethinkSans_800ExtraBold',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  successSubtitle: {
+    fontSize: 14,
+    fontFamily: 'RethinkSans_400Regular',
+    textAlign: 'center',
+    lineHeight: 22,
   },
 });

@@ -7,11 +7,11 @@ import {
   StyleSheet, 
   FlatList, 
   TextInput,
-  Image,
   Dimensions,
   Platform,
   KeyboardAvoidingView
 } from 'react-native';
+import { Image } from 'expo-image';
 import { X, Search, Check, ChevronRight } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -130,7 +130,7 @@ export const SelectionModal = ({
                             <Image 
                                 source={{ uri: item.logo_url }} 
                                 style={styles.logo} 
-                                resizeMode="contain"
+                                contentFit="contain"
                             />
                         )}
                         <Text style={[

@@ -1,5 +1,6 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
@@ -18,10 +19,9 @@ import {
 } from 'lucide-react-native';
 import { MotiView } from 'moti';
 import { supabase } from '../../lib/supabase';
-
 import { useAuth } from '../../contexts/AuthContext';
 
-const DashboardCard = ({ title, icon: Icon, onPress, color, colors }: any) => (
+const DashboardCard = ({ title, icon: Icon, onPress, color, colors, badge }: any) => (
     <MotiView
         from={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -30,7 +30,13 @@ const DashboardCard = ({ title, icon: Icon, onPress, color, colors }: any) => (
         <TouchableOpacity
             style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={onPress}
+            activeOpacity={0.85}
         >
+            {badge !== undefined && badge > 0 && (
+                <View style={styles.cardBadge}>
+                    <Text style={styles.cardBadgeText}>{badge}</Text>
+                </View>
+            )}
             <View style={[styles.iconCircle, { backgroundColor: color + '15' }]}>
                 <Icon size={24} color={color} />
             </View>
@@ -43,11 +49,45 @@ export default function AdminDashboard() {
     const router = useRouter();
     const { colors } = useTheme();
     const { isSuperAdmin } = useAuth();
+    const [pendingApplications, setPendingApplications] = useState(0);
+
+    useEffect(() => {
+        const fetchPendingApps = async () => {
+            try {
+                const { count, error } = await supabase
+                    .from('credit_applications')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('status', 'pending');
+                if (!error && count !== null) {
+                    setPendingApplications(count);
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        };
+
+        fetchPendingApps();
+
+        const channel = supabase
+            .channel('admin_dashboard_credit_count')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'credit_applications' },
+                () => {
+                    fetchPendingApps();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
 
     const allMenuItems = [
         { title: 'Statistika', path: '/admin/statistics', icon: PieChart, color: '#AF52DE' },
         { title: 'Kredit Paneli', path: '/admin/loans', icon: PlusCircle, color: '#00C7BE', superAdminOnly: true },
-        { title: 'Kredit Müraciətləri', path: '/admin/applications', icon: FileText, color: '#FF9500' },
+        { title: 'Kredit Müraciətləri', path: '/admin/applications', icon: FileText, color: '#FF9500', badge: pendingApplications },
         { title: 'Canlı Çat', path: '/admin/chats', icon: MessageSquare, color: '#007AFF' },
         { title: 'Elanlar', path: '/admin/listings', icon: LayoutDashboard, color: '#34C759' },
         { title: 'VIP Elanlar', path: '/admin/vip-listings', icon: Star, color: '#FFD700' },
@@ -134,6 +174,24 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: 140,
+        position: 'relative',
+    },
+    cardBadge: {
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        backgroundColor: '#FF3B30',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 10,
+        minWidth: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    cardBadgeText: {
+        color: '#FFF',
+        fontSize: 11,
+        fontFamily: 'RethinkSans_700Bold',
     },
     iconCircle: {
         width: 52,

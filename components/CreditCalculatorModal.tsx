@@ -10,10 +10,11 @@ import {
   ScrollView,
   Platform
 } from 'react-native';
-import { X, Calculator, Calendar, Percent, RefreshCcw, Banknote, CreditCard } from 'lucide-react-native';
+import { X, Calculator, Calendar, Percent, RefreshCcw, Banknote, CreditCard, Send } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { CreditApplicationModal } from './CreditApplicationModal';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -21,9 +22,17 @@ interface CreditCalculatorModalProps {
   visible: boolean;
   onClose: () => void;
   initialPrice?: string;
+  carId?: string;
+  carTitle?: string;
 }
 
-export const CreditCalculatorModal = ({ visible, onClose, initialPrice = '' }: CreditCalculatorModalProps) => {
+export const CreditCalculatorModal = ({ 
+  visible, 
+  onClose, 
+  initialPrice = '',
+  carId,
+  carTitle
+}: CreditCalculatorModalProps) => {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -36,6 +45,7 @@ export const CreditCalculatorModal = ({ visible, onClose, initialPrice = '' }: C
   const [totalInterest, setTotalInterest] = useState(0);
   const [totalPayment, setTotalPayment] = useState(0);
   const [principalAmount, setPrincipalAmount] = useState(0);
+  const [showApplyModal, setShowApplyModal] = useState(false);
 
   useEffect(() => {
     if (visible && initialPrice) {
@@ -279,10 +289,35 @@ export const CreditCalculatorModal = ({ visible, onClose, initialPrice = '' }: C
                 </View>
               </View>
 
+              {/* Apply for Credit Button */}
+              <TouchableOpacity 
+                style={styles.applyBtnWrap}
+                onPress={() => setShowApplyModal(true)}
+                activeOpacity={0.85}
+              >
+                <LinearGradient
+                  colors={[colors.primary, '#FF9500']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.calcApplyBtn}
+                >
+                  <Send size={18} color="#FFF" style={{ marginRight: 8 }} />
+                  <Text style={styles.calcApplyBtnText}>Bu Şərtlərlə Müraciət Et</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
             </View>
           </ScrollView>
         </View>
       </View>
+
+      <CreditApplicationModal
+        visible={showApplyModal}
+        onClose={() => setShowApplyModal(false)}
+        carId={carId}
+        carTitle={carTitle || (price ? `${parseFloat(price).toLocaleString()} AZN Krediti` : 'Avtomobil Krediti')}
+        carPrice={parseFloat(price) || undefined}
+      />
     </Modal>
   );
 };
@@ -513,5 +548,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     fontFamily: 'RethinkSans_600SemiBold',
+  },
+  applyBtnWrap: {
+    marginTop: 14,
+  },
+  calcApplyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 52,
+    borderRadius: 16,
+    shadowColor: '#FF9500',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  calcApplyBtnText: {
+    color: '#FFF',
+    fontSize: 15,
+    fontFamily: 'RethinkSans_700Bold',
   },
 });
