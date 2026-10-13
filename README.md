@@ -54,5 +54,10 @@ Layihəni lokal mühitdə işə salmaq üçün aşağıdakı addımları yerinə
 
 ### 1. Repozitoriyanı klonla
 ```bash
-git clone [https://github.com/istifadeci_adi/naxavtoapp.git](https://github.com/istifadeci_adi/naxavtoapp.git)
+git clone [https://github.com/iilkhoon/naxavtoapp]
+
 cd naxavtoapp
+
+npm install
+
+npm run dev
