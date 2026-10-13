@@ -1,0 +1,12 @@
+1. Dəyişiklikləri yoxla
+    - git status
+
+2. Dəyişiklikləri yadda saxla
+    - git add .
+
+3. Dəyişiklikləri yadda saxla və yorum yaz
+    - git commit -m "Değişikliklerinizi buraya yazın"
+
+4. Dəyişiklikləri GitHub-a yüklə
+    - git push
+Xəta versə - git push -u origin main
