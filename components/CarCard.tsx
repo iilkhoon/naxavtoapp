@@ -66,7 +66,7 @@ export const CarCard = memo(({
   }, [image, images]);
 
   const [currentImgIndex, setCurrentImgIndex] = useState(0);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     // PERFORMANCE OPTIMIZATION: Removed auto-scroll for VIP to improve list performance

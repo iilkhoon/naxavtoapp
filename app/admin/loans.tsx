@@ -380,7 +380,6 @@ export default function AdminLoans() {
         first.customer_phone.includes(q) ||
         (first.customer_fin && first.customer_fin.toLowerCase().includes(q)) ||
         (first.customer_unique_id && first.customer_unique_id.toLowerCase().includes(q));
-        (first.customer_unique_id && first.customer_unique_id.toLowerCase().includes(q));
     });
 
     const toggleRiskyCustomer = async (finKey: string, isCurrentlyRisky: boolean, userLoans: any[]) => {

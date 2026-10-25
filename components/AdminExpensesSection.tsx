@@ -478,7 +478,7 @@ export const AdminExpensesSection = () => {
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalBackdrop}>
-          <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={() => setModalVisible(false)} />
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setModalVisible(false)} />
           <View style={[styles.modalContent, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.text }]}>Yeni Qeyd Əlavə Et</Text>

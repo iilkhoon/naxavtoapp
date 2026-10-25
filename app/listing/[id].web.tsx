@@ -151,6 +151,7 @@ export default function WebListingDetail() {
     }, [settings]);
 
     const handleFavorite = async () => {
+        if (!listingId) return;
         const newStatus = await toggleFavorite(listingId);
         setIsFavorite(newStatus);
         showToast(newStatus ? 'Seçilmişlərə əlavə edildi' : 'Seçilmişlərdən silindi', 'success');

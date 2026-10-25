@@ -1,8 +1,8 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView, RefreshControl, Dimensions, StatusBar, Image as RNImage } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView, RefreshControl, StatusBar, Image as RNImage } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { X, LogOut, CarFront, Layers, Settings, Palette, FileText, AlertCircle, Hash, Crown, ChevronRight, TrendingUp, ShieldCheck, UserPlus, Bell, Zap, PieChart, Gift, MessageSquare, CreditCard, Users } from 'lucide-react-native';
+import { X, LogOut, CarFront, Layers, Settings, Palette, FileText, AlertCircle, Hash, Crown, ChevronRight, TrendingUp, ShieldCheck, Bell, Zap, PieChart, Gift, MessageSquare, CreditCard, Users } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { MotiView } from 'moti';
@@ -13,13 +13,41 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { AdminLoginForm } from '../components/AdminLoginForm';
 
-const { width } = Dimensions.get('window');
+
+// Defined outside MenuScreen so they keep their identity between renders
+// (inline components remounted and replayed their entrance animation on every update)
+const PremiumStatCard = ({ label, value, icon: Icon, gradientColors, delay }: any) => (
+  <MotiView from={{ opacity: 0, translateY: 20 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay, type: 'timing', duration: 400 }} style={styles.statCardWrapper}>
+    <LinearGradient colors={gradientColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.statCard}>
+      <View style={styles.statHeader}>
+        <View style={styles.statIconContainer}><Icon size={18} color="#FFF" /></View>
+        <View style={styles.trendBadge}><TrendingUp size={12} color="#FFF" /></View>
+      </View>
+      <View><Text style={styles.statValue}>{value}</Text><Text style={styles.statLabel}>{label}</Text></View>
+      <View style={styles.decorCircle1} /><View style={styles.decorCircle2} />
+    </LinearGradient>
+  </MotiView>
+);
+
+const PremiumMenuItem = ({ icon: Icon, label, desc, route, color, delay, isLast }: any) => {
+  const router = useRouter();
+  const { colors, isDark } = useTheme();
+  return (
+    <MotiView from={{ opacity: 0, translateX: -20 }} animate={{ opacity: 1, translateX: 0 }} transition={{ delay, type: 'timing' }}>
+      <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }, isLast && { marginBottom: 0, borderBottomWidth: 0 }]} onPress={() => router.push(route)} activeOpacity={0.7}>
+        <LinearGradient colors={[color, `${color}80`]} style={styles.menuIconContainer} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}><Icon size={20} color="#FFF" /></LinearGradient>
+        <View style={styles.menuTextContainer}><Text style={[styles.menuTitle, { color: colors.text }]}>{label}</Text><Text style={[styles.menuDesc, { color: colors.textSecondary }]}>{desc}</Text></View>
+        <View style={[styles.arrowContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#F3F4F6' }]}><ChevronRight size={16} color={colors.textSecondary} /></View>
+      </TouchableOpacity>
+    </MotiView>
+  );
+};
 
 export default function MenuScreen() {
   const router = useRouter();
   const { user, isAdmin, isSuperAdmin } = useAuth();
   const { showToast } = useToast();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [stats, setStats] = useState({ activeCars: 0, pendingListings: 0, activePlates: 0, totalUsers: 0 });
   const [refreshing, setRefreshing] = useState(false);
@@ -53,29 +81,6 @@ export default function MenuScreen() {
       // Optional: hide/show subtler feedback if needed
     }
   };
-
-  const PremiumStatCard = ({ label, value, icon: Icon, gradientColors, delay }: any) => (
-    <MotiView from={{ opacity: 0, translateY: 20 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay, type: 'timing', duration: 400 }} style={styles.statCardWrapper}>
-      <LinearGradient colors={gradientColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.statCard}>
-        <View style={styles.statHeader}>
-          <View style={styles.statIconContainer}><Icon size={18} color="#FFF" /></View>
-          <View style={styles.trendBadge}><TrendingUp size={12} color="#FFF" /></View>
-        </View>
-        <View><Text style={styles.statValue}>{value}</Text><Text style={styles.statLabel}>{label}</Text></View>
-        <View style={styles.decorCircle1} /><View style={styles.decorCircle2} />
-      </LinearGradient>
-    </MotiView>
-  );
-
-  const PremiumMenuItem = ({ icon: Icon, label, desc, route, color, delay, isLast }: any) => (
-    <MotiView from={{ opacity: 0, translateX: -20 }} animate={{ opacity: 1, translateX: 0 }} transition={{ delay, type: 'timing' }}>
-      <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }, isLast && { marginBottom: 0, borderBottomWidth: 0 }]} onPress={() => router.push(route)} activeOpacity={0.7}>
-        <LinearGradient colors={[color, `${color}80`]} style={styles.menuIconContainer} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}><Icon size={20} color="#FFF" /></LinearGradient>
-        <View style={styles.menuTextContainer}><Text style={[styles.menuTitle, { color: colors.text }]}>{label}</Text><Text style={[styles.menuDesc, { color: colors.textSecondary }]}>{desc}</Text></View>
-        <View style={[styles.arrowContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#F3F4F6' }]}><ChevronRight size={16} color={colors.textSecondary} /></View>
-      </TouchableOpacity>
-    </MotiView>
-  );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

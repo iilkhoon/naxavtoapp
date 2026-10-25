@@ -47,7 +47,7 @@ export default function ListingDetailScreen() {
     const [listing, setListing] = useState<Listing | null>(null);
     const [loading, setLoading] = useState(true);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const scrollViewRef = React.useRef<ScrollView>(null);
+    const scrollViewRef = React.useRef<React.ComponentRef<typeof ScrollView>>(null);
     const [isFavorite, setIsFavorite] = useState(false);
     const [activeSlide, setActiveSlide] = useState(0);
     const [isViewerVisible, setIsViewerVisible] = useState(false);
@@ -412,7 +412,7 @@ export default function ListingDetailScreen() {
                 </View>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 160 }} bounces={false}>
+            <ScrollView ref={scrollViewRef} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 160 }} bounces={false}>
                 <View style={styles.imageContainer}>
                     <ScrollView
                         horizontal

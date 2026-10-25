@@ -625,7 +625,7 @@ export default function HomeScreen() {
             />
           </View>
 
-          {(plateSearchRegion || plateSearchSeries || plateSearchNumber) && (
+          {!!(plateSearchRegion || plateSearchSeries || plateSearchNumber) && (
             <TouchableOpacity onPress={handleResetPlateSearch} style={styles.resetButton}>
               <X size={16} color={colors.textSecondary} />
             </TouchableOpacity>

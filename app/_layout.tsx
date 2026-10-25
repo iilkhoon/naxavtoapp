@@ -10,7 +10,7 @@ import { ToastProvider } from '../contexts/ToastContext';
 import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
 import { SettingsProvider, useSettings } from '../contexts/SettingsContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, Platform, Text, TextInput, Linking, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Platform, Text, Linking, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import Constants from 'expo-constants';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -28,40 +28,6 @@ import { InstagramPopup } from '../components/InstagramPopup';
 import { WebSideBanners } from '../components/WebSideBanners';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
-
-// Apply default font globally using defaultProps
-const applyGlobalFont = () => {
-  if (Platform.OS === 'web') return;
-
-  const CustomTextProps = {
-    style: { fontFamily: 'RethinkSans_400Regular' },
-  };
-
-  const CustomTextInputProps = {
-    style: { fontFamily: 'RethinkSans_400Regular' },
-  };
-
-  // @ts-ignore
-  if (Text.defaultProps) {
-    // @ts-ignore
-    Text.defaultProps.style = [{ fontFamily: 'RethinkSans_400Regular' }];
-  } else {
-    // @ts-ignore
-    Text.defaultProps = CustomTextProps;
-  }
-
-  // @ts-ignore
-  if (TextInput.defaultProps) {
-    // @ts-ignore
-    TextInput.defaultProps.style = [{ fontFamily: 'RethinkSans_400Regular' }];
-  } else {
-    // @ts-ignore
-    TextInput.defaultProps = CustomTextInputProps;
-  }
-};
-
-// Execute the patch
-applyGlobalFont();
 
 // Helper to compare semantic versions (e.g. "1.0.6" vs "1.0.7")
 // Returns -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
@@ -207,7 +173,7 @@ function RootLayoutNav() {
 
 const styles = StyleSheet.create({
   updateBlocker: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 9999,

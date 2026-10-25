@@ -7,3 +7,5 @@ node_modules
 expo-env.d.ts
 .expo/
 # @end expo-cli
+# Local tooling output
+lint_output.txt

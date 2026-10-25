@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
     },
     selectBtnText: { fontSize: 13, fontFamily: 'RethinkSans_600SemiBold' },
     savingOverlay: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center'
     },
     

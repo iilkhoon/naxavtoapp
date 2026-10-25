@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, ActivityIndicator,
     ScrollView, TextInput, Image, useWindowDimensions, TextStyle, Platform,
-    DeviceEventEmitter
+    DeviceEventEmitter, StyleProp
 } from 'react-native';
 import {
     Search, X, Wallet, Percent, ArrowLeftRight,
@@ -29,7 +29,6 @@ type FilterType = 'cash' | 'credit' | 'barter' | 'urgent';
 const HOME_LISTINGS_CACHE_KEY = 'home_listings_cache';
 const HOME_PLATES_CACHE_KEY = 'home_plates_cache';
 
-import { StyleProp } from 'react-native';
 const Typewriter = ({ words, color, style }: { words: string[], color: string, style?: StyleProp<TextStyle> }) => {
     const [currentWordIndex, setCurrentWordIndex] = useState(0);
     const [displayedText, setDisplayedText] = useState('');
@@ -509,7 +508,7 @@ export default function WebHomeScreen() {
                                 </View>
                             </TouchableOpacity>
 
-                            {(selectedBrand || selectedModel || searchQuery) && (
+                            {!!(selectedBrand || selectedModel || searchQuery) && (
                                 <TouchableOpacity onPress={handleResetSearch} style={styles.resetButton}>
                                     <X size={16} color="rgba(255,255,255,0.55)" />
                                 </TouchableOpacity>
@@ -579,7 +578,7 @@ export default function WebHomeScreen() {
                                 />
                             </View>
 
-                            {(plateSearchRegion || plateSearchSeries || plateSearchNumber) && (
+                            {!!(plateSearchRegion || plateSearchSeries || plateSearchNumber) && (
                                 <TouchableOpacity onPress={handleResetPlateSearch} style={styles.resetButton}>
                                     <X size={16} color="rgba(255,255,255,0.55)" />
                                 </TouchableOpacity>
@@ -932,7 +931,7 @@ const styles = StyleSheet.create({
         left: '40%' as any,
     },
     gridPattern: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         backgroundImage: 'linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)' as any,
         backgroundSize: '50px 50px' as any,
     },

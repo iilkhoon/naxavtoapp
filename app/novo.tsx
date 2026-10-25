@@ -45,11 +45,10 @@ export default function NovoAdminLogin() {
 
       {/* Dark hero, same look as the admin menu header */}
       <LinearGradient
-        colors={['#000000', '#1A0B0A', colors.background]}
-        locations={[0, 0.55, 1]}
-        style={[styles.hero, { height: (isDesktop ? 360 : 330) + insets.top }]}
+        colors={['#3B0D0A', '#160707', colors.background]}
+        locations={[0, 0.6, 1]}
+        style={[styles.hero, { height: (isDesktop ? 380 : 350) + insets.top }]}
       />
-      <View style={[styles.glow, { backgroundColor: colors.primary }]} />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -145,15 +144,6 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-  },
-  glow: {
-    position: 'absolute',
-    top: -120,
-    alignSelf: 'center',
-    width: 320,
-    height: 320,
-    borderRadius: 160,
-    opacity: 0.18,
   },
   topBar: {
     flexDirection: 'row',

@@ -296,7 +296,7 @@ export const ImageViewer = ({ visible, images, initialIndex = 0, onClose }: Imag
       hardwareAccelerated={true}
     >
       <GestureHandlerRootView style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="black" />
+        <StatusBar barStyle="light-content" />
 
         {/* Header / Close Button */}
         {showUI && (

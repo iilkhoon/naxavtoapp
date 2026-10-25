@@ -1,16 +1,18 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, Dimensions, DeviceEventEmitter } from 'react-native';
-import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, DeviceEventEmitter } from 'react-native';
+import type { Tabs } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { Home, Heart, Plus, User, Phone } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { MotiView } from 'moti';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
 
-export const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
-  const { colors, isDark } = useTheme();
+// Props expo-router passes to a custom `tabBar` (SDK 58: emitter + navigateToTab, no navigation)
+type TabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0];
+
+export const CustomTabBar = ({ state, emitter, navigateToTab }: TabBarProps) => {
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
   // Floating bottom margin
@@ -37,7 +39,6 @@ export const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarPro
       {/* Tab Items */}
       <View style={styles.tabRow}>
         {state.routes.map((route, index) => {
-          const { options } = descriptors[route.key];
           const isFocused = state.index === index;
 
           // Skip hidden tabs - only show these specific routes
@@ -45,7 +46,7 @@ export const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarPro
           if (!visibleRoutes.includes(route.name)) return null;
 
           const onPress = () => {
-            const event = navigation.emit({
+            const event = emitter.emit({
               type: 'tabPress',
               target: route.key,
               canPreventDefault: true,
@@ -56,7 +57,7 @@ export const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarPro
                 DeviceEventEmitter.emit('scroll_to_top_home');
               }
             } else if (!event.defaultPrevented) {
-              navigation.navigate(route.name);
+              navigateToTab(route.key);
             }
           };
 
@@ -155,7 +156,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   glassContainer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: 30, // Reduced from 40
     overflow: 'hidden',
     ...Platform.select({
@@ -174,7 +175,7 @@ const styles = StyleSheet.create({
     }),
   },
   glassBorder: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: 30, // Reduced from 40
     borderWidth: 1.5,
     // Note: borderColor is set inline to adapt to theme

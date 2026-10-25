@@ -81,9 +81,9 @@ export default function AddListingScreen() {
   const [plateSellerName, setPlateSellerName] = useState('');
   const [plateIsVip, setPlateIsVip] = useState(false);
 
-  const regionRef = useRef<TextInput>(null);
-  const seriesRef = useRef<TextInput>(null);
-  const numberRef = useRef<TextInput>(null);
+  const regionRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const seriesRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const numberRef = useRef<React.ComponentRef<typeof TextInput>>(null);
 
   const ImageComponent = Platform.OS === 'web' ? Image : ExpoImage;
   const flagImageProps = Platform.OS === 'web'

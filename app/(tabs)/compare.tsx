@@ -18,7 +18,7 @@ import { BannerSlider } from '../../components/BannerSlider';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-type Car = {
+type CompareCar = {
   id: string;
   make: string;
   model: string;
@@ -49,9 +49,9 @@ export default function CompareScreen() {
   const { colors, isDark } = useTheme();
   const { settings } = useSettings();
 
-  const [favorites, setFavorites] = useState<Car[]>([]);
-  const [leftCar, setLeftCar] = useState<Car | null>(null);
-  const [rightCar, setRightCar] = useState<Car | null>(null);
+  const [favorites, setFavorites] = useState<CompareCar[]>([]);
+  const [leftCar, setLeftCar] = useState<CompareCar | null>(null);
+  const [rightCar, setRightCar] = useState<CompareCar | null>(null);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [activeSide, setActiveSide] = useState<SelectionSide>(null);
@@ -83,7 +83,7 @@ export default function CompareScreen() {
     setModalVisible(true);
   };
 
-  const handleSelectCar = (car: Car) => {
+  const handleSelectCar = (car: CompareCar) => {
     if (activeSide === 'left') {
       if (rightCar?.id === car.id) setRightCar(null);
       setLeftCar(car);
@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
   bestValue: { fontSize: 13, fontFamily: 'RethinkSans_800ExtraBold', textAlign: 'center' },
   placeholderValue: { opacity: 0.3 },
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center' },
-  backdrop: { ...StyleSheet.absoluteFillObject },
+  backdrop: { ...StyleSheet.absoluteFill },
   modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '75%', overflow: 'hidden', borderTopWidth: 1 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1 },
   modalTitle: { fontSize: 18, fontFamily: 'RethinkSans_700Bold' },

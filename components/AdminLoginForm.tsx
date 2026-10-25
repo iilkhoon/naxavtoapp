@@ -22,7 +22,7 @@ type Props = {
 export function AdminLoginForm({ onSuccess }: Props) {
   const { colors, isDark } = useTheme();
   const { signIn } = useAuth();
-  const passwordRef = useRef<TextInput>(null);
+  const passwordRef = useRef<React.ComponentRef<typeof TextInput>>(null);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

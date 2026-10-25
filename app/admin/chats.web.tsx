@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, ActivityIndicator, ScrollView } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Search, Send, CheckCircle2, Circle } from 'lucide-react-native';
+import { Search, Send, CheckCircle2, Circle, MessageSquare } from 'lucide-react-native';
 
 interface Chat {
     id: string;
@@ -370,8 +370,6 @@ export default function AdminChatsWeb() {
     );
 }
 
-// Ensure MessageSquare is imported for the empty state
-import { MessageSquare } from 'lucide-react-native';
 
 const styles = StyleSheet.create({
     container: {
