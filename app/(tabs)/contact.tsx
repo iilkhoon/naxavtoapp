@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import Constants from 'expo-constants';
 import {
   View, Text, StyleSheet, ScrollView, Linking, Dimensions,
   ActivityIndicator, TouchableOpacity, Platform
@@ -267,8 +268,8 @@ export default function ContactScreen() {
 
         <View style={styles.footer}>
           <TouchableOpacity onPress={() => router.push('/menu')} activeOpacity={0.7} style={{ alignItems: 'center' }}>
-            <Text style={[styles.copyright, { color: colors.textSecondary }]}>© 2025 Naxçıvan Avto</Text>
-            <Text style={[styles.version, { color: colors.textSecondary }]}>Versiya 1.0.1</Text>
+            <Text style={[styles.copyright, { color: colors.textSecondary }]}>© {new Date().getFullYear()} Naxçıvan Avto</Text>
+            <Text style={[styles.version, { color: colors.textSecondary }]}>Versiya {Constants.expoConfig?.version}</Text>
             <Text style={[styles.version, { color: colors.textSecondary, marginTop: 4 }]}>Created by İlkin Rzayev / +994 55 466 66 63</Text>
           </TouchableOpacity>
         </View>

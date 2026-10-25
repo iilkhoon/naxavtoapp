@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import Constants from 'expo-constants';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView, RefreshControl, StatusBar, Image as RNImage } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -164,7 +165,7 @@ export default function MenuScreen() {
                 <Text style={styles.logoutText}>Hesabdan Çıxış</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={handleVersionClick} activeOpacity={1}>
-                <Text style={[styles.versionText, { color: colors.textSecondary }]}>Naxçıvan Avto Admin v1.0.1</Text>
+                <Text style={[styles.versionText, { color: colors.textSecondary }]}>Naxçıvan Avto Admin v{Constants.expoConfig?.version}</Text>
               </TouchableOpacity>
             </>
           ) : (

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Naxçıvan Avto",
     "slug": "naxcivan-avto",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "orientation": "portrait",
     "icon": "./icons/android-icon.png",
     "scheme": "naxcivan-avto",
