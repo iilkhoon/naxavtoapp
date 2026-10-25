@@ -181,20 +181,15 @@ export const CreditApplicationModal = ({
         account_id: session?.user?.id || null
       };
 
-      console.log('[Credit Application Modal] Submitting to Supabase:', insertPayload);
-
-      const { data, error } = await supabase
+      // No .select() here: applicants can insert but not read credit_applications
+      const { error } = await supabase
         .from('credit_applications')
-        .insert(insertPayload)
-        .select()
-        .single();
+        .insert(insertPayload);
 
       if (error) {
         console.error('[Credit Application Modal] Supabase error:', error);
         throw error;
       }
-
-      console.log('[Credit Application Modal] Submitted successfully:', data);
 
       setSubmitted(true);
       showToast('Kredit müraciətiniz qəbul edildi!', 'success');

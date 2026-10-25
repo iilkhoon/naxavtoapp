@@ -5,15 +5,19 @@ import { View, ActivityIndicator } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 
 export default function AdminLayout() {
-    const { session, loading } = useAuth();
+    const { session, loading, isAdmin } = useAuth();
     const router = useRouter();
     const { colors } = useTheme();
 
     useEffect(() => {
-        if (!loading && !session) {
-            router.replace('/novo');
+        if (!loading) {
+            if (!session) {
+                router.replace('/novo');
+            } else if (!isAdmin) {
+                router.replace('/novo');
+            }
         }
-    }, [session, loading]);
+    }, [session, loading, isAdmin]);
 
     if (loading) {
         return (
@@ -23,7 +27,7 @@ export default function AdminLayout() {
         );
     }
 
-    if (!session) {
+    if (!session || !isAdmin) {
         return null;
     }
 

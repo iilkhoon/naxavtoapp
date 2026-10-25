@@ -70,11 +70,7 @@ export default function MyLoans() {
 
     try {
       const { data: loansData, error } = await supabase
-        .from('loan_accounts')
-        .select('*')
-        .ilike('customer_fin', targetFin.toUpperCase())
-        .eq('customer_birth_date', targetBirth)
-        .order('created_at', { ascending: false });
+        .rpc('get_customer_loans', { p_fin: targetFin.toUpperCase(), p_birth: targetBirth });
 
       if (error) throw error;
 
@@ -97,12 +93,8 @@ export default function MyLoans() {
       });
 
       // Fetch schedules
-      const loanIds = loansData.map(l => l.id);
       const { data: allSchedules } = await supabase
-        .from('loan_schedule')
-        .select('*')
-        .in('loan_id', loanIds)
-        .order('installment_number');
+        .rpc('get_customer_loan_schedule', { p_fin: targetFin.toUpperCase(), p_birth: targetBirth });
 
       const grouped: Record<string, any[]> = {};
       (allSchedules || []).forEach((s: any) => {
@@ -135,10 +127,7 @@ export default function MyLoans() {
       const formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
 
       const { data, error } = await supabase
-        .from('loan_accounts')
-        .select('id')
-        .ilike('customer_fin', finCode.toUpperCase())
-        .eq('customer_birth_date', formattedDate);
+        .rpc('get_customer_loans', { p_fin: finCode.toUpperCase(), p_birth: formattedDate });
 
       if (error) throw error;
 

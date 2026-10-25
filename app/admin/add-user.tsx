@@ -13,7 +13,7 @@ import {
   Switch
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { supabase } from '../../lib/supabase';
+import { supabase, createIsolatedClient } from '../../lib/supabase';
 import { Colors } from '../../constants/Colors';
 import { Mail, Lock, UserPlus, ArrowLeft, CheckCircle } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -49,8 +49,8 @@ export default function AddUserScreen() {
 
     setLoading(true);
     try {
-      // Create user using Supabase Auth
-      const { data, error } = await supabase.auth.signUp({
+      // Create user with a separate client so the superadmin stays signed in
+      const { data, error } = await createIsolatedClient().auth.signUp({
         email,
         password,
         options: {
@@ -63,15 +63,12 @@ export default function AddUserScreen() {
       if (error) throw error;
 
       if (data.user) {
-        // Explicitly set role = 'admin' and is_superadmin status in public.profiles table
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({
-            role: 'admin',
-            is_superadmin: isSuperAdminChecked,
-            email: email
-          })
-          .eq('id', data.user.id);
+        // Role is granted server-side; set_admin_role checks the caller is a superadmin
+        const { error: profileError } = await supabase.rpc('set_admin_role', {
+          p_user_id: data.user.id,
+          p_email: email,
+          p_is_superadmin: isSuperAdminChecked,
+        });
 
         if (profileError) throw profileError;
 

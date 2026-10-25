@@ -117,11 +117,7 @@ export default function CreditScreen() {
   const fetchLoans = async (fin: string, birth: string) => {
     try {
       const { data: loansData, error } = await supabase
-        .from('loan_accounts')
-        .select('*')
-        .ilike('customer_fin', fin)
-        .eq('customer_birth_date', birth)
-        .order('created_at', { ascending: false });
+        .rpc('get_customer_loans', { p_fin: fin, p_birth: birth });
 
       if (error) throw error;
 
@@ -142,12 +138,8 @@ export default function CreditScreen() {
       });
 
       // Fetch schedules
-      const loanIds = loansData.map((l: any) => l.id);
       const { data: allSchedules } = await supabase
-        .from('loan_schedule')
-        .select('*')
-        .in('loan_id', loanIds)
-        .order('installment_number');
+        .rpc('get_customer_loan_schedule', { p_fin: fin, p_birth: birth });
 
       const grouped: Record<string, any[]> = {};
       (allSchedules || []).forEach((s: any) => {
@@ -157,7 +149,7 @@ export default function CreditScreen() {
       setSchedules(grouped);
       
       // Setup Notifications
-      await setupNotifications(loansData, grouped);
+      await setupNotifications(loansData, grouped, fin, birth);
       
     } catch (e: any) {
       showToast('Xəta: ' + e.message, 'error');
@@ -166,7 +158,7 @@ export default function CreditScreen() {
     }
   };
 
-  const setupNotifications = async (loansData: any[], allSchedules: Record<string, any[]>) => {
+  const setupNotifications = async (loansData: any[], allSchedules: Record<string, any[]>, fin: string, birth: string) => {
     try {
       if ((window as any).notifInterval) {
         clearInterval((window as any).notifInterval);
@@ -201,15 +193,8 @@ export default function CreditScreen() {
         console.log("Push token error", tokenErr);
       }
 
-      if (pushToken && loansData.length > 0) {
-        for (const loan of loansData) {
-          let currentNotes = loan.notes || '';
-          if (!currentNotes.includes(`[PUSH_TOKEN:${pushToken}]`)) {
-            currentNotes = currentNotes.replace(/\[PUSH_TOKEN:ExponentPushToken\[.*?\]\]/g, '').trim();
-            currentNotes = `${currentNotes}\n[PUSH_TOKEN:${pushToken}]`.trim();
-            supabase.from('loan_accounts').update({ notes: currentNotes }).eq('id', loan.id).then();
-          }
-        }
+      if (pushToken && loansData.some((loan: any) => !(loan.notes || '').includes(`[PUSH_TOKEN:${pushToken}]`))) {
+        supabase.rpc('register_loan_push_token', { p_fin: fin, p_birth: birth, p_token: pushToken }).then(() => {}, () => {});
       }
 
       let overdueAmount = 0;
@@ -315,20 +300,15 @@ export default function CreditScreen() {
         car_id: null
       };
 
-      console.log('[Credit Tab] Submitting application to Supabase:', insertData);
-
-      const { data, error } = await supabase
+      // No .select() here: applicants can insert but not read credit_applications
+      const { error } = await supabase
         .from('credit_applications')
-        .insert(insertData)
-        .select()
-        .single();
+        .insert(insertData);
 
       if (error) {
         console.error('[Credit Tab] Supabase insert error:', error);
         throw error;
       }
-
-      console.log('[Credit Tab] Inserted successfully:', data);
 
       setAppSubmitted(true);
       showToast('Kredit müraciətiniz uğurla qəbul edildi!', 'success');
@@ -385,10 +365,7 @@ export default function CreditScreen() {
       const formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
 
       const { data, error } = await supabase
-        .from('loan_accounts')
-        .select('id')
-        .ilike('customer_fin', finCode.toUpperCase())
-        .eq('customer_birth_date', formattedDate);
+        .rpc('get_customer_loans', { p_fin: finCode.toUpperCase(), p_birth: formattedDate });
 
       if (error) throw error;
 

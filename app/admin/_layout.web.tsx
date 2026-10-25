@@ -22,7 +22,7 @@ import { supabase } from '../../lib/supabase';
 import { WebHeader } from '../../components/WebHeader.web';
 
 export default function AdminLayoutWeb() {
-    const { session, loading, isSuperAdmin } = useAuth();
+    const { session, loading, isAdmin, isSuperAdmin } = useAuth();
     const router = useRouter();
     const pathname = usePathname();
     const { colors, isDark } = useTheme();
@@ -31,10 +31,14 @@ export default function AdminLayoutWeb() {
     const [menuOpen, setMenuOpen] = React.useState(!isMobile);
 
     useEffect(() => {
-        if (!loading && !session) {
-            router.replace('/novo');
+        if (!loading) {
+            if (!session) {
+                router.replace('/novo');
+            } else if (!isAdmin) {
+                router.replace('/novo');
+            }
         }
-    }, [session, loading]);
+    }, [session, loading, isAdmin]);
 
     useEffect(() => {
         setMenuOpen(!isMobile);
@@ -53,7 +57,7 @@ export default function AdminLayoutWeb() {
         );
     }
 
-    if (!session) {
+    if (!session || !isAdmin) {
         return null;
     }
 

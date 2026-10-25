@@ -9,6 +9,15 @@ type AuthContextType = {
   isAdmin: boolean;
   isSuperAdmin: boolean;
   profile: any;
+  signIn: (email: string, password: string) => Promise<{
+    success: boolean;
+    error?: string;
+    isAdmin?: boolean;
+    isSuperAdmin?: boolean;
+    user?: User;
+  }>;
+  signOut: () => Promise<void>;
+  refreshProfile: () => Promise<any>;
 };
 
 const AuthContext = createContext<AuthContextType>({
@@ -18,9 +27,31 @@ const AuthContext = createContext<AuthContextType>({
   isAdmin: false,
   isSuperAdmin: false,
   profile: null,
+  signIn: async () => ({ success: false, error: 'Auth not initialized' }),
+  signOut: async () => {},
+  refreshProfile: async () => null,
 });
 
 export const useAuth = () => useContext(AuthContext);
+
+// Translate Supabase auth errors to friendly Azerbaijani messages
+const formatAuthError = (err: any): string => {
+  if (!err) return 'Xəta baş verdi';
+  const msg = err.message || String(err);
+  if (msg.includes('Invalid login credentials')) {
+    return 'Email və ya şifrə yanlışdır.';
+  }
+  if (msg.includes('Email not confirmed')) {
+    return 'Bu email ünvanı hələ təsdiqlənməyib. Zəhmət olmasa email qutunuzu yoxlayın.';
+  }
+  if (msg.includes('rate limit') || msg.includes('Too many requests')) {
+    return 'Həddindən artıq cəhd edildi. Zəhmət olmasa bir qədər sonra yenidən cəhd edin.';
+  }
+  if (msg.includes('Network request failed') || msg.includes('Failed to fetch')) {
+    return 'İnternet bağlantısı problemi. Zəhmət olmasa şəbəkənizi yoxlayın.';
+  }
+  return msg;
+};
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
@@ -29,30 +60,63 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async (userId: string, currentUser?: User | null) => {
     try {
+      // Use maybeSingle so missing row does not throw PGRST116
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
-      
-      if (error) throw error;
+        .maybeSingle();
 
-      if (data) {
-        setProfile(data);
-        setIsAdmin(data.role === 'admin');
-        setIsSuperAdmin(!!data.is_superadmin);
-      } else {
+      if (error) {
+        // Don't fall back to a guessed profile on a failed read: upserting it
+        // could overwrite the real row.
+        console.warn('Error fetching profile from DB:', error.message);
         setProfile(null);
         setIsAdmin(false);
         setIsSuperAdmin(false);
+        return null;
       }
+
+      if (data) {
+        setProfile(data);
+        const adminFlag = data.role === 'admin' || !!data.is_superadmin;
+        const superAdminFlag = !!data.is_superadmin;
+        setIsAdmin(adminFlag);
+        setIsSuperAdmin(superAdminFlag);
+        return data;
+      }
+
+      // Fallback: no profile row yet, create a basic one.
+      // Never take role from user_metadata: users can edit their own metadata.
+      const usr = currentUser || session?.user;
+      const userMeta = usr?.user_metadata || {};
+      const fallbackProfile = {
+        id: userId,
+        email: usr?.email || '',
+        full_name: userMeta.full_name || usr?.email?.split('@')[0] || 'İstifadəçi',
+        role: 'user',
+        is_superadmin: false,
+      };
+
+      setProfile(fallbackProfile);
+      setIsAdmin(false);
+      setIsSuperAdmin(false);
+
+      // Attempt to upsert the profile in background so future queries find it
+      supabase
+        .from('profiles')
+        .upsert(fallbackProfile)
+        .then(() => {}, () => {});
+
+      return fallbackProfile;
     } catch (err) {
       console.error('Error fetching profile in AuthProvider:', err);
       setProfile(null);
       setIsAdmin(false);
       setIsSuperAdmin(false);
+      return null;
     }
   };
 
@@ -62,35 +126,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const initializeAuth = async () => {
       try {
         const timeoutPromise = new Promise<{ data: { session: null } }>((resolve) =>
-          setTimeout(() => resolve({ data: { session: null } }), 2500)
+          setTimeout(() => resolve({ data: { session: null } }), 3000)
         );
         const sessionPromise = supabase.auth.getSession();
         const res = (await Promise.race([sessionPromise, timeoutPromise])) as any;
-        const session = res?.data?.session ?? null;
+        const currentSession = res?.data?.session ?? null;
 
         if (!active) return;
-        setSession(session);
+        setSession(currentSession);
 
-        if (session?.user) {
-          const profileTimeout = new Promise<{ data: null }>((resolve) =>
-            setTimeout(() => resolve({ data: null }), 2000)
-          );
-          const profilePromise = supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-          const profileRes = (await Promise.race([profilePromise, profileTimeout])) as any;
-
-          if (profileRes?.data) {
-            setProfile(profileRes.data);
-            setIsAdmin(profileRes.data.role === 'admin');
-            setIsSuperAdmin(!!profileRes.data.is_superadmin);
-          } else {
-            setProfile(null);
-            setIsAdmin(false);
-            setIsSuperAdmin(false);
-          }
+        if (currentSession?.user) {
+          await fetchProfile(currentSession.user.id, currentSession.user);
         } else {
           setProfile(null);
           setIsAdmin(false);
@@ -105,12 +151,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     initializeAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event: any, newSession: Session | null) => {
       if (!active) return;
-      setLoading(true);
       setSession(newSession);
       if (newSession?.user) {
-        await fetchProfile(newSession.user.id);
+        await fetchProfile(newSession.user.id, newSession.user);
       } else {
         setProfile(null);
         setIsAdmin(false);
@@ -125,6 +170,69 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
 
+  const signIn = async (email: string, password: string) => {
+    setLoading(true);
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setSession(data.session);
+
+      // Synchronously resolve profile and admin flags before returning
+      const userProfile = await fetchProfile(data.user.id, data.user);
+      const adminFlag = userProfile?.role === 'admin' || !!userProfile?.is_superadmin;
+      const superAdminFlag = !!userProfile?.is_superadmin;
+
+      setIsAdmin(adminFlag);
+      setIsSuperAdmin(superAdminFlag);
+
+      return {
+        success: true,
+        session: data.session,
+        user: data.user,
+        profile: userProfile,
+        isAdmin: adminFlag,
+        isSuperAdmin: superAdminFlag,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: formatAuthError(err),
+      };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signOut = async () => {
+    setLoading(true);
+    try {
+      await supabase.auth.signOut();
+      setSession(null);
+      setProfile(null);
+      setIsAdmin(false);
+      setIsSuperAdmin(false);
+    } catch (e) {
+      console.error('SignOut error:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refreshProfile = async () => {
+    if (session?.user) {
+      return await fetchProfile(session.user.id, session.user);
+    }
+    return null;
+  };
+
   const value = {
     session,
     user: session?.user ?? null,
@@ -132,6 +240,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     isAdmin,
     isSuperAdmin,
     profile,
+    signIn,
+    signOut,
+    refreshProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

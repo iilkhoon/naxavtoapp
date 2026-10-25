@@ -11,7 +11,7 @@ export function WebHeader() {
     const pathname = usePathname();
     const { colors, isDark, toggleTheme } = useTheme();
     const { settings } = useSettings();
-    const { user } = useAuth();
+    const { user, isAdmin } = useAuth();
     const { width } = useWindowDimensions();
     const isMobile = width < 768;
     const [menuOpen, setMenuOpen] = useState(false);
@@ -96,12 +96,22 @@ export function WebHeader() {
 
                         {!isMobile && (
                             <TouchableOpacity
-                                onPress={() => router.push('/my-loans' as any)}
+                                onPress={() => {
+                                    if (user) {
+                                        if (isAdmin) {
+                                            router.push('/admin');
+                                        } else {
+                                            router.push('/my-loans');
+                                        }
+                                    } else {
+                                        router.push('/auth/login');
+                                    }
+                                }}
                                 style={[styles.loginBtn, { borderColor: colors.border }]}
                             >
                                 <User size={18} color={colors.text} />
                                 <Text style={[styles.loginBtnText, { color: colors.text }]}>
-                                    {user ? 'Kreditlərim' : 'Giriş'}
+                                    {user ? (isAdmin ? 'Admin Panel' : 'Kreditlərim') : 'Giriş'}
                                 </Text>
                             </TouchableOpacity>
                         )}
@@ -121,10 +131,7 @@ export function WebHeader() {
                                 onPress={() => setMenuOpen(v => !v)}
                                 style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
                             >
-                                {menuOpen
-                                    ? <X size={20} color={colors.text} />
-                                    : <Menu size={20} color={colors.text} />
-                                }
+                                {menuOpen ? <X size={20} color={colors.text} /> : <Menu size={20} color={colors.text} />}
                             </TouchableOpacity>
                         )}
                     </View>
@@ -159,11 +166,21 @@ export function WebHeader() {
                     {/* Login/Credit Panel button inside mobile menu */}
                     <TouchableOpacity
                         style={[styles.mobileLoginBtn, { borderColor: colors.border }]}
-                        onPress={() => handleNav('/my-loans')}
+                        onPress={() => {
+                            if (user) {
+                                if (isAdmin) {
+                                    handleNav('/admin');
+                                } else {
+                                    handleNav('/my-loans');
+                                }
+                            } else {
+                                handleNav('/auth/login');
+                            }
+                        }}
                     >
                         <User size={18} color={colors.text} />
                         <Text style={[styles.mobileLoginBtnText, { color: colors.text }]}>
-                            {user ? 'Kredit Paneli' : 'Giriş Et'}
+                            {user ? (isAdmin ? 'Admin Paneli' : 'Kreditlərim') : 'Giriş Et'}
                         </Text>
                     </TouchableOpacity>
 

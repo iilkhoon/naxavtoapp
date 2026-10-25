@@ -11,12 +11,13 @@ import { useToast } from '../contexts/ToastContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
+import { AdminLoginForm } from '../components/AdminLoginForm';
 
 const { width } = Dimensions.get('window');
 
 export default function MenuScreen() {
   const router = useRouter();
-  const { user, isSuperAdmin } = useAuth();
+  const { user, isAdmin, isSuperAdmin } = useAuth();
   const { showToast } = useToast();
   const { colors, isDark } = useTheme();
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
@@ -34,7 +35,7 @@ export default function MenuScreen() {
     } catch (error) { console.error(error); } finally { setRefreshing(false); }
   };
 
-  useFocusEffect(useCallback(() => { if (user) fetchStats(); }, [user]));
+  useFocusEffect(useCallback(() => { if (user && isAdmin) fetchStats(); }, [user, isAdmin]));
   const onRefresh = () => { setRefreshing(true); fetchStats(); };
   const handleLogoutPress = () => setLogoutModalVisible(true);
   const confirmLogout = async () => {
@@ -92,8 +93,8 @@ export default function MenuScreen() {
           </View>
           <TouchableOpacity onPress={() => router.dismiss()} style={styles.closeButton}><BlurView intensity={30} tint="dark" style={styles.closeButtonBlur}><X size={20} color="#FFF" /></BlurView></TouchableOpacity>
         </View>
-        <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />} showsVerticalScrollIndicator={false}>
-          {user ? (
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />} showsVerticalScrollIndicator={false}>
+          {user && isAdmin ? (
             <>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statsScroll} contentContainerStyle={styles.statsContainer} decelerationRate="fast" snapToInterval={150}>
                 <PremiumStatCard label="Aktiv Elan" value={stats.activeCars} icon={CarFront} gradientColors={['#2E8B57', '#4CD964']} delay={0} />
@@ -162,17 +163,24 @@ export default function MenuScreen() {
               </TouchableOpacity>
             </>
           ) : (
-            <View style={styles.guestContainer}>
-              <MotiView from={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={[styles.guestIconCircle, { backgroundColor: `${colors.primary}15`, borderColor: colors.primary }]}>
-                <Crown size={50} color={colors.primary} />
-              </MotiView>
-              <Text style={[styles.guestTitle, { color: colors.text }]}>Giriş Tələb Olunur</Text>
-              <Text style={[styles.guestSub, { color: colors.textSecondary }]}>Admin panelinə daxil olmaq üçün zəhmət olmasa hesabınıza giriş edin.</Text>
-              <TouchableOpacity style={[styles.loginButton, { backgroundColor: colors.primary }]} onPress={() => router.push('/auth/login')}>
-                <Text style={styles.loginButtonText}>Giriş</Text>
-                <ChevronRight size={20} color="#FFF" />
-              </TouchableOpacity>
-            </View>
+            <MotiView
+              from={{ opacity: 0, translateY: 24 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={{ type: 'timing', duration: 450 }}
+              style={[styles.loginCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            >
+              <View style={styles.loginCardHeader}>
+                <View style={[styles.loginCardIcon, { backgroundColor: `${colors.primary}15` }]}>
+                  <Crown size={22} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.loginCardTitle, { color: colors.text }]}>Admin girişi</Text>
+                  <Text style={[styles.loginCardSub, { color: colors.textSecondary }]}>Panelə daxil olmaq üçün hesabınızla giriş edin</Text>
+                </View>
+              </View>
+              {/* After sign-in isAdmin flips and this screen renders the dashboard */}
+              <AdminLoginForm />
+            </MotiView>
           )}
         </ScrollView>
       </SafeAreaView>
@@ -221,10 +229,9 @@ const styles = StyleSheet.create({
   logoutButton: { flexDirection: 'row', marginHorizontal: 24, padding: 18, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginTop: 10, borderWidth: 1 },
   logoutText: { color: '#FF3B30', fontSize: 16, fontFamily: 'RethinkSans_700Bold' },
   versionText: { textAlign: 'center', marginTop: 20, fontSize: 12, opacity: 0.5, fontFamily: 'RethinkSans_400Regular' },
-  guestContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 60, paddingHorizontal: 40 },
-  guestIconCircle: { width: 100, height: 100, borderRadius: 50, justifyContent: 'center', alignItems: 'center', marginBottom: 24, borderWidth: 2 },
-  guestTitle: { fontSize: 24, fontFamily: 'RethinkSans_800ExtraBold', marginBottom: 12 },
-  guestSub: { textAlign: 'center', marginBottom: 32, fontSize: 15, lineHeight: 24, opacity: 0.8, fontFamily: 'RethinkSans_400Regular' },
-  loginButton: { flexDirection: 'row', paddingHorizontal: 32, paddingVertical: 16, borderRadius: 20, justifyContent: 'center', alignItems: 'center', width: '100%', boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.3)', elevation: 5 },
-  loginButtonText: { color: '#FFF', fontSize: 16, fontFamily: 'RethinkSans_700Bold', marginRight: 8 },
+  loginCard: { marginHorizontal: 20, marginTop: 40, borderRadius: 28, borderWidth: 1, padding: 22, boxShadow: '0px 12px 24px rgba(0, 0, 0, 0.18)', elevation: 8 },
+  loginCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 22 },
+  loginCardIcon: { width: 48, height: 48, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  loginCardTitle: { fontSize: 20, fontFamily: 'RethinkSans_800ExtraBold', marginBottom: 2 },
+  loginCardSub: { fontSize: 13, lineHeight: 18, fontFamily: 'RethinkSans_400Regular' },
 });

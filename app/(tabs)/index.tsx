@@ -133,10 +133,8 @@ export default function HomeScreen() {
       if (!error && data) {
         setActiveCompetition(data);
         // Fetch participant count
-        const { count } = await supabase
-          .from('competition_participants')
-          .select('*', { count: 'exact', head: true })
-          .eq('competition_id', data.id);
+        const { data: count } = await supabase
+          .rpc('get_competition_participant_count', { p_competition_id: data.id });
         setCompetitionParticipantCount(count ?? 0);
       } else {
         setActiveCompetition(null);

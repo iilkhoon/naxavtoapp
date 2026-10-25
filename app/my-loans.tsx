@@ -32,33 +32,15 @@ export default function MyLoans() {
     }
 
     try {
-      // First check if user has loans by phone
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('phone')
-        .eq('id', session.user.id)
-        .single();
-
-      let loansData: any[] = [];
-
-      // Try by user_id first
+      // RLS only exposes loans linked to this user (customer_user_id).
+      // Matching by profile phone was removed: users can edit their own phone.
       const { data: byUserId } = await supabase
         .from('loan_accounts')
         .select('*')
         .eq('customer_user_id', session.user.id)
         .order('created_at', { ascending: false });
 
-      if (byUserId && byUserId.length > 0) {
-        loansData = byUserId;
-      } else if (profile?.phone) {
-        // Try by phone number
-        const { data: byPhone } = await supabase
-          .from('loan_accounts')
-          .select('*')
-          .eq('customer_phone', profile.phone)
-          .order('created_at', { ascending: false });
-        loansData = byPhone || [];
-      }
+      const loansData: any[] = byUserId || [];
 
       setLoans(loansData);
 

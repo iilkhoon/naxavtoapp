@@ -165,11 +165,16 @@ function RootLayoutNav() {
             name="auth/login"
             options={{
               ...modalScreenOptions,
-              headerShown: true,
-              title: 'Giriş',
-              headerStyle: { backgroundColor: colors.card },
-              headerTintColor: colors.text,
-              headerTitleStyle: { fontFamily: 'RethinkSans_700Bold' },
+              headerShown: false,
+            }}
+          />
+
+          {/* Admin Login Portal */}
+          <Stack.Screen
+            name="novo"
+            options={{
+              headerShown: false,
+              animation: (Platform.OS === 'ios' ? 'default' : 'fade_from_bottom') as any,
             }}
           />
 
@@ -239,13 +244,15 @@ const styles = StyleSheet.create({
 export default function RootLayout() {
   useFrameworkReady();
 
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     RethinkSans_400Regular,
     RethinkSans_500Medium,
     RethinkSans_600SemiBold,
     RethinkSans_700Bold,
     RethinkSans_800ExtraBold,
   });
+  // A font load error must not leave the app on a blank screen; fall back to system fonts
+  const fontsReady = fontsLoaded || !!fontError;
 
   useEffect(() => {
     // Fail-safe: Ensure splash screen hides within 2.5 seconds no matter what
@@ -253,35 +260,32 @@ export default function RootLayout() {
       SplashScreen.hideAsync().catch(() => {});
     }, 2500);
 
-    if (fontsLoaded) {
+    if (fontsReady) {
       SplashScreen.hideAsync().catch(() => {});
     }
 
     return () => clearTimeout(failSafeTimer);
-  }, [fontsLoaded]);
+  }, [fontsReady]);
 
-  // Check for OTA updates in background after startup delay to avoid blocking cold start
+  // Download OTA updates in the background. They are applied on the next cold start:
+  // reloading here used to restart the app a few seconds after it opened.
   useEffect(() => {
     if (Platform.OS === 'web' || __DEV__) return;
-    const timer = setTimeout(() => {
-      async function checkForUpdates() {
-        try {
-          const update = await Updates.checkForUpdateAsync();
-          if (update.isAvailable) {
-            await Updates.fetchUpdateAsync();
-            await Updates.reloadAsync();
-          }
-        } catch (e) {
-          // Ignore errors silently
+    const timer = setTimeout(async () => {
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (update.isAvailable) {
+          await Updates.fetchUpdateAsync();
         }
+      } catch (e) {
+        // Ignore errors silently
       }
-      checkForUpdates();
     }, 3500);
 
     return () => clearTimeout(timer);
   }, []);
 
-  if (!fontsLoaded) {
+  if (!fontsReady) {
     return null;
   }
 
