@@ -2,7 +2,7 @@
   "expo": {
     "name": "Naxçıvan Avto",
     "slug": "naxcivan-avto",
-    "version": "1.4.0",
+    "version": "1.4.1",
     "orientation": "portrait",
     "icon": "./icons/android-icon.png",
     "scheme": "naxcivan-avto",
@@ -15,7 +15,8 @@
         "applinks:naxavto.com"
       ],
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIRequiresFullScreen": true
       }
     },
     "android": {
@@ -27,7 +28,7 @@
       },
       "softwareKeyboardLayoutMode": "pan",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 12,
+      "versionCode": 13,
       "intentFilters": [
         {
           "action": "VIEW",
