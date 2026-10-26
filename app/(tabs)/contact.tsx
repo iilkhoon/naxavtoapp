@@ -13,6 +13,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { AdminExpensesSection } from '../../components/AdminExpensesSection';
+import { useTabBarPadding } from '../../hooks/useTabBarPadding';
+import { haptics } from '../../utils/haptics';
 
 const APP_ICON = require('../../icons/android-icon.png');
 
@@ -55,6 +57,8 @@ export default function ContactScreen() {
   const { colors, isDark } = useTheme();
   const { isAdmin, isSuperAdmin } = useAuth();
   const { settings, refreshSettings } = useSettings();
+  // Root ScrollView: iOS insets it for the tab bar already
+  const bottomPad = useTabBarPadding({ autoInset: true });
 
   // Settings are already loaded app-wide; refresh quietly when the tab gains focus
   useFocusEffect(
@@ -81,7 +85,7 @@ export default function ContactScreen() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + 24 }]}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + 24, paddingBottom: bottomPad }]}
       showsVerticalScrollIndicator={false}
     >
       {isAdmin && isSuperAdmin && <AdminExpensesSection />}
@@ -99,9 +103,27 @@ export default function ContactScreen() {
       <View style={styles.quickRow}>
         <QuickAction icon={Phone} label="Zəng" onPress={() => primaryPhone && call(primaryPhone)} colors={colors} isDark={isDark} />
         <QuickAction icon={MessageCircle} label="WhatsApp" onPress={() => open(settings.whatsapp || 'https://whatsapp.com')} colors={colors} isDark={isDark} />
-        <QuickAction icon={MessagesSquare} label="Çat" onPress={() => router.push('/chat')} colors={colors} isDark={isDark} />
+        <QuickAction icon={Mail} label="Email" onPress={() => open(`mailto:${settings.email || 'info@naxcivanavto.com'}`)} colors={colors} isDark={isDark} />
         <QuickAction icon={MapPin} label="Xəritə" onPress={openMap} colors={colors} isDark={isDark} />
       </View>
+
+      {/* Live chat (moved here from the floating button on the home screen) */}
+      <TouchableOpacity
+        style={[styles.chatCard, { backgroundColor: colors.primary }]}
+        onPress={() => { haptics.tap(); router.push('/chat'); }}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel="Canlı çat"
+      >
+        <View style={styles.chatIcon}>
+          <MessagesSquare size={22} color="#FFF" strokeWidth={2} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.chatTitle}>Canlı çat</Text>
+          <Text style={styles.chatSubtitle}>Operatorla birbaşa yazışın</Text>
+        </View>
+        <ChevronRight size={18} color="rgba(255,255,255,0.8)" />
+      </TouchableOpacity>
 
       {/* Phones */}
       {phones.length > 0 && (
@@ -149,14 +171,14 @@ export default function ContactScreen() {
         <Text style={[styles.footerText, { color: colors.textSecondary }]}>
           © {new Date().getFullYear()} Naxçıvan Avto · Versiya {Constants.expoConfig?.version}
         </Text>
-        <Text style={[styles.footerText, { color: colors.placeholder }]}>Created by İlkin Rzayev</Text>
+        <Text style={[styles.footerText, { color: colors.placeholder }]}>Created by İlkin Rzayev / Novo Media · +994 51 500 00 77</Text>
       </TouchableOpacity>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: 16, paddingBottom: 130 },
+  content: { paddingHorizontal: 16 },
   identity: { alignItems: 'center', marginBottom: 20 },
   avatar: {
     width: 88,
@@ -189,6 +211,18 @@ const styles = StyleSheet.create({
   rowBody: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingVertical: 11, paddingRight: 12, minHeight: 56 },
   rowTitle: { fontSize: 16, fontFamily: 'RethinkSans_600SemiBold' },
   rowValue: { fontSize: 13, fontFamily: 'RethinkSans_500Medium', marginTop: 1 },
+  chatCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 16,
+    marginTop: 20,
+    boxShadow: '0px 8px 20px rgba(255, 59, 48, 0.25)',
+  },
+  chatIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+  chatTitle: { color: '#FFF', fontSize: 16, fontFamily: 'RethinkSans_700Bold' },
+  chatSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontFamily: 'RethinkSans_500Medium', marginTop: 1 },
   footer: { alignItems: 'center', marginTop: 32, gap: 4 },
   footerText: { fontSize: 12, fontFamily: 'RethinkSans_500Medium' },
 });

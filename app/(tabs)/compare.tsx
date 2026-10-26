@@ -1,22 +1,18 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Modal,
-  FlatList, Dimensions, StatusBar, Pressable, Platform
+  FlatList, Pressable,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { getFavorites } from '../../lib/favorites';
-import { MotiView } from 'moti';
-import {
-  Plus, X, Check, AlertCircle, Banknote, Calendar, Gauge, Zap, Fuel, Car, Palette, Settings, Activity, Globe, MapPin, CreditCard, ArrowLeftRight
-} from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Plus, X, Check, Heart, ChevronLeft } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { BannerSlider } from '../../components/BannerSlider';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { useTabBarPadding } from '../../hooks/useTabBarPadding';
+import { haptics } from '../../utils/haptics';
 
 type CompareCar = {
   id: string;
@@ -26,6 +22,7 @@ type CompareCar = {
   price: number;
   currency: string;
   image_url: string;
+  images?: string[];
   mileage: number;
   engine: string;
   horsepower?: number;
@@ -41,29 +38,36 @@ type CompareCar = {
   fuel_type: string;
 };
 
-type SelectionSide = 'left' | 'right' | null;
+type Side = 'left' | 'right';
+
+const formatNumber = (value: number) => Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const money = (car: CompareCar) => `${formatNumber(car.price)} ${car.currency === 'AZN' ? '₼' : car.currency}`;
+const cover = (car: CompareCar) => (car.images && car.images.length > 0 ? car.images[0] : car.image_url);
+
+// Which side wins a numeric row (lower price/mileage, newer year)
+type Better = 'lower' | 'higher';
+const winner = (l: number | undefined, r: number | undefined, better: Better): Side | null => {
+  if (l == null || r == null || l === r) return null;
+  return better === 'lower' ? (l < r ? 'left' : 'right') : (l > r ? 'left' : 'right');
+};
 
 export default function CompareScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const { settings } = useSettings();
+  const bottomPad = useTabBarPadding({ autoInset: true });
 
   const [favorites, setFavorites] = useState<CompareCar[]>([]);
   const [leftCar, setLeftCar] = useState<CompareCar | null>(null);
   const [rightCar, setRightCar] = useState<CompareCar | null>(null);
-
-  const [modalVisible, setModalVisible] = useState(false);
-  const [activeSide, setActiveSide] = useState<SelectionSide>(null);
-  const [loading, setLoading] = useState(false);
+  const [activeSide, setActiveSide] = useState<Side | null>(null);
 
   const fetchFavoritesData = async () => {
-    setLoading(true);
     try {
       const favIds = await getFavorites();
       if (favIds.length === 0) {
         setFavorites([]);
-        setLoading(false);
         return;
       }
       const { data, error } = await supabase
@@ -73,17 +77,15 @@ export default function CompareScreen() {
         .order('created_at', { ascending: false });
       if (error) throw error;
       setFavorites(data || []);
-    } catch (error) { console.error(error); } finally { setLoading(false); }
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   useFocusEffect(useCallback(() => { fetchFavoritesData(); }, []));
 
-  const openSelectionModal = (side: SelectionSide) => {
-    setActiveSide(side);
-    setModalVisible(true);
-  };
-
   const handleSelectCar = (car: CompareCar) => {
+    haptics.tap();
     if (activeSide === 'left') {
       if (rightCar?.id === car.id) setRightCar(null);
       setLeftCar(car);
@@ -91,182 +93,176 @@ export default function CompareScreen() {
       if (leftCar?.id === car.id) setLeftCar(null);
       setRightCar(car);
     }
-    setModalVisible(false);
     setActiveSide(null);
   };
 
-  const clearSelection = (side: 'left' | 'right') => {
-    if (side === 'left') setLeftCar(null);
-    else setRightCar(null);
-  };
+  const goBack = () => (router.canGoBack() ? router.back() : router.navigate('/(tabs)/favorites' as any));
 
-  const ComparisonRow = ({ icon: Icon, label, leftValue, rightValue, highlightBest = false, type = 'text', index }: any) => {
-    let leftStyle = [styles.rowValue, { color: colors.text }];
-    let rightStyle = [styles.rowValue, { color: colors.text }];
+  const surface = { backgroundColor: colors.card, borderColor: isDark ? colors.border : 'rgba(0,0,0,0.06)' };
 
-    if (highlightBest && leftCar && rightCar && leftValue && rightValue) {
-      let isLeftBetter = false;
-      let isRightBetter = false;
-      if (type === 'price') {
-        if (leftCar.price < rightCar.price) isLeftBetter = true;
-        else if (rightCar.price < leftCar.price) isRightBetter = true;
-      } else if (type === 'year') {
-        if (leftCar.year > rightCar.year) isLeftBetter = true;
-        else if (rightCar.year > leftCar.year) isRightBetter = true;
-      } else if (type === 'mileage') {
-        if (leftCar.mileage < rightCar.mileage) isLeftBetter = true;
-        else if (rightCar.mileage < leftCar.mileage) isRightBetter = true;
-      }
-      if (isLeftBetter) leftStyle = [styles.bestValue, { color: '#4CD964' }];
-      if (isRightBetter) rightStyle = [styles.bestValue, { color: '#4CD964' }];
-    }
-
-    const isEven = index % 2 === 0;
-    const rowBg = isEven ? (isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)') : 'transparent';
-
-    return (
-      <View style={[styles.rowContainer, { backgroundColor: rowBg }]}>
-        <View style={styles.cellSide}>
-          <Text style={[leftStyle, !leftCar && styles.placeholderValue]} numberOfLines={1}>{leftValue || '-'}</Text>
+  const renderSlot = (side: Side, car: CompareCar | null) =>
+    car ? (
+      <View style={styles.slot}>
+        <View style={[styles.slotImageWrap, surface]}>
+          <Image source={{ uri: cover(car) }} style={styles.slotImage} />
+          <TouchableOpacity
+            style={styles.removeBtn}
+            onPress={() => { haptics.tap(); side === 'left' ? setLeftCar(null) : setRightCar(null); }}
+            hitSlop={8}
+            accessibilityLabel="Seçimi sil"
+          >
+            <X size={12} color="#FFF" strokeWidth={3} />
+          </TouchableOpacity>
         </View>
-        <View style={styles.cellCenter}>
-          <View style={[styles.iconCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#F0F0F0' }]}>
-            <Icon size={14} color={colors.textSecondary} />
-          </View>
-          <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>{label}</Text>
-        </View>
-        <View style={styles.cellSide}>
-          <Text style={[rightStyle, !rightCar && styles.placeholderValue]} numberOfLines={1}>{rightValue || '-'}</Text>
-        </View>
+        <Text style={[styles.slotMake, { color: colors.textSecondary }]} numberOfLines={1}>{car.make}</Text>
+        <Text style={[styles.slotModel, { color: colors.text }]} numberOfLines={1}>{car.model}</Text>
+        <Text style={[styles.slotPrice, { color: colors.text }]} numberOfLines={1}>{money(car)}</Text>
       </View>
+    ) : (
+      <TouchableOpacity
+        style={[styles.slot, styles.emptySlot, { borderColor: isDark ? '#3A3A3C' : '#D1D1D6' }]}
+        onPress={() => { haptics.tap(); setActiveSide(side); }}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.plusCircle, { backgroundColor: colors.primarySoft }]}>
+          <Plus size={22} color={colors.primary} strokeWidth={2.4} />
+        </View>
+        <Text style={[styles.addText, { color: colors.textSecondary }]}>Avtomobil seç</Text>
+      </TouchableOpacity>
     );
-  };
+
+  const rows: { label: string; left?: string | number | null; right?: string | number | null; win?: Side | null }[] = [
+    { label: 'Qiymət', left: leftCar && money(leftCar), right: rightCar && money(rightCar), win: winner(leftCar?.price, rightCar?.price, 'lower') },
+    { label: 'Buraxılış ili', left: leftCar?.year, right: rightCar?.year, win: winner(leftCar?.year, rightCar?.year, 'higher') },
+    { label: 'Yürüş', left: leftCar && `${formatNumber(leftCar.mileage)} km`, right: rightCar && `${formatNumber(rightCar.mileage)} km`, win: winner(leftCar?.mileage, rightCar?.mileage, 'lower') },
+    { label: 'Mühərrik', left: leftCar?.engine && `${leftCar.engine} L`, right: rightCar?.engine && `${rightCar.engine} L` },
+    { label: 'At gücü', left: leftCar?.horsepower && `${leftCar.horsepower} a.g.`, right: rightCar?.horsepower && `${rightCar.horsepower} a.g.`, win: winner(leftCar?.horsepower, rightCar?.horsepower, 'higher') },
+    { label: 'Yanacaq', left: leftCar?.fuel_type, right: rightCar?.fuel_type },
+    { label: 'Ban növü', left: leftCar?.body_type, right: rightCar?.body_type },
+    { label: 'Rəng', left: leftCar?.color, right: rightCar?.color },
+    { label: 'Sürətlər qutusu', left: leftCar?.gearbox, right: rightCar?.gearbox },
+    { label: 'Ötürücü', left: leftCar?.transmission, right: rightCar?.transmission },
+    { label: 'Bazar', left: leftCar?.market, right: rightCar?.market },
+    { label: 'Şəhər', left: leftCar?.location, right: rightCar?.location },
+    { label: 'Kredit', left: leftCar && (leftCar.is_credit ? 'Var' : 'Yox'), right: rightCar && (rightCar.is_credit ? 'Var' : 'Yox') },
+    { label: 'Barter', left: leftCar && (leftCar.is_barter ? 'Var' : 'Yox'), right: rightCar && (rightCar.is_barter ? 'Var' : 'Yox') },
+  ];
+
+  const renderValue = (value: string | number | null | undefined, wins: boolean) => (
+    <View style={styles.valueCell}>
+      {wins && <Check size={13} color={colors.success} strokeWidth={3} />}
+      <Text
+        style={[styles.value, { color: wins ? colors.success : colors.text }, wins && styles.valueWin, value == null && { color: colors.placeholder }]}
+        numberOfLines={1}
+      >
+        {value ?? '—'}
+      </Text>
+    </View>
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
-      <View style={[styles.header, { paddingTop: insets.top + 10, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Müqayisə</Text>
-        <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>Sevdiyiniz avtomobilləri müqayisə edin</Text>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={{ marginBottom: 16 }}>
-          <BannerSlider
-            images={[settings.compare_banner_1, settings.compare_banner_2, settings.compare_banner_3]}
-            height={120}
-          />
+      <ScrollView
+        contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: bottomPad }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <TouchableOpacity onPress={goBack} style={styles.backBtn} hitSlop={10} accessibilityLabel="Geri">
+          <ChevronLeft size={22} color={colors.primary} strokeWidth={2.4} />
+          <Text style={[styles.backText, { color: colors.primary }]}>Seçilmişlər</Text>
+        </TouchableOpacity>
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: colors.text }]}>Müqayisə</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Seçilmişlərdən iki avtomobili yan-yana qoyun</Text>
         </View>
+
+        <BannerSlider
+          images={[settings.compare_banner_1, settings.compare_banner_2, settings.compare_banner_3]}
+          height={120}
+        />
+
+        {/* Slots */}
         <View style={styles.selectionArea}>
-          <View style={styles.slotWrapper}>
-            {leftCar ? (
-              <MotiView from={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={styles.carCard}>
-                <View style={[styles.imageWrapper, { borderColor: colors.border }]}>
-                  <Image source={{ uri: leftCar.image_url }} style={styles.carImage} />
-                  <LinearGradient colors={['transparent', 'rgba(0,0,0,0.7)']} style={StyleSheet.absoluteFill} />
-                  <TouchableOpacity style={styles.removeBtn} onPress={() => clearSelection('left')}><X size={12} color="#FFF" /></TouchableOpacity>
-                  <View style={styles.imageOverlayContent}><Text style={styles.overlayPrice}>{leftCar.price} {leftCar.currency}</Text></View>
-                </View>
-                <View style={styles.carInfo}>
-                  <Text style={[styles.carMake, { color: colors.textSecondary }]}>{leftCar.make}</Text>
-                  <Text style={[styles.carModel, { color: colors.text }]} numberOfLines={1}>{leftCar.model}</Text>
-                </View>
-              </MotiView>
-            ) : (
-              <TouchableOpacity style={[styles.emptySlot, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => openSelectionModal('left')}>
-                <View style={[styles.plusCircle, { backgroundColor: colors.background }]}><Plus size={24} color={colors.primary} /></View>
-                <Text style={[styles.addText, { color: colors.textSecondary }]}>Avtomobil Seç</Text>
-              </TouchableOpacity>
-            )}
+          {renderSlot('left', leftCar)}
+          <View style={[styles.vs, { backgroundColor: colors.text }]}>
+            <Text style={[styles.vsText, { color: colors.background }]}>VS</Text>
           </View>
-
-          <View style={styles.vsContainer}>
-            <LinearGradient colors={['#FF3B30', '#FF9500']} style={styles.vsCircle} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-              <Text style={styles.vsText}>VS</Text>
-            </LinearGradient>
-          </View>
-
-          <View style={styles.slotWrapper}>
-            {rightCar ? (
-              <MotiView from={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={styles.carCard}>
-                <View style={[styles.imageWrapper, { borderColor: colors.border }]}>
-                  <Image source={{ uri: rightCar.image_url }} style={styles.carImage} />
-                  <LinearGradient colors={['transparent', 'rgba(0,0,0,0.7)']} style={StyleSheet.absoluteFill} />
-                  <TouchableOpacity style={styles.removeBtn} onPress={() => clearSelection('right')}><X size={12} color="#FFF" /></TouchableOpacity>
-                  <View style={styles.imageOverlayContent}><Text style={styles.overlayPrice}>{rightCar.price} {rightCar.currency}</Text></View>
-                </View>
-                <View style={styles.carInfo}>
-                  <Text style={[styles.carMake, { color: colors.textSecondary }]}>{rightCar.make}</Text>
-                  <Text style={[styles.carModel, { color: colors.text }]} numberOfLines={1}>{rightCar.model}</Text>
-                </View>
-              </MotiView>
-            ) : (
-              <TouchableOpacity style={[styles.emptySlot, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => openSelectionModal('right')}>
-                <View style={[styles.plusCircle, { backgroundColor: colors.background }]}><Plus size={24} color={colors.primary} /></View>
-                <Text style={[styles.addText, { color: colors.textSecondary }]}>Avtomobil Seç</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          {renderSlot('right', rightCar)}
         </View>
 
-        <View style={styles.instructionContainer}>
-          <Text style={[styles.instructionText, { color: colors.textSecondary }]}>Müqayisə etmək istədiyiniz iki avtomobili seçin</Text>
-        </View>
-
+        {/* Comparison table */}
         {(leftCar || rightCar) && (
-          <MotiView from={{ opacity: 0, translateY: 20 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 500 }} style={[styles.tableContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <ComparisonRow index={0} icon={Banknote} label="Qiymət" leftValue={leftCar ? `${leftCar.price.toLocaleString()} ${leftCar.currency}` : null} rightValue={rightCar ? `${rightCar.price.toLocaleString()} ${rightCar.currency}` : null} highlightBest type="price" />
-            <ComparisonRow index={1} icon={Calendar} label="İl" leftValue={leftCar?.year} rightValue={rightCar?.year} highlightBest type="year" />
-            <ComparisonRow index={2} icon={Gauge} label="Yürüş" leftValue={leftCar ? `${leftCar.mileage} km` : null} rightValue={rightCar ? `${rightCar.mileage} km` : null} highlightBest type="mileage" />
-            <ComparisonRow index={3} icon={Zap} label="Mühərrik" leftValue={leftCar ? `${leftCar.engine} L` : null} rightValue={rightCar ? `${rightCar.engine} L` : null} />
-            <ComparisonRow index={4} icon={Zap} label="At gücü" leftValue={leftCar && leftCar.horsepower ? `${leftCar.horsepower} a.g.` : (leftCar ? '-' : null)} rightValue={rightCar && rightCar.horsepower ? `${rightCar.horsepower} a.g.` : (rightCar ? '-' : null)} />
-            <ComparisonRow index={5} icon={Fuel} label="Yanacaq" leftValue={leftCar?.fuel_type} rightValue={rightCar?.fuel_type} />
-            <ComparisonRow index={6} icon={Car} label="Ban növü" leftValue={leftCar?.body_type} rightValue={rightCar?.body_type} />
-            <ComparisonRow index={7} icon={Palette} label="Rəng" leftValue={leftCar?.color} rightValue={rightCar?.color} />
-            <ComparisonRow index={8} icon={Settings} label="Sürətlər qutusu" leftValue={leftCar?.gearbox} rightValue={rightCar?.gearbox} />
-            <ComparisonRow index={9} icon={Activity} label="Ötürücü" leftValue={leftCar?.transmission} rightValue={rightCar?.transmission} />
-            <ComparisonRow index={10} icon={Globe} label="Bazar" leftValue={leftCar?.market} rightValue={rightCar?.market} />
-            <ComparisonRow index={11} icon={MapPin} label="Şəhər" leftValue={leftCar?.location} rightValue={rightCar?.location} />
-            <ComparisonRow index={12} icon={CreditCard} label="Kredit" leftValue={leftCar ? (leftCar.is_credit ? 'Var' : 'Yox') : null} rightValue={rightCar ? (rightCar.is_credit ? 'Var' : 'Yox') : null} />
-            <ComparisonRow index={13} icon={ArrowLeftRight} label="Barter" leftValue={leftCar ? (leftCar.is_barter ? 'Var' : 'Yox') : null} rightValue={rightCar ? (rightCar.is_barter ? 'Var' : 'Yox') : null} />
-          </MotiView>
+          <View style={[styles.table, surface]}>
+            {rows.map((row, i) => (
+              <View
+                key={row.label}
+                style={[styles.tableRow, i < rows.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}
+              >
+                {renderValue(row.left, row.win === 'left')}
+                <Text style={[styles.rowLabel, { color: colors.textSecondary }]} numberOfLines={1}>{row.label}</Text>
+                {renderValue(row.right, row.win === 'right')}
+              </View>
+            ))}
+          </View>
         )}
       </ScrollView>
 
-      <Modal visible={modalVisible} animationType="slide" transparent={true} onRequestClose={() => setModalVisible(false)} statusBarTranslucent={true}>
+      {/* Picker sheet */}
+      <Modal visible={activeSide !== null} animationType="slide" transparent onRequestClose={() => setActiveSide(null)} statusBarTranslucent>
         <View style={styles.modalOverlay}>
-          <Pressable style={styles.backdrop} onPress={() => setModalVisible(false)} />
-          <View style={[styles.modalContent, { backgroundColor: colors.card, borderColor: colors.border, width: SCREEN_WIDTH, paddingBottom: insets.bottom + 20 }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Seçilmişlərdən əlavə et</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)} style={[styles.closeModalButton, { backgroundColor: isDark ? '#333' : '#F3F4F6' }]}><X size={20} color={colors.text} /></TouchableOpacity>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setActiveSide(null)} />
+          <View style={[styles.sheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + 12 }]}>
+            <View style={[styles.grabber, { backgroundColor: colors.border }]} />
+            <View style={styles.sheetHeader}>
+              <Text style={[styles.sheetTitle, { color: colors.text }]}>Avtomobil seçin</Text>
+              <TouchableOpacity
+                onPress={() => setActiveSide(null)}
+                style={[styles.sheetClose, { backgroundColor: isDark ? 'rgba(118,118,128,0.24)' : 'rgba(118,118,128,0.12)' }]}
+                accessibilityLabel="Bağla"
+              >
+                <X size={16} color={colors.text} strokeWidth={2.4} />
+              </TouchableOpacity>
             </View>
+
             {favorites.length === 0 ? (
-              <View style={styles.emptyModalState}>
-                <AlertCircle size={40} color={colors.textSecondary} />
-                <Text style={[styles.emptyModalText, { color: colors.text }]}>Seçilmiş elan yoxdur.</Text>
-                <Text style={[styles.emptyModalSubText, { color: colors.textSecondary }]}>Müqayisə etmək üçün əvvəlcə elanları bəyənin.</Text>
+              <View style={styles.sheetEmpty}>
+                <View style={[styles.plusCircle, { backgroundColor: colors.primarySoft }]}>
+                  <Heart size={22} color={colors.primary} />
+                </View>
+                <Text style={[styles.sheetEmptyTitle, { color: colors.text }]}>Seçilmiş elan yoxdur</Text>
+                <Text style={[styles.sheetEmptyText, { color: colors.textSecondary }]}>Müqayisə üçün əvvəlcə elanları ürəklə işarələyin.</Text>
               </View>
             ) : (
               <FlatList
                 data={favorites}
                 keyExtractor={(item) => item.id}
-                style={{ width: '100%', flex: 1 }}
-                contentContainerStyle={{ padding: 20 }}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={[styles.modalItem, { backgroundColor: colors.background, borderColor: colors.border }, (leftCar?.id === item.id || rightCar?.id === item.id) && styles.disabledItem]}
-                    onPress={() => handleSelectCar(item)}
-                    disabled={leftCar?.id === item.id || rightCar?.id === item.id}
-                  >
-                    <Image source={{ uri: item.image_url }} style={styles.modalItemImage} />
-                    <View style={styles.modalItemInfo}>
-                      <Text style={[styles.modalItemTitle, { color: colors.text }]}>{item.make} {item.model}</Text>
-                      <Text style={[styles.modalItemPrice, { color: colors.primary }]}>{item.price.toLocaleString()} {item.currency}</Text>
-                    </View>
-                    {(leftCar?.id === item.id || rightCar?.id === item.id) && <View style={[styles.selectedBadge, { backgroundColor: colors.primary }]}><Check size={16} color="#FFF" /></View>}
-                  </TouchableOpacity>
-                )}
+                contentContainerStyle={{ paddingHorizontal: 16 }}
+                ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+                renderItem={({ item }) => {
+                  const taken = leftCar?.id === item.id || rightCar?.id === item.id;
+                  return (
+                    <TouchableOpacity
+                      style={[styles.pickItem, surface, taken && { opacity: 0.45 }]}
+                      onPress={() => handleSelectCar(item)}
+                      disabled={taken}
+                      activeOpacity={0.7}
+                    >
+                      <Image source={{ uri: cover(item) }} style={styles.pickImage} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.pickTitle, { color: colors.text }]} numberOfLines={1}>{item.make} {item.model}</Text>
+                        <Text style={[styles.pickMeta, { color: colors.textSecondary }]} numberOfLines={1}>
+                          {[item.year, item.mileage != null && `${formatNumber(item.mileage)} km`].filter(Boolean).join(' · ')}
+                        </Text>
+                      </View>
+                      <Text style={[styles.pickPrice, { color: colors.text }]}>{money(item)}</Text>
+                      {taken && (
+                        <View style={[styles.pickCheck, { backgroundColor: colors.primary }]}>
+                          <Check size={12} color="#FFF" strokeWidth={3} />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                }}
               />
             )}
           </View>
@@ -278,52 +274,46 @@ export default function CompareScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1, alignItems: 'center' },
-  headerTitle: { fontSize: 24, fontFamily: 'RethinkSans_800ExtraBold', marginBottom: 4 },
-  headerSubtitle: { fontSize: 14, fontFamily: 'RethinkSans_500Medium', opacity: 0.7, textAlign: 'center' },
-  scrollContent: { paddingBottom: 100 },
-  selectionArea: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 20, marginBottom: 10, position: 'relative', alignItems: 'flex-start' },
-  slotWrapper: { width: '46%' },
-  emptySlot: { height: 180, borderRadius: 20, borderWidth: 1, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', gap: 12 },
-  plusCircle: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.1)', elevation: 3 },
+  backBtn: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', marginLeft: 10, marginBottom: 4 },
+  backText: { fontSize: 16, fontFamily: 'RethinkSans_500Medium' },
+  header: { paddingHorizontal: 20, marginBottom: 16 },
+  title: { fontSize: 32, fontFamily: 'RethinkSans_800ExtraBold', letterSpacing: -0.6 },
+  subtitle: { fontSize: 14, fontFamily: 'RethinkSans_500Medium', marginTop: 2 },
+
+  selectionArea: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, gap: 10, marginTop: 4, marginBottom: 16 },
+  slot: { flex: 1 },
+  emptySlot: { height: 176, borderRadius: 16, borderWidth: 1.5, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', gap: 10 },
+  plusCircle: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
   addText: { fontSize: 14, fontFamily: 'RethinkSans_600SemiBold' },
-  carCard: { width: '100%', alignItems: 'center' },
-  imageWrapper: { width: '100%', height: 130, borderRadius: 20, overflow: 'hidden', borderWidth: 1, marginBottom: 12, position: 'relative', boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.2)', elevation: 5 },
-  carImage: { width: '100%', height: '100%' },
-  removeBtn: { position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
-  imageOverlayContent: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 8 },
-  overlayPrice: { color: '#FFF', fontSize: 14, fontFamily: 'RethinkSans_800ExtraBold', ...Platform.select({ ios: { textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }, android: { textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }, web: { textShadow: '0px 1px 2px rgba(0,0,0,0.5)' as any } }) },
-  carInfo: { alignItems: 'center', width: '100%' },
-  carMake: { fontSize: 12, fontFamily: 'RethinkSans_600SemiBold', textTransform: 'uppercase', marginBottom: 2 },
-  carModel: { fontSize: 16, fontFamily: 'RethinkSans_800ExtraBold', textAlign: 'center' },
-  vsContainer: { position: 'absolute', top: 65, left: 0, right: 0, alignItems: 'center', zIndex: 10 },
-  vsCircle: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', boxShadow: '0px 4px 8px rgba(255, 59, 48, 0.4)', elevation: 6 },
-  vsText: { fontFamily: 'RethinkSans_800ExtraBold', fontSize: 14, fontStyle: 'italic', color: '#FFF' },
-  instructionContainer: { alignItems: 'center', marginTop: 10, marginBottom: 24, paddingHorizontal: 40 },
-  instructionText: { textAlign: 'center', fontSize: 13, fontFamily: 'RethinkSans_500Medium', opacity: 0.7 },
-  tableContainer: { marginHorizontal: 16, borderRadius: 24, overflow: 'hidden', borderWidth: 1, boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)', elevation: 4 },
-  rowContainer: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 12 },
-  cellSide: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  cellCenter: { width: 100, alignItems: 'center', justifyContent: 'center' },
-  iconCircle: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
-  rowLabel: { fontSize: 9, fontFamily: 'RethinkSans_700Bold', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: 'center' },
-  rowValue: { fontSize: 13, fontFamily: 'RethinkSans_600SemiBold', textAlign: 'center' },
-  bestValue: { fontSize: 13, fontFamily: 'RethinkSans_800ExtraBold', textAlign: 'center' },
-  placeholderValue: { opacity: 0.3 },
-  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center' },
-  backdrop: { ...StyleSheet.absoluteFill },
-  modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '75%', overflow: 'hidden', borderTopWidth: 1 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1 },
-  modalTitle: { fontSize: 18, fontFamily: 'RethinkSans_700Bold' },
-  closeModalButton: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
-  modalItem: { flexDirection: 'row', alignItems: 'center', padding: 12, marginBottom: 10, borderRadius: 16, borderWidth: 1, width: '100%' },
-  disabledItem: { opacity: 0.5 },
-  modalItemImage: { width: 60, height: 60, borderRadius: 12, marginRight: 12 },
-  modalItemInfo: { flex: 1 },
-  modalItemTitle: { fontSize: 16, fontFamily: 'RethinkSans_700Bold', marginBottom: 4 },
-  modalItemPrice: { fontSize: 14, fontFamily: 'RethinkSans_600SemiBold' },
-  selectedBadge: { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  emptyModalState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
-  emptyModalText: { fontSize: 18, fontFamily: 'RethinkSans_700Bold', marginTop: 16, marginBottom: 8 },
-  emptyModalSubText: { textAlign: 'center', fontFamily: 'RethinkSans_400Regular' },
+  slotImageWrap: { width: '100%', aspectRatio: 4 / 3, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden', marginBottom: 8 },
+  slotImage: { width: '100%', height: '100%' },
+  removeBtn: { position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center' },
+  slotMake: { fontSize: 12, fontFamily: 'RethinkSans_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.4 },
+  slotModel: { fontSize: 16, fontFamily: 'RethinkSans_700Bold' },
+  slotPrice: { fontSize: 15, fontFamily: 'RethinkSans_800ExtraBold', marginTop: 2 },
+  vs: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginTop: 56 },
+  vsText: { fontSize: 11, fontFamily: 'RethinkSans_800ExtraBold' },
+
+  table: { marginHorizontal: 16, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  tableRow: { flexDirection: 'row', alignItems: 'center', minHeight: 48, paddingHorizontal: 12 },
+  rowLabel: { width: 104, textAlign: 'center', fontSize: 12, fontFamily: 'RethinkSans_600SemiBold' },
+  valueCell: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3 },
+  value: { fontSize: 14, fontFamily: 'RethinkSans_600SemiBold', textAlign: 'center', flexShrink: 1 },
+  valueWin: { fontFamily: 'RethinkSans_800ExtraBold' },
+
+  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
+  sheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, maxHeight: '78%', minHeight: '45%', paddingTop: 8 },
+  grabber: { width: 36, height: 5, borderRadius: 3, alignSelf: 'center', marginBottom: 8 },
+  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12 },
+  sheetTitle: { fontSize: 20, fontFamily: 'RethinkSans_800ExtraBold' },
+  sheetClose: { width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
+  sheetEmpty: { alignItems: 'center', paddingHorizontal: 40, paddingVertical: 40, gap: 8 },
+  sheetEmptyTitle: { fontSize: 17, fontFamily: 'RethinkSans_700Bold', marginTop: 4 },
+  sheetEmptyText: { textAlign: 'center', fontSize: 14, fontFamily: 'RethinkSans_500Medium', lineHeight: 20 },
+  pickItem: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
+  pickImage: { width: 64, height: 48, borderRadius: 8 },
+  pickTitle: { fontSize: 15, fontFamily: 'RethinkSans_700Bold' },
+  pickMeta: { fontSize: 12, fontFamily: 'RethinkSans_500Medium', marginTop: 2 },
+  pickPrice: { fontSize: 14, fontFamily: 'RethinkSans_800ExtraBold' },
+  pickCheck: { width: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
 });

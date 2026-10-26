@@ -25,15 +25,17 @@ import { CarCard } from '../../components/CarCard';
 import { PlateCard } from '../../components/PlateCard';
 import { BannerSlider } from '../../components/BannerSlider';
 import { Pagination } from '../../components/Pagination';
-import { FloatingChatButton } from '../../components/FloatingChatButton';
 import { supabase } from '../../lib/supabase';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { getFavorites, toggleFavorite } from '../../lib/favorites';
+import { haptics } from '../../utils/haptics';
+import { useTabBarPadding } from '../../hooks/useTabBarPadding';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { Listing, Plate, Brand, Model, AdvancedFilters } from '../../types';
+import { HapticRefreshControl } from '../../components/ui/HapticRefreshControl';
 
 const { width } = Dimensions.get('window');
 
@@ -108,6 +110,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
+  const bottomPad = useTabBarPadding();
   // ~13 em is the width of the longest hero line, "Xəyalındakı avtomobili|"
   const heroFont = Math.max(22, Math.min(30, (screenWidth - 40) / 13.2));
   const heroTextSize = { fontSize: heroFont, lineHeight: Math.round(heroFont * 1.2) };
@@ -516,7 +519,7 @@ export default function HomeScreen() {
     return (
       <TouchableOpacity
         style={styles.categoryTab}
-        onPress={() => setActiveFilterType(type)}
+        onPress={() => { haptics.tap(); setActiveFilterType(type); }}
         activeOpacity={0.6}
         accessibilityRole="tab"
         accessibilityState={{ selected: isActive }}
@@ -790,8 +793,8 @@ export default function HomeScreen() {
               style={{
                 flex: 1,
                 // Add padding to create gaps
-                paddingRight: i < item.items.length - 1 ? 8 : 0,
-                paddingLeft: i > 0 ? 8 : 0
+                paddingRight: i < item.items.length - 1 ? 6 : 0,
+                paddingLeft: i > 0 ? 6 : 0
               }}
             >
               <CarCard
@@ -820,7 +823,7 @@ export default function HomeScreen() {
           ))}
           {/* Spacers for incomplete rows */}
           {Array.from({ length: numColumns - item.items.length }).map((_, i) => (
-            <View key={`spacer-${i}`} style={{ flex: 1, paddingLeft: 8 }} />
+            <View key={`spacer-${i}`} style={{ flex: 1, paddingLeft: 6 }} />
           ))}
         </View>
       );
@@ -901,7 +904,7 @@ export default function HomeScreen() {
               <TouchableOpacity
                 key={tab}
                 style={[styles.segment, selected && [styles.segmentSelected, { backgroundColor: isDark ? '#636366' : '#FFFFFF' }]]}
-                onPress={() => setActiveTopTab(tab)}
+                onPress={() => { haptics.tap(); setActiveTopTab(tab); }}
                 activeOpacity={0.8}
                 accessibilityRole="tab"
                 accessibilityState={{ selected }}
@@ -945,11 +948,11 @@ export default function HomeScreen() {
         keyExtractor={(item, index) => activeTopTab === 'transport' ? (item.type === 'banner' ? 'banner' : `row-${index}`) : item.id}
         numColumns={activeTopTab === 'transport' ? 1 : 2}
         columnWrapperStyle={activeTopTab === 'plates' ? styles.grid : undefined}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmptyOrError}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          <HapticRefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
         showsVerticalScrollIndicator={false}
         initialNumToRender={5}
@@ -976,8 +979,6 @@ export default function HomeScreen() {
         }
       />
 
-      {/* Live Chat Floating Button */}
-      {activeTopTab === 'transport' && <FloatingChatButton />}
     </View>
   );
 }

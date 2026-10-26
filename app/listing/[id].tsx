@@ -26,8 +26,20 @@ import LoadingAnimation from '../../components/LoadingAnimation';
 
 import * as Clipboard from 'expo-clipboard';
 import { CarCard } from '../../components/CarCard';
+import { haptics } from '../../utils/haptics';
 
 const { width, height } = Dimensions.get('window');
+
+const formatNumber = (value: number) => Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+
+// "+994605555555" -> "+994 60 555 55 55"
+const formatPhone = (raw: string) => {
+    const m = raw.replace(/[^\d+]/g, '').match(/^(\+994)(\d{2})(\d{3})(\d{2})(\d{2})$/);
+    return m ? `${m[1]} ${m[2]} ${m[3]} ${m[4]} ${m[5]}` : raw;
+};
+
+// Gap between the "Digər elanlar" cards (matches the home grid)
+const OTHER_GAP = 12;
 
 export default function ListingDetailScreen() {
     const { id } = useLocalSearchParams();
@@ -40,7 +52,7 @@ export default function ListingDetailScreen() {
     const { width: windowWidth } = useWindowDimensions();
 
     const numColumns = windowWidth > 768 ? 4 : 2;
-    const gap = 21;
+    const gap = OTHER_GAP;
     const padding = 48;
     const itemWidth = (windowWidth - padding - (numColumns - 1) * gap) / numColumns;
 
@@ -203,13 +215,20 @@ export default function ListingDetailScreen() {
 
     const handleShare = async () => {
         if (!listing) return;
+        haptics.tap();
         const shareUrl = `https://naxavto.com/listing/${listing.short_id || listing.id}`;
+        const title = `${listing.make} ${listing.model}${listing.year ? `, ${listing.year}` : ''}`;
+        const details = [
+            `${formatNumber(listing.price)} ${listing.currency === 'AZN' ? '₼' : listing.currency}`,
+            listing.mileage != null ? `${formatNumber(listing.mileage)} km` : null,
+            listing.location,
+        ].filter(Boolean).join(' · ');
         try {
+            // A single message keeps title, details and link together in every app
+            // (with a separate `url`, iOS share targets like WhatsApp drop the text).
             await Share.share({
-                message: Platform.OS === 'ios'
-                    ? `Naxavto: ${listing.make} ${listing.model} - ${listing.price} AZN`
-                    : `Naxavto: ${listing.make} ${listing.model} - ${listing.price} AZN\n${shareUrl}`,
-                url: shareUrl, // iOS support
+                title,
+                message: `${title}\n${details}\n\nNaxçıvan Avto-da bax: ${shareUrl}`,
             });
         } catch (error) { console.log(error); }
     };
@@ -221,7 +240,6 @@ export default function ListingDetailScreen() {
             if (settings[key]) phones.push(settings[key]);
         }
         if (phones.length === 0 && settings.phone) phones.push(settings.phone);
-        if (phones.length === 0) phones.push('+994 50 123 45 67');
         return phones;
     }, [settings]);
 
@@ -492,7 +510,7 @@ export default function ListingDetailScreen() {
                                 )}
                             </View>
                             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                                {listing.year} • {listing.engine} L • {listing.location}
+                                {[listing.year, listing.engine && `${listing.engine} L`, listing.location].filter(Boolean).join(' · ')}
                             </Text>
                         </View>
 
@@ -510,14 +528,14 @@ export default function ListingDetailScreen() {
 
                     <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-                    <View style={[styles.priceCard, { backgroundColor: isDark ? '#1C1C1E' : '#FFF', borderColor: colors.primary }]}>
+                    <View style={[styles.priceCard, { backgroundColor: colors.card, borderColor: isDark ? colors.border : 'rgba(0,0,0,0.06)' }]}>
                         <View>
                             <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>Satış qiyməti</Text>
                             <View style={styles.priceRow}>
-                                <Text style={[styles.priceValue, { color: colors.primary }]}>
-                                    {listing.price.toLocaleString()}
+                                <Text style={[styles.priceValue, { color: colors.text }]}>
+                                    {formatNumber(listing.price)}
                                 </Text>
-                                <Text style={[styles.currency, { color: colors.primary }]}>{listing.currency}</Text>
+                                <Text style={[styles.currency, { color: colors.textSecondary }]}>{listing.currency === 'AZN' ? '₼' : listing.currency}</Text>
                             </View>
                         </View>
 
@@ -588,10 +606,10 @@ export default function ListingDetailScreen() {
                     <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 24 }]}>Göstəricilər</Text>
                     <View style={styles.specsGrid}>
                         <SpecItem icon={Calendar} label="Buraxılış" value={`${listing.year}`} />
-                        <SpecItem icon={Gauge} label="Yürüş" value={`${listing.mileage} km`} />
+                        <SpecItem icon={Gauge} label="Yürüş" value={listing.mileage != null ? `${formatNumber(listing.mileage)} km` : null} />
                         <SpecItem icon={Car} label="Ban növü" value={listing.body_type} />
                         <SpecItem icon={Palette} label="Rəng" value={listing.color} />
-                        <SpecItem icon={Zap} label="Mühərrik" value={`${listing.engine} L`} />
+                        <SpecItem icon={Zap} label="Mühərrik" value={listing.engine ? `${listing.engine} L` : null} />
                         {listing.horsepower ? <SpecItem icon={Zap} label="At gücü" value={`${listing.horsepower} a.g.`} /> : null}
                         <SpecItem icon={Settings} label="Sürətlər qutusu" value={listing.gearbox} />
                         <SpecItem icon={Layers} label="Ötürücü" value={listing.transmission} />
@@ -661,10 +679,10 @@ export default function ListingDetailScreen() {
                                     <TouchableOpacity
                                         key={index}
                                         style={[styles.phoneRow, { backgroundColor: isDark ? '#333' : '#F8F9FA' }]}
-                                        onPress={() => handleCall(phone)}
+                                        onPress={() => { haptics.tap(); handleCall(phone); }}
                                     >
                                         <Phone size={16} color={colors.primary} />
-                                        <Text style={[styles.phoneText, { color: colors.text }]}>{phone}</Text>
+                                        <Text style={[styles.phoneText, { color: colors.text }]}>{formatPhone(phone)}</Text>
                                     </TouchableOpacity>
                                 ))}
                             </View>
@@ -674,7 +692,7 @@ export default function ListingDetailScreen() {
                     {randomListings.length > 0 && (
                         <View style={styles.section}>
                             <Text style={[styles.sectionTitle, { color: colors.text }]}>Digər elanlar</Text>
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', columnGap: 21, rowGap: numColumns > 2 ? 21 : 8 }}>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: OTHER_GAP }}>
                                 {randomListings.map((item, index) => {
                                     let itemImages: string[] = [];
                                     try {
@@ -728,7 +746,7 @@ export default function ListingDetailScreen() {
                             Avtomobil və nömrə haqqında ətraflı məlumat üçün bizimlə əlaqə saxlayın!
                         </Text>
                         <Text style={[styles.devCredit, { color: colors.textSecondary }]}>
-                            İlkin Rzayev / Novoloji / +994 55 466 66 63
+                            Created by İlkin Rzayev / Novo Media · +994 51 500 00 77
                         </Text>
                     </View>
 
@@ -804,10 +822,10 @@ const styles = StyleSheet.create({
     idLabel: { fontSize: 10, marginRight: 4, fontFamily: 'RethinkSans_600SemiBold' },
     idValue: { fontSize: 12, fontFamily: 'RethinkSans_700Bold' },
     divider: { height: 1, width: '100%', marginBottom: 16 },
-    priceCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderRadius: 24, marginBottom: 24, borderWidth: 1, boxShadow: '0px 4px 12px rgba(255, 59, 48, 0.15)', elevation: 5 },
-    priceLabel: { fontSize: 12, fontFamily: 'RethinkSans_600SemiBold', textTransform: 'uppercase', marginBottom: 4, letterSpacing: 1 },
+    priceCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 18, borderRadius: 16, marginBottom: 24, borderWidth: StyleSheet.hairlineWidth, boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.04), 0px 4px 12px rgba(0, 0, 0, 0.04)' },
+    priceLabel: { fontSize: 12, fontFamily: 'RethinkSans_600SemiBold', textTransform: 'uppercase', marginBottom: 4, letterSpacing: 0.5 },
     priceRow: { flexDirection: 'row', alignItems: 'flex-start' },
-    priceValue: { fontSize: 32, fontFamily: 'RethinkSans_800ExtraBold', lineHeight: 38 },
+    priceValue: { fontSize: 30, fontFamily: 'RethinkSans_800ExtraBold', lineHeight: 36, letterSpacing: -0.6 },
     currency: { fontSize: 16, fontFamily: 'RethinkSans_700Bold', marginTop: 6, marginLeft: 4 },
     priceTags: { alignItems: 'flex-end', gap: 8 },
     priceTag: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },

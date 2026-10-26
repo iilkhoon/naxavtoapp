@@ -1,13 +1,14 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Platform } from 'react-native';
-import { MotiView } from 'moti';
-import { Crown } from 'lucide-react-native';
-import { AnimatedPressable } from './ui/AnimatedPressable';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Crown, MapPin } from 'lucide-react-native';
 import { PlateVisual } from './PlateVisual';
 import { useTheme } from '../contexts/ThemeContext';
+import { haptics } from '../utils/haptics';
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = Platform.OS === 'web' ? '100%' : (width - 48) / 2;
+// Two columns with 16pt side padding and a 12pt gap, matching the car grid
+const CARD_WIDTH = Platform.OS === 'web' ? '100%' : (width - 32 - 12) / 2;
 
 interface PlateCardProps {
   region: string;
@@ -20,71 +21,64 @@ interface PlateCardProps {
   onPress?: () => void;
 }
 
+const formatNumber = (value: number) => Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+
+// Same anatomy as CarCard: visual on top, price → title → meta below
 export const PlateCard = ({
   region,
   series,
   number,
   price,
   description,
-  index = 0,
   isVip,
-  onPress
+  onPress,
 }: PlateCardProps) => {
   const { colors, isDark } = useTheme();
 
   return (
-    <MotiView
-      from={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ delay: Math.min(index * 50, 300), type: 'spring' }}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <TouchableOpacity
-        onPress={onPress}
+        onPress={() => { haptics.tap(); onPress?.(); }}
         activeOpacity={0.88}
-        style={[
-          styles.card,
-          {
-            backgroundColor: colors.card,
-            borderColor: isVip ? '#FFD700' : 'transparent',
-            borderWidth: isVip ? 1 : 0,
-            width: '100%'
-          }
-        ]}
+        style={[styles.card, { backgroundColor: colors.card, borderColor: isDark ? colors.border : 'rgba(0,0,0,0.06)' }]}
+        accessibilityRole="button"
+        accessibilityLabel={`${region}-${series}-${number}, ${formatNumber(price)} manat`}
       >
-        {/* Visual Section */}
-        <View style={[styles.visualContainer, { backgroundColor: isDark ? '#2C2C2E' : '#E5E5EA' }]}>
+        <View style={styles.visual}>
+          <LinearGradient
+            colors={isDark ? ['#2C2C2E', '#1C1C1E'] : ['#F2F2F7', '#E5E5EA']}
+            style={StyleSheet.absoluteFill}
+          />
           <View style={{ transform: [{ scale: 0.45 }] }}>
-            <PlateVisual
-              region={region}
-              series={series}
-              number={number}
-            />
+            <PlateVisual region={region} series={series} number={number} />
           </View>
+
           {isVip && (
-            <View style={[styles.vipBadge, { backgroundColor: '#FFD700' }]}>
-              <Crown size={10} color="#000" fill="#000" />
+            <LinearGradient colors={['#FFE58A', '#F4B400']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.vipBadge}>
+              <Crown size={11} color="#3D2B00" fill="#3D2B00" />
               <Text style={styles.vipText}>VIP</Text>
-            </View>
+            </LinearGradient>
           )}
         </View>
 
-        {/* Info Section */}
         <View style={styles.content}>
-          <Text style={[styles.price, { color: colors.primary }]}>
-            {price.toLocaleString()} <Text style={{ fontSize: 12 }}>AZN</Text>
+          <Text style={[styles.price, { color: colors.text }]} numberOfLines={1}>
+            {formatNumber(price)}
+            <Text style={[styles.currency, { color: colors.textSecondary }]}> ₼</Text>
           </Text>
-
-          <Text style={[styles.plateText, { color: colors.text }]}>
+          <Text style={[styles.plateText, { color: colors.text }]} numberOfLines={1}>
             {region}-{series}-{number}
           </Text>
-
-          <Text style={[styles.locationText, { color: colors.textSecondary }]}>
-            Naxçıvan
+          <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={1}>
+            {description?.trim() || 'Qeydiyyat nişanı'}
           </Text>
+          <View style={styles.metaRow}>
+            <MapPin size={11} color={colors.textSecondary} />
+            <Text style={[styles.metaText, { color: colors.textSecondary }]}>Naxçıvan</Text>
+          </View>
         </View>
       </TouchableOpacity>
-    </MotiView>
+    </View>
   );
 };
 
@@ -94,48 +88,70 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   card: {
-    borderRadius: 20,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
     width: '100%',
+    boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.04), 0px 4px 12px rgba(0, 0, 0, 0.04)',
   },
-  visualContainer: {
-    height: 100,
+  visual: {
     width: '100%',
+    aspectRatio: 4 / 3,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
   },
-  content: {
-    padding: 12,
-  },
-  price: {
-    fontSize: 17,
-    fontWeight: '800',
-    marginBottom: 4,
-  },
-  plateText: {
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  locationText: {
-    fontSize: 10,
-    fontWeight: '500',
-  },
   vipBadge: {
     position: 'absolute',
     top: 8,
-    right: 8,
+    left: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
+    gap: 3,
+    paddingHorizontal: 7,
+    height: 20,
     borderRadius: 6,
-    gap: 2,
+    boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.25)',
   },
   vipText: {
-    fontSize: 9,
-    fontWeight: 'bold',
-    color: '#000',
+    color: '#3D2B00',
+    fontSize: 10,
+    fontFamily: 'RethinkSans_800ExtraBold',
+    letterSpacing: 0.6,
+  },
+  content: {
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 12,
+  },
+  price: {
+    fontSize: 17,
+    fontFamily: 'RethinkSans_800ExtraBold',
+    letterSpacing: -0.3,
+    marginBottom: 2,
+  },
+  currency: {
+    fontSize: 13,
+    fontFamily: 'RethinkSans_700Bold',
+  },
+  plateText: {
+    fontSize: 14,
+    fontFamily: 'RethinkSans_700Bold',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  description: {
+    fontSize: 12,
+    fontFamily: 'RethinkSans_500Medium',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 8,
+  },
+  metaText: {
+    fontSize: 11,
+    fontFamily: 'RethinkSans_500Medium',
   },
 });

@@ -341,7 +341,7 @@ export default function PlateDetailScreen() {
               Avtomobil və nömrə haqqında ətraflı məlumat üçün bizimlə əlaqə saxlayın!
             </Text>
             <Text style={[styles.devCredit, { color: colors.textSecondary }]}>
-              İlkin Rzayev / Novoloji / +994 55 466 66 63
+              Created by İlkin Rzayev / Novo Media · +994 51 500 00 77
             </Text>
           </View>
 

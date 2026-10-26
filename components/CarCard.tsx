@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Heart, Crown, Zap, MapPin } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { formatListingDate } from '../utils/date';
+import { haptics } from '../utils/haptics';
 
 interface CarCardProps {
   id: string;
@@ -85,7 +86,7 @@ export const CarCard = memo(({
           },
         ]}
         activeOpacity={0.88}
-        onPress={() => onPress && onPress(id)}
+        onPress={() => { haptics.tap(); onPress && onPress(id); }}
         accessibilityRole="button"
         accessibilityLabel={`${title}, ${formatNumber(price)} ${currency}`}
       >
@@ -101,7 +102,7 @@ export const CarCard = memo(({
 
           <TouchableOpacity
             activeOpacity={0.7}
-            onPress={(e) => { e.stopPropagation(); onToggleFavorite && onToggleFavorite(id); }}
+            onPress={(e) => { e.stopPropagation(); haptics.medium(); onToggleFavorite && onToggleFavorite(id); }}
             style={styles.heartButton}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessibilityLabel={isFavorite ? 'Seçilmişlərdən sil' : 'Seçilmişlərə əlavə et'}
@@ -150,21 +151,18 @@ export const CarCard = memo(({
             {title}
           </Text>
 
-          {!!specs && (
-            <Text style={[styles.specText, { color: colors.textSecondary }]} numberOfLines={1}>
-              {specs}
-            </Text>
-          )}
+          <Text style={[styles.specText, { color: colors.textSecondary }]} numberOfLines={1}>
+            {specs || ' '}
+          </Text>
 
-          {tags.length > 0 && (
-            <View style={styles.tags}>
-              {tags.map((tag) => (
-                <View key={tag.label} style={[styles.tag, { backgroundColor: `${tag.color}${isDark ? '33' : '1A'}` }]}>
-                  <Text style={[styles.tagText, { color: tag.color }]}>{tag.label}</Text>
-                </View>
-              ))}
-            </View>
-          )}
+          {/* Always rendered (even when empty) so every card in a row has the same height */}
+          <View style={styles.tags}>
+            {tags.map((tag) => (
+              <View key={tag.label} style={[styles.tag, { backgroundColor: `${tag.color}${isDark ? '33' : '1A'}` }]}>
+                <Text style={[styles.tagText, { color: tag.color }]}>{tag.label}</Text>
+              </View>
+            ))}
+          </View>
 
           <View style={styles.metaRow}>
             <MapPin size={11} color={colors.textSecondary} />
@@ -278,9 +276,10 @@ const styles = StyleSheet.create({
   },
   tags: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 4,
     marginTop: 8,
+    height: 18,
+    overflow: 'hidden',
   },
   tag: {
     paddingHorizontal: 6,

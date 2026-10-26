@@ -20,6 +20,8 @@ import { formatDate } from '../../lib/utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
+import { useTabBarPadding } from '../../hooks/useTabBarPadding';
+import { HapticRefreshControl } from '../../components/ui/HapticRefreshControl';
 
 // Handle notifications when app is active
 Notifications.setNotificationHandler({
@@ -37,6 +39,8 @@ const CREDIT_SESSION_KEY = 'nax_credit_session';
 export default function CreditScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  // The scroll views sit below a header, so iOS does not inset them automatically
+  const bottomPad = useTabBarPadding();
   const { showToast } = useToast();
   const { session } = useAuth();
 
@@ -488,7 +492,7 @@ export default function CreditScreen() {
           style={{ flex: 1 }}
         >
           <ScrollView 
-            contentContainerStyle={styles.scrollContent} 
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]} 
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
@@ -689,7 +693,7 @@ export default function CreditScreen() {
       {activeTab === 'account' && (
         !isLoggedIn ? (
           <ScrollView
-            contentContainerStyle={styles.loginScroll}
+            contentContainerStyle={[styles.loginScroll, { paddingBottom: bottomPad }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
@@ -698,47 +702,53 @@ export default function CreditScreen() {
               animate={{ opacity: 1, translateY: 0 }}
               style={styles.loginContainer}
             >
-              <View style={[styles.loginIconWrap, { backgroundColor: colors.primary + '15' }]}>
-                <CreditCard size={44} color={colors.primary} />
+              {/* Card visual (Apple Wallet style) */}
+              <View style={styles.walletCard}>
+                <View style={styles.walletTop}>
+                  <Text style={styles.walletBrand}>Naxçıvan Avto</Text>
+                  <CreditCard size={22} color="rgba(255,255,255,0.9)" />
+                </View>
+                <Text style={styles.walletNumber}>•••• •••• •••• {finCode.length > 0 ? finCode.slice(-4).padStart(4, '•') : '••••'}</Text>
+                <View style={styles.walletBottom}>
+                  <View>
+                    <Text style={styles.walletCaption}>Kredit hesabı</Text>
+                    <Text style={styles.walletValue}>Ödəniş cədvəli və qalıq</Text>
+                  </View>
+                  <View style={styles.walletChip} />
+                </View>
               </View>
 
-              <Text style={[styles.loginTitle, { color: colors.text }]}>Kredit Hesabım</Text>
+              <Text style={[styles.loginTitle, { color: colors.text }]}>Kredit hesabım</Text>
               <Text style={[styles.loginSubtitle, { color: colors.textSecondary }]}>
-                Aktiv kreditlərinizə və ödəniş cədvəlinizə baxmaq üçün FİN kodunuz və doğum tarixinizlə daxil olun.
+                FİN kodunuz və doğum tarixinizlə daxil olub kreditlərinizi, ödəniş cədvəlinizi izləyin.
               </Text>
 
-              {/* FIN Code Input */}
-              <View style={styles.loginField}>
-                <Text style={[styles.loginLabel, { color: colors.text }]}>
-                  <Hash size={14} color={colors.primary} /> FIN Kod
-                </Text>
-                <View style={[styles.loginInput, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              {/* Grouped fields */}
+              <View style={[styles.loginGroup, { backgroundColor: colors.card, borderColor: isDark ? colors.border : 'rgba(0,0,0,0.06)' }]}>
+                <View style={styles.loginRow}>
+                  <Text style={[styles.loginRowLabel, { color: colors.text }]}>FİN kod</Text>
                   <TextInput
-                    style={[styles.loginInputText, { color: colors.text }]}
+                    style={[styles.loginRowInput, { color: colors.text }]}
                     value={finCode}
                     onChangeText={(val) => {
                       const cleaned = val.toUpperCase().replace(/[^A-Z0-9]/g, '');
                       if (cleaned.length <= 7) setFinCode(cleaned);
                     }}
-                    placeholder="Məs: 7ABC123"
+                    placeholder="7ABC123"
                     placeholderTextColor={colors.placeholder}
                     autoCapitalize="characters"
+                    autoCorrect={false}
                     maxLength={7}
                   />
-                  <View style={[styles.charCounter, { backgroundColor: isDark ? '#333' : '#F0F0F0' }]}>
-                    <Text style={[styles.charCounterText, { color: colors.textSecondary }]}>{finCode.length}/7</Text>
-                  </View>
+                  <Text style={[styles.loginCounter, { color: finCode.length === 7 ? colors.success : colors.placeholder }]}>
+                    {finCode.length}/7
+                  </Text>
                 </View>
-              </View>
-
-              {/* Birth Date Input */}
-              <View style={styles.loginField}>
-                <Text style={[styles.loginLabel, { color: colors.text }]}>
-                  <Calendar size={14} color={colors.primary} /> Doğum Tarixi
-                </Text>
-                <View style={[styles.loginInput, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={[styles.loginSeparator, { backgroundColor: colors.border }]} />
+                <View style={styles.loginRow}>
+                  <Text style={[styles.loginRowLabel, { color: colors.text }]}>Doğum tarixi</Text>
                   <TextInput
-                    style={[styles.loginInputText, { color: colors.text }]}
+                    style={[styles.loginRowInput, { color: colors.text }]}
                     value={birthDate}
                     onChangeText={(val) => {
                       const nums = val.replace(/[^0-9]/g, '');
@@ -748,38 +758,44 @@ export default function CreditScreen() {
                       if (nums.length > 4) formatted += '.' + nums.substring(4, 8);
                       setBirthDate(formatted);
                     }}
-                    placeholder="GG.AA.YYYY"
+                    placeholder="GG.AA.İİİİ"
                     placeholderTextColor={colors.placeholder}
                     keyboardType="number-pad"
                     maxLength={10}
+                    returnKeyType="go"
+                    onSubmitEditing={handleLogin}
                   />
                 </View>
               </View>
 
-              {/* Login Button */}
               <TouchableOpacity
                 style={[styles.loginBtn, { backgroundColor: colors.primary, opacity: loginLoading ? 0.6 : 1 }]}
                 onPress={handleLogin}
                 disabled={loginLoading}
+                activeOpacity={0.85}
               >
                 {loginLoading ? (
                   <ActivityIndicator size="small" color="#FFF" />
                 ) : (
-                  <>
-                    <Shield size={20} color="#FFF" />
-                    <Text style={styles.loginBtnText}>Daxil Ol</Text>
-                  </>
+                  <Text style={styles.loginBtnText}>Daxil ol</Text>
                 )}
               </TouchableOpacity>
+
+              <View style={styles.loginNote}>
+                <Shield size={13} color={colors.textSecondary} />
+                <Text style={[styles.loginNoteText, { color: colors.textSecondary }]}>
+                  Məlumatlarınız yalnız kreditinizi tapmaq üçün istifadə olunur
+                </Text>
+              </View>
             </MotiView>
           </ScrollView>
         ) : (
           /* Logged In Dashboard */
           <ScrollView
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.dashScroll}
+            contentContainerStyle={[styles.dashScroll, { paddingBottom: bottomPad }]}
             refreshControl={
-              <RefreshControl
+              <HapticRefreshControl
                 refreshing={refreshing}
                 onRefresh={() => {
                   setRefreshing(true);
@@ -1108,20 +1124,37 @@ const styles = StyleSheet.create({
   },
   
   // Login & Dashboard styles
+  walletCard: {
+    width: '100%',
+    aspectRatio: 1.586,
+    borderRadius: 18,
+    padding: 18,
+    justifyContent: 'space-between',
+    backgroundColor: '#1C1C1E',
+    marginBottom: 24,
+    boxShadow: '0px 14px 30px rgba(0, 0, 0, 0.28)',
+  },
+  walletTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  walletBrand: { color: '#FFF', fontSize: 16, fontFamily: 'RethinkSans_800ExtraBold', letterSpacing: 0.3 },
+  walletNumber: { color: 'rgba(255,255,255,0.92)', fontSize: 18, fontFamily: 'RethinkSans_600SemiBold', letterSpacing: 2 },
+  walletBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  walletCaption: { color: 'rgba(255,255,255,0.55)', fontSize: 11, fontFamily: 'RethinkSans_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.6 },
+  walletValue: { color: '#FFF', fontSize: 13, fontFamily: 'RethinkSans_600SemiBold', marginTop: 2 },
+  walletChip: { width: 34, height: 26, borderRadius: 6, backgroundColor: '#FF3B30' },
+  loginGroup: { width: '100%', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden', marginTop: 20 },
+  loginRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, height: 52 },
+  loginRowLabel: { width: 112, flexShrink: 0, fontSize: 15, fontFamily: 'RethinkSans_600SemiBold' },
+  loginRowInput: { flex: 1, height: '100%', fontSize: 16, fontFamily: 'RethinkSans_500Medium', padding: 0 },
+  loginCounter: { fontSize: 12, fontFamily: 'RethinkSans_600SemiBold', marginLeft: 8 },
+  loginSeparator: { height: StyleSheet.hairlineWidth, marginLeft: 16 },
+  loginNote: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14, paddingHorizontal: 12 },
+  loginNoteText: { fontSize: 12, fontFamily: 'RethinkSans_500Medium', flexShrink: 1 },
   loginScroll: {
     padding: 20,
     paddingBottom: 60,
   },
   loginContainer: {
     alignItems: 'center',
-  },
-  loginIconWrap: {
-    width: 84,
-    height: 84,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
   },
   loginTitle: {
     fontSize: 22,
@@ -1133,40 +1166,8 @@ const styles = StyleSheet.create({
     fontFamily: 'RethinkSans_400Regular',
     textAlign: 'center',
     lineHeight: 18,
-    marginBottom: 24,
+    marginBottom: 0,
     paddingHorizontal: 12,
-  },
-  loginField: {
-    width: '100%',
-    marginBottom: 16,
-  },
-  loginLabel: {
-    fontSize: 13,
-    fontFamily: 'RethinkSans_700Bold',
-    marginBottom: 6,
-  },
-  loginInput: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    height: 50,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  loginInputText: {
-    flex: 1,
-    fontSize: 16,
-    fontFamily: 'RethinkSans_700Bold',
-    letterSpacing: 1,
-  },
-  charCounter: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  charCounterText: {
-    fontSize: 11,
-    fontFamily: 'RethinkSans_600SemiBold',
   },
   loginBtn: {
     flexDirection: 'row',
@@ -1176,7 +1177,7 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 14,
     gap: 8,
-    marginTop: 8,
+    marginTop: 20,
   },
   loginBtnText: {
     color: '#FFF',

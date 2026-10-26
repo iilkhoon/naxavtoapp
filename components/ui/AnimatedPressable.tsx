@@ -6,6 +6,7 @@ import Animated, {
   withSpring, 
   withTiming 
 } from 'react-native-reanimated';
+import { haptics } from '../../utils/haptics';
 
 interface AnimatedPressableProps extends PressableProps {
   style?: StyleProp<ViewStyle>;
@@ -40,7 +41,7 @@ export const AnimatedPressable = ({
 
   return (
     <AnimatedPressableComponent
-      onPressIn={() => { pressed.value = 1; }}
+      onPressIn={() => { pressed.value = 1; haptics.tap(); }}
       onPressOut={() => { pressed.value = 0; }}
       style={[style, animatedStyle]}
       {...props}

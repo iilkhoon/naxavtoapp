@@ -6,6 +6,7 @@ import { Home, Heart, Plus, User, Phone } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { MotiView } from 'moti';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { haptics } from '../utils/haptics';
 
 
 // Props expo-router passes to a custom `tabBar` (SDK 58: emitter + navigateToTab, no navigation)
@@ -46,6 +47,7 @@ export const CustomTabBar = ({ state, emitter, navigateToTab }: TabBarProps) => 
           if (!visibleRoutes.includes(route.name)) return null;
 
           const onPress = () => {
+            haptics.tap();
             const event = emitter.emit({
               type: 'tabPress',
               target: route.key,
@@ -121,7 +123,7 @@ export const CustomTabBar = ({ state, emitter, navigateToTab }: TabBarProps) => 
                   size={24}
                   color={isFocused ? (isDark ? '#FFF' : '#000') : (isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)')}
                   fill={isFocused && route.name === 'favorites' ? (isDark ? '#FFF' : '#000') : 'transparent'}
-                  strokeWidth={isFocused ? 2 : 1.6}
+                  strokeWidth={isFocused ? 2 : 1.75}
                 />
 
                 {/* Minimal Indicator Dot */}

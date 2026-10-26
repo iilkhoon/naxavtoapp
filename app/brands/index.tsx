@@ -9,8 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
-  KeyboardAvoidingView,
-  RefreshControl
+  KeyboardAvoidingView
 } from 'react-native';
 import { Image } from 'expo-image';
 import { supabase } from '../../lib/supabase';
@@ -20,6 +19,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { MotiView } from 'moti';
 import LoadingAnimation from '../../components/LoadingAnimation';
 import { useScreenTopPadding } from '../../hooks/useScreenTopPadding';
+import { HapticRefreshControl } from '../../components/ui/HapticRefreshControl';
 
 export default function BrandsScreen() {
   const router = useRouter();
@@ -194,7 +194,7 @@ export default function BrandsScreen() {
           numColumns={2}
           columnWrapperStyle={{ justifyContent: 'space-between' }}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+            <HapticRefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }
           ListEmptyComponent={
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Marka tapılmadı</Text>

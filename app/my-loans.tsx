@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, ActivityIndicator,
-  TouchableOpacity, Platform, RefreshControl
+  TouchableOpacity, Platform
 } from 'react-native';
 import {
   ArrowLeft, Car, Calendar, CreditCard, CheckCircle,
@@ -14,6 +14,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { formatDate } from '../lib/utils';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MotiView } from 'moti';
+import { HapticRefreshControl } from '../components/ui/HapticRefreshControl';
 
 export default function MyLoans() {
   const router = useRouter();
@@ -128,7 +129,7 @@ export default function MyLoans() {
         style={{ flex: 1 }}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchLoans(); }} tintColor={colors.primary} />}
+        refreshControl={<HapticRefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchLoans(); }} tintColor={colors.primary} />}
       >
         {!session ? (
           <View style={styles.emptyContainer}>

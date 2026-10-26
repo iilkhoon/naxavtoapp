@@ -9,8 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
-  KeyboardAvoidingView,
-  RefreshControl
+  KeyboardAvoidingView
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { Trash2, Plus, ChevronDown, ArrowLeft, Layers, Search } from 'lucide-react-native';
@@ -20,6 +19,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { MotiView } from 'moti';
 import LoadingAnimation from '../../components/LoadingAnimation';
 import { useScreenTopPadding } from '../../hooks/useScreenTopPadding';
+import { HapticRefreshControl } from '../../components/ui/HapticRefreshControl';
 
 export default function ModelsScreen() {
   const router = useRouter();
@@ -195,7 +195,7 @@ export default function ModelsScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} enabled={!!selectedBrand} />
+            <HapticRefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} enabled={!!selectedBrand} />
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>

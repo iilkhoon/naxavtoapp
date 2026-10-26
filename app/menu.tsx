@@ -13,6 +13,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { AdminLoginForm } from '../components/AdminLoginForm';
+import { HapticRefreshControl } from '../components/ui/HapticRefreshControl';
 
 
 // Defined outside MenuScreen so they keep their identity between renders
@@ -99,7 +100,7 @@ export default function MenuScreen() {
           </View>
           <TouchableOpacity onPress={() => router.dismiss()} style={styles.closeButton}><BlurView intensity={30} tint="dark" style={styles.closeButtonBlur}><X size={20} color="#FFF" /></BlurView></TouchableOpacity>
         </View>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets refreshControl={<HapticRefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />} showsVerticalScrollIndicator={false}>
           {user && isAdmin ? (
             <>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statsScroll} contentContainerStyle={styles.statsContainer} decelerationRate="fast" snapToInterval={150}>

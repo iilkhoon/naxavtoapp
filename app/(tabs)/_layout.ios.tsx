@@ -1,10 +1,20 @@
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { useRouter } from 'expo-router';
 import { DynamicColorIOS } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 // iOS uses the system tab bar (Liquid Glass on iOS 26+). Android keeps the custom
 // tab bar in _layout.tsx and web uses _layout.web.tsx.
 const tint = DynamicColorIOS({ light: '#FF3B30', dark: '#FF453A' });
+
+// SF Symbols can't be drawn thinner than the system weight, which reads heavy
+// here; Ionicons' outline set has a much lighter stroke.
+const icon = (name: React.ComponentProps<typeof Ionicons>['name']) => (
+  <NativeTabs.Trigger.Icon
+    src={<NativeTabs.Trigger.VectorIcon family={Ionicons} name={name} />}
+    renderingMode="template"
+  />
+);
 
 export default function TabLayout() {
   const router = useRouter();
@@ -12,22 +22,22 @@ export default function TabLayout() {
   return (
     <NativeTabs tintColor={tint} minimizeBehavior="onScrollDown">
       <NativeTabs.Trigger name="index" disableTransparentOnScrollEdge>
-        <NativeTabs.Trigger.Icon sf="house" />
+        {icon('home-outline')}
         <NativeTabs.Trigger.Label>Ana səhifə</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="favorites" disableTransparentOnScrollEdge>
-        <NativeTabs.Trigger.Icon sf="heart" />
+        {icon('heart-outline')}
         <NativeTabs.Trigger.Label>Seçilmişlər</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="credit" disableTransparentOnScrollEdge>
-        <NativeTabs.Trigger.Icon sf="creditcard" />
+        {icon('card-outline')}
         <NativeTabs.Trigger.Label>Kredit</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="contact" disableTransparentOnScrollEdge>
-        <NativeTabs.Trigger.Icon sf="phone" />
+        {icon('call-outline')}
         <NativeTabs.Trigger.Label>Əlaqə</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
 
@@ -43,7 +53,7 @@ export default function TabLayout() {
         disabled
         listeners={{ tabPress: () => router.push('/add-listing') }}
       >
-        <NativeTabs.Trigger.Icon sf="plus" />
+        {icon('add')}
         <NativeTabs.Trigger.Label hidden>Elan ver</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
 

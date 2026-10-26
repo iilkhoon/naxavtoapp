@@ -885,7 +885,7 @@ export default function WebHomeScreen() {
 
                 <View style={[styles.footerBottom, isMobile && { paddingHorizontal: 24, flexDirection: 'column', alignItems: 'center' }]}>
                     <Text style={[styles.footerCopy, isMobile && { textAlign: 'center' }]}>© 2025 Naxçıvan Avto. Bütün hüquqlar qorunur.</Text>
-                    <Text style={[styles.footerDev, isMobile && { textAlign: 'center' }]}>Hazırladı: İlkin Rzayev / Novoloji · +994 55 466 66 63</Text>
+                    <Text style={[styles.footerDev, isMobile && { textAlign: 'center' }]}>Hazırladı: İlkin Rzayev / Novo Media · +994 51 500 00 77</Text>
                 </View>
             </View>
         </ScrollView>

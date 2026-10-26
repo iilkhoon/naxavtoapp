@@ -17,6 +17,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
 import { X, Check, Sparkles, Percent, ArrowLeftRight, MapPin } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { haptics } from '../utils/haptics';
 
 // Swatch colours for the colour picker (keys match the `colors` table)
 const COLOR_MAP: Record<string, string> = {
@@ -248,7 +249,7 @@ export default function FilterScreen() {
               key={item.id}
               label={item.name}
               selected={value === item.name}
-              onPress={() => setValue(value === item.name ? '' : item.name)}
+              onPress={() => { haptics.tap(); setValue(value === item.name ? '' : item.name); }}
               colors={colors}
               isDark={isDark}
             />
@@ -349,7 +350,7 @@ export default function FilterScreen() {
                     key={item.id}
                     label={item.name}
                     selected={color === item.name}
-                    onPress={() => setColor(color === item.name ? '' : item.name)}
+                    onPress={() => { haptics.tap(); setColor(color === item.name ? '' : item.name); }}
                     colors={colors}
                   />
                 ))}
