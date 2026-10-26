@@ -368,6 +368,8 @@ export default function SelectOptionScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    // On the web this opens as a page: keep it a readable sheet-width column
+    ...Platform.select({ web: { width: '100%', maxWidth: 640, alignSelf: 'center' } as any }),
   },
   customHeader: {
     paddingBottom: 12,

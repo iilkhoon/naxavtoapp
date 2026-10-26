@@ -1,19 +1,54 @@
-import React, { useState, useEffect } from 'react';
-import {
-    View, Text, StyleSheet, TouchableOpacity, TextInput,
-    ScrollView, useWindowDimensions, Platform
-} from 'react-native';
-import { RefreshCcw, Banknote, CreditCard, Calendar, Percent, Send } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme } from '../contexts/ThemeContext';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import { Send, RotateCcw } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { WebHeader } from '../components/WebHeader.web';
 import { WebFooter } from '../components/WebFooter.web';
+import { SeoHead } from '../components/web/SeoHead';
 import { CreditApplicationModal } from '../components/CreditApplicationModal';
+import {
+    WebScreen, LargeTitle, Card, Button, Segmented, GroupCaption, useWebTokens, useBreakpoints, FONT, formatMoney, WebTokens,
+} from '../components/web/WebKit';
+
+const TERMS = ['12', '24', '36', '48', '60'] as const;
+
+// Annuity payment, same formula as the mobile calculator
+const calculate = (price: string, down: string, rate: string, months: string) => {
+    const p = parseFloat(price) || 0;
+    const d = parseFloat(down) || 0;
+    const r = parseFloat(rate) || 0;
+    const n = parseFloat(months) || 0;
+    const principal = Math.max(0, p - d);
+    if (principal <= 0 || n <= 0) return { principal, monthly: 0, interest: 0, total: 0 };
+    if (r === 0) return { principal, monthly: principal / n, interest: 0, total: principal };
+    const mr = r / 12 / 100;
+    const monthly = principal * (mr * Math.pow(1 + mr, n)) / (Math.pow(1 + mr, n) - 1);
+    return { principal, monthly, interest: monthly * n - principal, total: monthly * n };
+};
+
+// Grouped input row, defined outside the screen so the input keeps focus
+const InputRow = ({ t, label, suffix, value, onChangeText }: {
+    t: WebTokens; label: string; suffix: string; value: string; onChangeText: (v: string) => void;
+}) => (
+    <View style={styles.inputRow}>
+        <Text style={[styles.inputLabel, { color: t.text }]}>{label}</Text>
+        <TextInput
+            value={value}
+            onChangeText={(v) => onChangeText(v.replace(/[^0-9.]/g, ''))}
+            placeholder="0"
+            placeholderTextColor={t.placeholder}
+            keyboardType="numeric"
+            accessibilityLabel={label}
+            style={[styles.input, { color: t.text }]}
+        />
+        <Text style={[styles.inputSuffix, { color: t.textSecondary }]}>{suffix}</Text>
+    </View>
+);
 
 export default function WebCalculatorScreen() {
-    const { colors, isDark } = useTheme();
-    const { width } = useWindowDimensions();
-    const isMobile = width < 768;
+    const router = useRouter();
+    const t = useWebTokens();
+    const { isMobile, isTablet } = useBreakpoints();
 
     const [price, setPrice] = useState('');
     const [initialPayment, setInitialPayment] = useState('');
@@ -21,487 +56,144 @@ export default function WebCalculatorScreen() {
     const [months, setMonths] = useState('36');
     const [showApplyModal, setShowApplyModal] = useState(false);
 
-    const [monthlyPayment, setMonthlyPayment] = useState(0);
-    const [totalInterest, setTotalInterest] = useState(0);
-    const [totalPayment, setTotalPayment] = useState(0);
-    const [principalAmount, setPrincipalAmount] = useState(0);
-
-    useEffect(() => { calculateLoan(); }, [price, initialPayment, rate, months]);
-
-    const calculateLoan = () => {
-        const p = parseFloat(price) || 0;
-        const down = parseFloat(initialPayment) || 0;
-        const r = parseFloat(rate) || 0;
-        const n = parseFloat(months) || 0;
-        const principal = Math.max(0, p - down);
-        setPrincipalAmount(principal);
-        if (principal <= 0 || n <= 0) { setMonthlyPayment(0); setTotalInterest(0); setTotalPayment(0); return; }
-        if (r === 0) {
-            setMonthlyPayment(principal / n); setTotalPayment(principal); setTotalInterest(0);
-        } else {
-            const mr = r / 12 / 100;
-            const monthly = principal * (mr * Math.pow(1 + mr, n)) / (Math.pow(1 + mr, n) - 1);
-            setMonthlyPayment(monthly); setTotalPayment(monthly * n); setTotalInterest(monthly * n - principal);
-        }
-    };
+    const result = useMemo(() => calculate(price, initialPayment, rate, months), [price, initialPayment, rate, months]);
+    const principalShare = result.total > 0 ? (result.principal / result.total) * 100 : 0;
 
     const reset = () => { setPrice(''); setInitialPayment(''); setRate('21'); setMonths('36'); };
-    const predefinedMonths = ['12', '24', '36', '48', '60'];
-    const total = principalAmount + totalInterest;
-    const principalPercent = total > 0 ? (principalAmount / total) * 100 : 0;
-    const interestPercent = total > 0 ? (totalInterest / total) * 100 : 0;
+    const separator = <View style={[styles.sep, { backgroundColor: t.hairline }]} />;
 
     return (
-        <View style={{ flex: 1, backgroundColor: colors.background, display: 'flex' as any, flexDirection: 'column', minHeight: '100vh' as any }}>
+        <View style={{ flex: 1, backgroundColor: t.bg }}>
             <WebHeader />
-            <ScrollView
-                style={{ flex: 1 }}
-                contentContainerStyle={{ paddingTop: isMobile ? 60 : 76, flexGrow: 1 }}
-                showsVerticalScrollIndicator={false}
-            >
-                <View style={[styles.pageWrap, isMobile && { paddingHorizontal: 16, paddingTop: 24 }]}>
-                    {/* Page Header */}
-                    <View style={styles.pageHeader}>
-                        <Text style={[styles.pageTitle, { color: colors.text }, isMobile && { fontSize: 24 }]}>
-                            Kredit Hesablayıcı
-                        </Text>
-                        <Text style={[styles.pageSubtitle, { color: colors.textSecondary }]}>
-                            Kredit məbləğini, faizi və aylıq ödənişi hesablayın
-                        </Text>
-                    </View>
-
-                    <View style={[styles.mainLayout, isMobile && { flexDirection: 'column' }]}>
-                        {/* LEFT — Inputs */}
-                        <View style={[styles.inputsCol, isMobile && { width: '100%' }]}>
-                            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                                <View style={styles.cardTitleRow}>
-                                    <Text style={[styles.cardTitle, { color: colors.text }]}>Məlumatları Daxil Edin</Text>
-                                    <TouchableOpacity onPress={reset} style={[styles.resetBtn, { backgroundColor: colors.primary + '15' }]}>
-                                        <RefreshCcw size={16} color={colors.primary} />
-                                        <Text style={[styles.resetBtnText, { color: colors.primary }]}>Sıfırla</Text>
-                                    </TouchableOpacity>
-                                </View>
-
-                                {/* Price + Down Payment */}
-                                <View style={[styles.row, isMobile && { flexDirection: 'column' }]}>
-                                    <View style={styles.inputGroup}>
-                                        <Text style={[styles.label, { color: colors.textSecondary }]}>Avtomobilin Qiyməti (₼)</Text>
-                                        <View style={[styles.inputWrap, { backgroundColor: isDark ? '#1C1C1E' : '#F5F5F7', borderColor: colors.border }]}>
-                                            <Banknote size={18} color={colors.textSecondary} />
-                                            <TextInput
-                                                style={[styles.input, { color: colors.text }]}
-                                                value={price}
-                                                onChangeText={setPrice}
-                                                placeholder="0"
-                                                placeholderTextColor={colors.textSecondary}
-                                                keyboardType="numeric"
-                                            />
-                                        </View>
-                                    </View>
-                                    <View style={styles.inputGroup}>
-                                        <Text style={[styles.label, { color: colors.textSecondary }]}>İlkin Ödəniş (₼)</Text>
-                                        <View style={[styles.inputWrap, { backgroundColor: isDark ? '#1C1C1E' : '#F5F5F7', borderColor: colors.border }]}>
-                                            <CreditCard size={18} color={colors.textSecondary} />
-                                            <TextInput
-                                                style={[styles.input, { color: colors.text }]}
-                                                value={initialPayment}
-                                                onChangeText={setInitialPayment}
-                                                placeholder="0"
-                                                placeholderTextColor={colors.textSecondary}
-                                                keyboardType="numeric"
-                                            />
-                                        </View>
-                                    </View>
-                                </View>
-
-                                {/* Rate + Months */}
-                                <View style={[styles.row, isMobile && { flexDirection: 'column' }]}>
-                                    <View style={styles.inputGroup}>
-                                        <Text style={[styles.label, { color: colors.textSecondary }]}>İllik Faiz (%)</Text>
-                                        <View style={[styles.inputWrap, { backgroundColor: isDark ? '#1C1C1E' : '#F5F5F7', borderColor: colors.border }]}>
-                                            <Percent size={18} color={colors.textSecondary} />
-                                            <TextInput
-                                                style={[styles.input, { color: colors.text }]}
-                                                value={rate}
-                                                onChangeText={setRate}
-                                                placeholder="0"
-                                                placeholderTextColor={colors.textSecondary}
-                                                keyboardType="numeric"
-                                            />
-                                        </View>
-                                    </View>
-                                    <View style={styles.inputGroup}>
-                                        <Text style={[styles.label, { color: colors.textSecondary }]}>Müddət (Ay)</Text>
-                                        <View style={[styles.inputWrap, { backgroundColor: isDark ? '#1C1C1E' : '#F5F5F7', borderColor: colors.border }]}>
-                                            <Calendar size={18} color={colors.textSecondary} />
-                                            <TextInput
-                                                style={[styles.input, { color: colors.text }]}
-                                                value={months}
-                                                onChangeText={setMonths}
-                                                placeholder="0"
-                                                placeholderTextColor={colors.textSecondary}
-                                                keyboardType="numeric"
-                                            />
-                                        </View>
-                                    </View>
-                                </View>
-
-                                {/* Quick month selector */}
-                                <View style={{ marginTop: 8 }}>
-                                    <Text style={[styles.label, { color: colors.textSecondary, marginBottom: 10 }]}>Tez Seçim</Text>
-                                    <View style={styles.pillRow}>
-                                        {predefinedMonths.map((m) => (
-                                            <TouchableOpacity
-                                                key={m}
-                                                style={[
-                                                    styles.pill,
-                                                    {
-                                                        backgroundColor: months === m ? colors.primary : (isDark ? '#2C2C2E' : '#F0F0F5'),
-                                                        borderColor: months === m ? colors.primary : colors.border,
-                                                    }
-                                                ]}
-                                                onPress={() => setMonths(m)}
-                                            >
-                                                <Text style={[styles.pillText, { color: months === m ? '#FFF' : colors.text }]}>{m} ay</Text>
-                                            </TouchableOpacity>
-                                        ))}
-                                    </View>
-                                </View>
+            <WebScreen footer={<WebFooter />} maxWidth={1040}>
+                <SeoHead title="Avtomobil krediti kalkulyatoru" description="Aylıq kredit ödənişini hesablayın və Naxçıvan Avto-ya onlayn kredit müraciəti göndərin." path="/calculator" />
+                <LargeTitle
+                    title="Kredit"
+                    subtitle="Aylıq ödənişi hesablayın və bir neçə dəqiqəyə müraciət göndərin."
+                    right={
+                        <TouchableOpacity onPress={() => router.push('/my-loans' as any)} style={styles.walletLink} accessibilityLabel="Kredit hesabım">
+                            <View style={styles.walletMini}>
+                                <View style={styles.walletMiniChip} />
                             </View>
-                        </View>
-
-                        {/* RIGHT — Results */}
-                        <View style={[styles.resultsCol, isMobile && { width: '100%' }]}>
-                            {/* Main result card */}
-                            <LinearGradient
-                                colors={['#FF3B30', '#FF6B35']}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 1 }}
-                                style={styles.resultCard}
-                            >
-                                <Text style={styles.resultLabel}>Aylıq Ödəniş</Text>
-                                <View style={styles.amountRow}>
-                                    <Text style={styles.amountText}>{monthlyPayment.toFixed(0)}</Text>
-                                    <Text style={styles.currencyText}>₼</Text>
-                                </View>
-                                <View style={styles.divider} />
-                                <View style={styles.summaryRow}>
-                                    <View style={styles.summaryItem}>
-                                        <Text style={styles.summaryLabel}>Əsas Məbləğ</Text>
-                                        <Text style={styles.summaryValue}>{principalAmount.toLocaleString()} ₼</Text>
-                                    </View>
-                                    <View style={styles.summaryItem}>
-                                        <Text style={styles.summaryLabel}>Faiz Məbləği</Text>
-                                        <Text style={styles.summaryValue}>{totalInterest.toFixed(0)} ₼</Text>
-                                    </View>
-                                    <View style={styles.summaryItem}>
-                                        <Text style={styles.summaryLabel}>Yekun</Text>
-                                        <Text style={styles.summaryValue}>{totalPayment.toFixed(0)} ₼</Text>
-                                    </View>
-                                </View>
-                            </LinearGradient>
-
-                            {/* Visual bar */}
-                            {totalPayment > 0 && (
-                                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                                    <Text style={[styles.cardTitle, { color: colors.text, marginBottom: 16 }]}>Bölgü</Text>
-                                    <View style={styles.barTrack}>
-                                        <View style={[styles.barSeg, { flex: principalPercent, backgroundColor: '#34C759' }]} />
-                                        <View style={[styles.barSeg, { flex: interestPercent, backgroundColor: '#FF9500' }]} />
-                                    </View>
-                                    <View style={styles.legendRow}>
-                                        <View style={styles.legendItem}>
-                                            <View style={[styles.dot, { backgroundColor: '#34C759' }]} />
-                                            <Text style={[styles.legendText, { color: colors.textSecondary }]}>Əsas ({Math.round(principalPercent)}%)</Text>
-                                        </View>
-                                        <View style={styles.legendItem}>
-                                            <View style={[styles.dot, { backgroundColor: '#FF9500' }]} />
-                                            <Text style={[styles.legendText, { color: colors.textSecondary }]}>Faiz ({Math.round(interestPercent)}%)</Text>
-                                        </View>
-                                    </View>
-
-                                    {/* Breakdown rows */}
-                                    <View style={[styles.breakdownRow, { borderTopColor: colors.border, marginTop: 20 }]}>
-                                        <Text style={[styles.breakdownLabel, { color: colors.textSecondary }]}>Avtomobilin Qiyməti</Text>
-                                        <Text style={[styles.breakdownValue, { color: colors.text }]}>{parseFloat(price || '0').toLocaleString()} ₼</Text>
-                                    </View>
-                                    <View style={[styles.breakdownRow, { borderTopColor: colors.border }]}>
-                                        <Text style={[styles.breakdownLabel, { color: colors.textSecondary }]}>İlkin Ödəniş</Text>
-                                        <Text style={[styles.breakdownValue, { color: '#34C759' }]}>- {parseFloat(initialPayment || '0').toLocaleString()} ₼</Text>
-                                    </View>
-                                    <View style={[styles.breakdownRow, { borderTopColor: colors.border }]}>
-                                        <Text style={[styles.breakdownLabel, { color: colors.textSecondary }]}>Kredit Məbləği</Text>
-                                        <Text style={[styles.breakdownValue, { color: colors.primary }]}>{principalAmount.toLocaleString()} ₼</Text>
-                                    </View>
-                                    <View style={[styles.breakdownRow, { borderTopColor: colors.border }]}>
-                                        <Text style={[styles.breakdownLabel, { color: colors.textSecondary }]}>Ümumi Faiz</Text>
-                                        <Text style={[styles.breakdownValue, { color: '#FF9500' }]}>{totalInterest.toFixed(0)} ₼</Text>
-                                    </View>
-                                    <View style={[styles.breakdownRow, { borderTopColor: colors.border, borderBottomWidth: 0 }]}>
-                                        <Text style={[styles.breakdownLabel, { color: colors.text, fontFamily: 'RethinkSans_700Bold' }]}>Ümumi Geri Ödəniş</Text>
-                                        <Text style={[styles.breakdownValue, { color: colors.primary, fontFamily: 'RethinkSans_800ExtraBold' }]}>{totalPayment.toFixed(0)} ₼</Text>
-                                    </View>
-
-                                    <TouchableOpacity
-                                        style={styles.applyBtnWrap}
-                                        onPress={() => setShowApplyModal(true)}
-                                        activeOpacity={0.85}
-                                    >
-                                        <LinearGradient
-                                            colors={[colors.primary, '#FF9500']}
-                                            start={{ x: 0, y: 0 }}
-                                            end={{ x: 1, y: 0 }}
-                                            style={styles.calcApplyBtn}
-                                        >
-                                            <Send size={18} color="#FFF" style={{ marginRight: 8 }} />
-                                            <Text style={styles.calcApplyBtnText}>Bu Şərtlərlə Kreditə Müraciət Et</Text>
-                                        </LinearGradient>
-                                    </TouchableOpacity>
-                                </View>
-                            )}
-                        </View>
-                    </View>
-                </View>
-
-                <CreditApplicationModal
-                    visible={showApplyModal}
-                    onClose={() => setShowApplyModal(false)}
-                    carTitle={price ? `${parseFloat(price).toLocaleString()} AZN Krediti` : 'Avtomobil Krediti'}
-                    carPrice={parseFloat(price) || undefined}
+                            <View>
+                                <Text style={[styles.walletLinkTitle, { color: t.text }]}>Kredit hesabım</Text>
+                                <Text style={[styles.walletLinkSub, { color: t.textSecondary }]}>Ödəniş cədvəli və qalıq ›</Text>
+                            </View>
+                        </TouchableOpacity>
+                    }
                 />
 
-                <WebFooter />
-            </ScrollView>
+                <View style={[styles.layout, isTablet && { flexDirection: 'column' }]}>
+                    {/* Inputs */}
+                    <View style={[{ flex: 1, minWidth: 0 }, isTablet && { width: '100%' }]}>
+                        <View style={styles.captionRow}>
+                            <GroupCaption style={{ marginBottom: 0 }}>Məlumatlar</GroupCaption>
+                            <TouchableOpacity onPress={reset} style={styles.reset}>
+                                <RotateCcw size={13} color={t.accent} />
+                                <Text style={[styles.resetText, { color: t.accent }]}>Sıfırla</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <View style={[styles.group, { backgroundColor: t.surface, borderColor: t.hairline, boxShadow: t.shadow } as any]}>
+                            <InputRow t={t} label="Avtomobilin qiyməti" suffix="₼" value={price} onChangeText={setPrice} />
+                            {separator}
+                            <InputRow t={t} label="İlkin ödəniş" suffix="₼" value={initialPayment} onChangeText={setInitialPayment} />
+                            {separator}
+                            <InputRow t={t} label="İllik faiz" suffix="%" value={rate} onChangeText={setRate} />
+                        </View>
+
+                        <GroupCaption style={{ marginTop: 28 }}>Müddət</GroupCaption>
+                        <Segmented
+                            options={TERMS.map((m) => ({ value: m, label: `${m} ay` }))}
+                            value={(TERMS as readonly string[]).includes(months) ? (months as typeof TERMS[number]) : ('' as any)}
+                            onChange={setMonths}
+                            fullWidth
+                        />
+                        <View style={[styles.group, { backgroundColor: t.surface, borderColor: t.hairline, marginTop: 12 }]}>
+                            <InputRow t={t} label="Başqa müddət" suffix="ay" value={months} onChangeText={setMonths} />
+                        </View>
+                    </View>
+
+                    {/* Result */}
+                    <View style={[{ width: 400 }, isTablet && { width: '100%' }]}>
+                        <Card padding={isMobile ? 22 : 28}>
+                            <Text style={[styles.resultLabel, { color: t.textSecondary }]}>Aylıq ödəniş</Text>
+                            <Text style={[styles.resultValue, { color: t.text }, isMobile && { fontSize: 44 }]} numberOfLines={1}>
+                                {formatMoney(result.monthly)}
+                            </Text>
+
+                            <View style={[styles.bar, { backgroundColor: t.fill }]}>
+                                {result.total > 0 && (
+                                    <>
+                                        <View style={{ flex: principalShare, backgroundColor: t.text }} />
+                                        <View style={{ flex: 100 - principalShare, backgroundColor: t.accent }} />
+                                    </>
+                                )}
+                            </View>
+                            <View style={styles.legend}>
+                                <View style={styles.legendItem}><View style={[styles.dot, { backgroundColor: t.text }]} /><Text style={[styles.legendText, { color: t.textSecondary }]}>Əsas məbləğ</Text></View>
+                                <View style={styles.legendItem}><View style={[styles.dot, { backgroundColor: t.accent }]} /><Text style={[styles.legendText, { color: t.textSecondary }]}>Faiz</Text></View>
+                            </View>
+
+                            {[
+                                { label: 'Kredit məbləği', value: formatMoney(result.principal) },
+                                { label: 'Ümumi faiz', value: formatMoney(result.interest) },
+                                { label: 'Ümumi geri ödəniş', value: formatMoney(result.total), strong: true },
+                            ].map((row) => (
+                                <View key={row.label} style={[styles.breakdown, { borderTopColor: t.hairline }]}>
+                                    <Text style={[styles.breakdownLabel, { color: row.strong ? t.text : t.textSecondary }, row.strong && { fontFamily: FONT.semibold }]}>{row.label}</Text>
+                                    <Text style={[styles.breakdownValue, { color: t.text }, row.strong && { fontFamily: FONT.heavy }]}>{row.value}</Text>
+                                </View>
+                            ))}
+
+                            <Button
+                                title="Bu şərtlərlə müraciət et"
+                                size="lg"
+                                fullWidth
+                                icon={<Send size={17} color="#FFF" />}
+                                onPress={() => setShowApplyModal(true)}
+                                style={{ marginTop: 20 }}
+                            />
+                            <Text style={[styles.note, { color: t.textTertiary }]}>Hesablama təxminidir; yekun şərtlər müraciətdən sonra təsdiqlənir.</Text>
+                        </Card>
+                    </View>
+                </View>
+            </WebScreen>
+
+            <CreditApplicationModal
+                visible={showApplyModal}
+                onClose={() => setShowApplyModal(false)}
+                carTitle={price ? `${formatMoney(price)} kredit` : 'Avtomobil krediti'}
+                carPrice={parseFloat(price) || undefined}
+            />
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    pageWrap: {
-        maxWidth: 1100,
-        alignSelf: 'center',
-        width: '100%',
-        paddingHorizontal: 32,
-        paddingTop: 40,
-        paddingBottom: 40,
-    },
-    pageHeader: {
-        marginBottom: 32,
-    },
-    pageTitle: {
-        fontSize: 32,
-        fontFamily: 'RethinkSans_800ExtraBold',
-        marginBottom: 8,
-    },
-    pageSubtitle: {
-        fontSize: 15,
-        fontFamily: 'RethinkSans_500Medium',
-    },
-    mainLayout: {
-        flexDirection: 'row',
-        gap: 28,
-        alignItems: 'flex-start',
-    },
-    inputsCol: {
-        flex: 1.1,
-        gap: 20,
-    },
-    resultsCol: {
-        flex: 1,
-        gap: 20,
-        position: 'sticky' as any,
-        top: 96,
-    },
-    card: {
-        borderRadius: 20,
-        borderWidth: 1,
-        padding: 24,
-    },
-    cardTitleRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 20,
-    },
-    cardTitle: {
-        fontSize: 17,
-        fontFamily: 'RethinkSans_800ExtraBold',
-    },
-    resetBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        paddingHorizontal: 12,
-        paddingVertical: 7,
-        borderRadius: 10,
-    },
-    resetBtnText: {
-        fontSize: 13,
-        fontFamily: 'RethinkSans_600SemiBold',
-    },
-    row: {
-        flexDirection: 'row',
-        gap: 16,
-        marginBottom: 16,
-    },
-    inputGroup: {
-        flex: 1,
-    },
-    label: {
-        fontSize: 13,
-        fontFamily: 'RethinkSans_600SemiBold',
-        marginBottom: 8,
-    },
-    inputWrap: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        borderWidth: 1,
-        borderRadius: 14,
-        height: 52,
-        paddingHorizontal: 14,
-    },
-    input: {
-        flex: 1,
-        fontSize: 16,
-        fontFamily: 'RethinkSans_600SemiBold',
-        ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : {}) as any,
-    },
-    pillRow: {
-        flexDirection: 'row',
-        gap: 8,
-    },
-    pill: {
-        flex: 1,
-        paddingVertical: 11,
-        borderRadius: 12,
-        alignItems: 'center',
-        borderWidth: 1,
-    },
-    pillText: {
-        fontSize: 13,
-        fontFamily: 'RethinkSans_600SemiBold',
-    },
-    // Result card
-    resultCard: {
-        borderRadius: 20,
-        padding: 28,
-        shadowColor: '#FF3B30',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 16,
-    },
-    resultLabel: {
-        color: 'rgba(255,255,255,0.9)',
-        fontSize: 13,
-        fontFamily: 'RethinkSans_600SemiBold',
-        textTransform: 'uppercase',
-        letterSpacing: 1,
-        textAlign: 'center',
-        marginBottom: 8,
-    },
-    amountRow: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        justifyContent: 'center',
-        marginBottom: 24,
-    },
-    amountText: {
-        color: '#FFF',
-        fontSize: 56,
-        fontFamily: 'RethinkSans_800ExtraBold',
-        lineHeight: 64,
-    },
-    currencyText: {
-        color: 'rgba(255,255,255,0.9)',
-        fontSize: 28,
-        fontFamily: 'RethinkSans_600SemiBold',
-        marginTop: 10,
-        marginLeft: 4,
-    },
-    divider: {
-        height: 1,
-        backgroundColor: 'rgba(255,255,255,0.25)',
-        marginBottom: 20,
-    },
-    summaryRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-    },
-    summaryItem: {
-        alignItems: 'center',
-    },
-    summaryLabel: {
-        color: 'rgba(255,255,255,0.75)',
-        fontSize: 11,
-        fontFamily: 'RethinkSans_600SemiBold',
-        marginBottom: 4,
-    },
-    summaryValue: {
-        color: '#FFF',
-        fontSize: 15,
-        fontFamily: 'RethinkSans_700Bold',
-    },
-    // Bar
-    barTrack: {
-        height: 10,
-        borderRadius: 5,
-        flexDirection: 'row',
-        overflow: 'hidden',
-        marginBottom: 12,
-    },
-    barSeg: {
-        height: '100%',
-    },
-    legendRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-    },
-    legendItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    dot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-    },
-    legendText: {
-        fontSize: 13,
-        fontFamily: 'RethinkSans_500Medium',
-    },
-    breakdownRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 12,
-        borderTopWidth: 1,
-        borderBottomWidth: 1,
-        borderBottomColor: 'transparent',
-    },
-    breakdownLabel: {
-        fontSize: 13,
-        fontFamily: 'RethinkSans_500Medium',
-    },
-    breakdownValue: {
-        fontSize: 14,
-        fontFamily: 'RethinkSans_700Bold',
-    },
-    applyBtnWrap: {
-        marginTop: 20,
-    },
-    calcApplyBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: 50,
-        borderRadius: 14,
-        cursor: 'pointer' as any,
-    },
-    calcApplyBtnText: {
-        color: '#FFF',
-        fontSize: 15,
-        fontFamily: 'RethinkSans_700Bold',
-    },
+    layout: { flexDirection: 'row', alignItems: 'flex-start', gap: 32 },
+    captionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+    reset: { flexDirection: 'row', alignItems: 'center', gap: 4, cursor: 'pointer' as any },
+    resetText: { fontSize: 13, fontFamily: FONT.semibold },
+    group: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+    inputRow: { flexDirection: 'row', alignItems: 'center', height: 54, paddingHorizontal: 16, gap: 12 },
+    inputLabel: { flex: 1, fontSize: 15, fontFamily: FONT.semibold },
+    input: { width: 140, height: '100%', textAlign: 'right', fontSize: 17, fontFamily: FONT.semibold, padding: 0, outlineStyle: 'none' } as any,
+    inputSuffix: { width: 20, fontSize: 15, fontFamily: FONT.medium },
+    sep: { height: StyleSheet.hairlineWidth, marginLeft: 16 },
+    resultLabel: { fontSize: 14, fontFamily: FONT.medium },
+    resultValue: { fontSize: 52, fontFamily: FONT.heavy, letterSpacing: -1.6, marginTop: 4 },
+    bar: { flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', marginTop: 20 },
+    legend: { flexDirection: 'row', gap: 16, marginTop: 10, marginBottom: 12 },
+    legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    dot: { width: 8, height: 8, borderRadius: 4 },
+    legendText: { fontSize: 12, fontFamily: FONT.medium },
+    breakdown: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 13, borderTopWidth: StyleSheet.hairlineWidth },
+    breakdownLabel: { fontSize: 15, fontFamily: FONT.regular },
+    breakdownValue: { fontSize: 15, fontFamily: FONT.semibold },
+    note: { fontSize: 12, fontFamily: FONT.regular, textAlign: 'center', marginTop: 12 },
+    walletLink: { flexDirection: 'row', alignItems: 'center', gap: 12, cursor: 'pointer' as any },
+    walletMini: { width: 56, height: 36, borderRadius: 7, backgroundColor: '#1C1C1E', padding: 6, justifyContent: 'flex-end', alignItems: 'flex-end', boxShadow: '0px 6px 14px rgba(0,0,0,0.2)' as any },
+    walletMiniChip: { width: 12, height: 9, borderRadius: 2, backgroundColor: '#FF3B30' },
+    walletLinkTitle: { fontSize: 15, fontFamily: FONT.semibold },
+    walletLinkSub: { fontSize: 13, fontFamily: FONT.regular },
 });

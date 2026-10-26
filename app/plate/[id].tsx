@@ -8,9 +8,8 @@ import {
   StatusBar,
   Linking,
   Share,
-  Platform,
   ScrollView,
-  Alert
+  Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
@@ -104,30 +103,17 @@ export default function PlateDetailScreen() {
   const handleShare = async () => {
     if (!plate) return;
     const shareUrl = `https://naxavto.com/plate/${plate.short_id || plate.id}`;
-    const baseMessage = `Naxavto-da bu nömrəyə bax: ${plate.region}-${plate.series}-${plate.number} - ${plate.price} AZN`;
-    const message = Platform.OS === 'ios' ? baseMessage : `${baseMessage}\n${shareUrl}`;
+    const price = `${Math.round(Number(plate.price) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} ₼`;
+    // A single message keeps plate, price and link together in every app
+    // (with a separate `url`, iOS share targets like WhatsApp drop the text).
+    const message = `${plate.region}-${plate.series}-${plate.number}
+${price} · Naxçıvan
 
+Naxçıvan Avto-da bax: ${shareUrl}`;
     try {
-      if (Platform.OS === 'web') {
-        if (navigator.share) {
-          await navigator.share({
-            title: 'Naxavto',
-            text: message,
-            url: shareUrl,
-          });
-        } else {
-          Alert.alert('Paylaşım', 'Bu brauzer paylaşımı dəstəkləmir.');
-        }
-      } else {
-        await Share.share({
-          message,
-          url: shareUrl, // iOS support
-        });
-      }
+      await Share.share({ title: 'Naxçıvan Avto', message });
     } catch (error: any) {
-      if (error.name !== 'AbortError' && error.name !== 'NotAllowedError') {
-        console.log('Share error:', error);
-      }
+      console.log('Share error:', error);
     }
   };
 

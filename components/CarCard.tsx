@@ -94,6 +94,7 @@ export const CarCard = memo(({
         <View style={[styles.imageContainer, { backgroundColor: isDark ? '#2C2C2E' : '#E5E5EA' }]}>
           <ImageComponent
             style={styles.image}
+            accessibilityLabel={title}
             source={Platform.OS === 'web' ? { uri: coverImage } : coverImage}
             {...(Platform.OS !== 'web'
               ? { contentFit: 'cover', cachePolicy: 'memory-disk', transition: 150 }

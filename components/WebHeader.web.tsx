@@ -1,197 +1,140 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image, useWindowDimensions } from 'react-native';
-import { Sun, Moon, Plus, Menu, X, Home, Heart, ArrowLeftRight, Phone, Calculator, User } from 'lucide-react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { Sun, Moon, Plus, Menu, X, User } from 'lucide-react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useTheme } from '../contexts/ThemeContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useWebTokens, useBreakpoints, HEADER_HEIGHT, CONTENT_MAX_WIDTH, FONT, GroupedList, ListRow, Button } from './web/WebKit';
 
+const NAV_LINKS = [
+    { label: 'Elanlar', href: '/' },
+    { label: 'Seçilmişlər', href: '/favorites' },
+    { label: 'Müqayisə', href: '/compare' },
+    { label: 'Kredit', href: '/calculator' },
+    { label: 'Əlaqə', href: '/contact' },
+];
+
+// Translucent Apple-style bar: logo, quiet text links, one accent action
 export function WebHeader() {
     const router = useRouter();
     const pathname = usePathname();
-    const { colors, isDark, toggleTheme } = useTheme();
+    const { isDark, toggleTheme } = useTheme();
     const { settings } = useSettings();
     const { user, isAdmin } = useAuth();
-    const { width } = useWindowDimensions();
-    const isMobile = width < 768;
+    const t = useWebTokens();
+    const { isMobile } = useBreakpoints();
     const [menuOpen, setMenuOpen] = useState(false);
 
     const logoUrl = isDark ? settings.site_logo_dark : settings.site_logo_light;
-
-    const navLinks = [
-        { label: 'Ana Səhifə', href: '/', icon: Home },
-        { label: 'Müqayisə', href: '/compare', icon: ArrowLeftRight },
-        { label: 'Seçilmişlər', href: '/favorites', icon: Heart },
-        { label: 'Kredit', href: '/calculator', icon: Calculator },
-        { label: 'Əlaqə', href: '/contact', icon: Phone },
-    ];
+    const accountLabel = user ? (isAdmin ? 'Admin panel' : 'Kreditlərim') : 'Daxil ol';
+    const accountHref = user ? (isAdmin ? '/admin' : '/my-loans') : '/auth/login';
 
     const isActive = (href: string) => {
-        if (href === '/') return pathname === '/' || pathname === '/index';
+        if (href === '/') return pathname === '/' || pathname === '/index' || pathname.startsWith('/listing') || pathname.startsWith('/plate');
         return pathname.startsWith(href);
     };
 
-    const handleNav = (href: string) => {
-        router.push(href as any);
+    const go = (href: string) => {
         setMenuOpen(false);
+        router.push(href as any);
     };
 
     return (
-        <View style={{ zIndex: 1000, position: 'fixed' as any, top: 0, left: 0, right: 0 }}>
-            {/* Main header bar */}
-            <View style={[styles.header, {
-                backgroundColor: isDark ? 'rgba(18,18,18,0.96)' : 'rgba(242,242,247,0.96)',
-                borderBottomColor: colors.border,
+        <View style={styles.fixed}>
+            <View style={[styles.bar, {
+                height: isMobile ? HEADER_HEIGHT.mobile : HEADER_HEIGHT.desktop,
+                backgroundColor: isDark ? 'rgba(22,22,23,0.8)' : 'rgba(255,255,255,0.8)',
+                borderBottomColor: t.hairline,
             }]}>
-                <View style={[styles.inner, isMobile && { paddingHorizontal: 16, paddingVertical: 12 }]}>
-                    {/* Logo */}
-                    <TouchableOpacity onPress={() => router.push('/')} style={styles.logoArea}>
+                <View style={[styles.inner, { paddingHorizontal: isMobile ? 16 : 32 }]}>
+                    <TouchableOpacity onPress={() => go('/')} accessibilityLabel="Naxçıvan Avto — ana səhifə" style={styles.logo}>
                         {logoUrl ? (
-                            <Image source={{ uri: logoUrl }} style={[styles.logoImg, isMobile && { width: 80, height: 36 }]} resizeMode="contain" />
+                            <Image
+                                source={{ uri: logoUrl }}
+                                accessibilityLabel="Naxçıvan Avto"
+                                style={isMobile ? { width: 84, height: 34 } : { width: 96, height: 38 }}
+                                resizeMode="contain"
+                            />
                         ) : (
-                            <View>
-                                <Text style={[styles.logoTextMain, { color: colors.text }]}>NAXÇIVAN</Text>
-                                <Text style={[styles.logoTextSub, { color: colors.primary }]}>AVTO</Text>
-                            </View>
+                            <Text style={[styles.wordmark, { color: t.text }]}>
+                                Naxçıvan<Text style={{ color: t.accent }}> Avto</Text>
+                            </Text>
                         )}
                     </TouchableOpacity>
 
-                    {/* Desktop Nav Links */}
                     {!isMobile && (
-                        <View style={styles.navLinks}>
-                            {navLinks.map((link) => (
-                                <TouchableOpacity
-                                    key={link.href}
-                                    onPress={() => handleNav(link.href)}
-                                    style={styles.navLinkBtn}
-                                >
-                                    <Text style={[
-                                        styles.navLinkText,
-                                        {
-                                            color: isActive(link.href) ? colors.primary : colors.textSecondary,
-                                            fontFamily: isActive(link.href) ? 'RethinkSans_700Bold' : 'RethinkSans_500Medium',
-                                        }
-                                    ]}>
-                                        {link.label}
-                                    </Text>
-                                    {isActive(link.href) && (
-                                        <View style={[styles.activeUnderline, { backgroundColor: colors.primary }]} />
-                                    )}
-                                </TouchableOpacity>
-                            ))}
+                        <View role="navigation" style={styles.nav}>
+                            {NAV_LINKS.map((link) => {
+                                const active = isActive(link.href);
+                                return (
+                                    <TouchableOpacity
+                                        key={link.href}
+                                        onPress={() => go(link.href)}
+                                        style={[styles.navItem, active && { backgroundColor: t.fill }]}
+                                        aria-current={active ? 'page' : undefined}
+                                    >
+                                        <Text style={[styles.navText, {
+                                            color: active ? t.text : t.textSecondary,
+                                            fontFamily: active ? FONT.semibold : FONT.medium,
+                                        }]}>
+                                            {link.label}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
                         </View>
                     )}
 
-                    {/* Right Actions */}
-                    <View style={styles.rightActions}>
+                    <View style={styles.actions}>
                         <TouchableOpacity
                             onPress={toggleTheme}
-                            style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+                            accessibilityLabel={isDark ? 'İşıqlı rejim' : 'Qaranlıq rejim'}
+                            style={[styles.iconBtn, { backgroundColor: t.fill }]}
                         >
-                            {isDark
-                                ? <Sun size={18} color={colors.text} />
-                                : <Moon size={18} color={colors.text} />
-                            }
+                            {isDark ? <Sun size={17} color={t.text} /> : <Moon size={17} color={t.text} />}
                         </TouchableOpacity>
 
                         {!isMobile && (
-                            <TouchableOpacity
-                                onPress={() => {
-                                    if (user) {
-                                        if (isAdmin) {
-                                            router.push('/admin');
-                                        } else {
-                                            router.push('/my-loans');
-                                        }
-                                    } else {
-                                        router.push('/auth/login');
-                                    }
-                                }}
-                                style={[styles.loginBtn, { borderColor: colors.border }]}
-                            >
-                                <User size={18} color={colors.text} />
-                                <Text style={[styles.loginBtnText, { color: colors.text }]}>
-                                    {user ? (isAdmin ? 'Admin Panel' : 'Kreditlərim') : 'Giriş'}
-                                </Text>
+                            <TouchableOpacity onPress={() => go(accountHref)} style={styles.accountBtn}>
+                                <User size={16} color={t.textSecondary} />
+                                <Text style={[styles.accountText, { color: t.text }]}>{accountLabel}</Text>
                             </TouchableOpacity>
                         )}
 
                         {!isMobile && (
-                            <TouchableOpacity
-                                onPress={() => router.push('/add-listing' as any)}
-                                style={[styles.addBtn, { backgroundColor: colors.primary }]}
-                            >
-                                <Plus size={18} color="#FFF" />
-                                <Text style={styles.addBtnText}>Elan ver</Text>
-                            </TouchableOpacity>
+                            <Button title="Elan ver" size="sm" icon={<Plus size={15} color="#FFF" strokeWidth={2.6} />} onPress={() => go('/add-listing')} style={{ height: 34, paddingHorizontal: 14 }} />
                         )}
 
                         {isMobile && (
                             <TouchableOpacity
-                                onPress={() => setMenuOpen(v => !v)}
-                                style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+                                onPress={() => setMenuOpen((v) => !v)}
+                                accessibilityLabel={menuOpen ? 'Menyunu bağla' : 'Menyu'}
+                                style={[styles.iconBtn, { backgroundColor: t.fill }]}
                             >
-                                {menuOpen ? <X size={20} color={colors.text} /> : <Menu size={20} color={colors.text} />}
+                                {menuOpen ? <X size={19} color={t.text} /> : <Menu size={19} color={t.text} />}
                             </TouchableOpacity>
                         )}
                     </View>
                 </View>
             </View>
 
-            {/* Mobile Dropdown Menu */}
             {isMobile && menuOpen && (
-                <View style={[styles.mobileMenu, {
-                    backgroundColor: isDark ? '#111' : '#F8F8F8',
-                    borderBottomColor: colors.border,
-                }]}>
-                    {navLinks.map((link) => {
-                        const Icon = link.icon;
-                        const active = isActive(link.href);
-                        return (
-                            <TouchableOpacity
+                <View style={[styles.sheet, { backgroundColor: t.bg, borderBottomColor: t.hairline }]}>
+                    <GroupedList>
+                        {NAV_LINKS.map((link) => (
+                            <ListRow
                                 key={link.href}
-                                style={[styles.mobileLink, active && { backgroundColor: colors.primary + '15' }]}
-                                onPress={() => handleNav(link.href)}
-                            >
-                                <Icon size={18} color={active ? colors.primary : colors.textSecondary} />
-                                <Text style={[styles.mobileLinkText, {
-                                    color: active ? colors.primary : colors.text,
-                                    fontFamily: active ? 'RethinkSans_700Bold' : 'RethinkSans_500Medium',
-                                }]}>
-                                    {link.label}
-                                </Text>
-                            </TouchableOpacity>
-                        );
-                    })}
-                    {/* Login/Credit Panel button inside mobile menu */}
-                    <TouchableOpacity
-                        style={[styles.mobileLoginBtn, { borderColor: colors.border }]}
-                        onPress={() => {
-                            if (user) {
-                                if (isAdmin) {
-                                    handleNav('/admin');
-                                } else {
-                                    handleNav('/my-loans');
-                                }
-                            } else {
-                                handleNav('/auth/login');
-                            }
-                        }}
-                    >
-                        <User size={18} color={colors.text} />
-                        <Text style={[styles.mobileLoginBtnText, { color: colors.text }]}>
-                            {user ? (isAdmin ? 'Admin Paneli' : 'Kreditlərim') : 'Giriş Et'}
-                        </Text>
-                    </TouchableOpacity>
-
-                    {/* Elan ver button inside mobile menu */}
-                    <TouchableOpacity
-                        style={[styles.mobileAddBtn, { backgroundColor: colors.primary }]}
-                        onPress={() => handleNav('/add-listing')}
-                    >
-                        <Plus size={18} color="#FFF" />
-                        <Text style={styles.addBtnText}>Elan ver</Text>
-                    </TouchableOpacity>
+                                title={link.label}
+                                onPress={() => go(link.href)}
+                                right={isActive(link.href) ? <View style={[styles.dot, { backgroundColor: t.accent }]} /> : undefined}
+                            />
+                        ))}
+                    </GroupedList>
+                    <GroupedList style={{ marginTop: 12 }}>
+                        <ListRow icon={<User size={16} color={t.text} />} title={accountLabel} onPress={() => go(accountHref)} />
+                    </GroupedList>
+                    <Button title="Elan ver" size="lg" fullWidth icon={<Plus size={18} color="#FFF" />} onPress={() => go('/add-listing')} style={{ marginTop: 16 }} />
                 </View>
             )}
         </View>
@@ -199,141 +142,29 @@ export function WebHeader() {
 }
 
 const styles = StyleSheet.create({
-    header: {
-        borderBottomWidth: 1,
-        backdropFilter: 'blur(20px)' as any,
+    fixed: { zIndex: 1000, position: 'fixed' as any, top: 0, left: 0, right: 0 },
+    bar: {
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        justifyContent: 'center',
+        backdropFilter: 'saturate(180%) blur(20px)' as any,
     },
     inner: {
-        maxWidth: 1280,
+        maxWidth: CONTENT_MAX_WIDTH + 64,
         alignSelf: 'center',
         width: '100%',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 32,
-        paddingVertical: 16,
     },
-    logoArea: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    logoImg: {
-        width: 100,
-        height: 44,
-    },
-    logoTextMain: {
-        fontSize: 15,
-        fontFamily: 'RethinkSans_800ExtraBold',
-        letterSpacing: 2,
-    },
-    logoTextSub: {
-        fontSize: 11,
-        fontFamily: 'RethinkSans_800ExtraBold',
-        letterSpacing: 4,
-        marginTop: -3,
-    },
-    navLinks: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    navLinkBtn: {
-        paddingHorizontal: 14,
-        paddingVertical: 8,
-        alignItems: 'center',
-        position: 'relative',
-    },
-    navLinkText: {
-        fontSize: 15,
-    },
-    activeUnderline: {
-        position: 'absolute',
-        bottom: 2,
-        left: 14,
-        right: 14,
-        height: 2,
-        borderRadius: 1,
-    },
-    rightActions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-    },
-    iconBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1,
-    },
-    addBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 18,
-        paddingVertical: 10,
-        borderRadius: 20,
-        gap: 6,
-    },
-    addBtnText: {
-        color: '#FFF',
-        fontFamily: 'RethinkSans_700Bold',
-        fontSize: 14,
-    },
-    // Mobile menu
-    mobileMenu: {
-        borderBottomWidth: 1,
-        paddingVertical: 8,
-        paddingHorizontal: 16,
-        gap: 4,
-    },
-    mobileLink: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        paddingVertical: 14,
-        paddingHorizontal: 12,
-        borderRadius: 12,
-    },
-    mobileLinkText: {
-        fontSize: 16,
-    },
-    mobileAddBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        paddingVertical: 14,
-        borderRadius: 16,
-        marginTop: 4,
-        marginBottom: 8,
-    },
-    loginBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 20,
-        borderWidth: 1,
-        gap: 8,
-    },
-    loginBtnText: {
-        fontFamily: 'RethinkSans_700Bold',
-        fontSize: 14,
-    },
-    mobileLoginBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        paddingVertical: 14,
-        borderRadius: 16,
-        borderWidth: 1,
-        marginTop: 8,
-        marginBottom: 4,
-    },
-    mobileLoginBtnText: {
-        fontFamily: 'RethinkSans_700Bold',
-        fontSize: 16,
-    },
+    logo: { flexDirection: 'row', alignItems: 'center', cursor: 'pointer' as any },
+    wordmark: { fontSize: 17, fontFamily: FONT.heavy, letterSpacing: -0.3 },
+    nav: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+    navItem: { paddingHorizontal: 12, height: 32, borderRadius: 8, justifyContent: 'center', cursor: 'pointer' as any },
+    navText: { fontSize: 14 },
+    actions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    iconBtn: { width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center', cursor: 'pointer' as any },
+    accountBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, height: 34, cursor: 'pointer' as any },
+    accountText: { fontSize: 14, fontFamily: FONT.semibold },
+    sheet: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 20, borderBottomWidth: StyleSheet.hairlineWidth, boxShadow: '0px 24px 48px rgba(0,0,0,0.12)' as any },
+    dot: { width: 7, height: 7, borderRadius: 4 },
 });

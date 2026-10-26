@@ -1,33 +1,35 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
-    View, Text, StyleSheet, TouchableOpacity, ActivityIndicator,
-    ScrollView, TextInput, Image, useWindowDimensions, TextStyle, Platform,
-    DeviceEventEmitter, StyleProp
+    View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, TextStyle,
+    DeviceEventEmitter, StyleProp,
 } from 'react-native';
-import {
-    Search, X, Wallet, Percent, ArrowLeftRight,
-    TrendingUp, Star, Zap, ChevronRight, Crown, Heart,
-    SlidersHorizontal, Calculator, AlertTriangle
-} from 'lucide-react-native';
+import { Search, X, SlidersHorizontal, Plus } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getFavorites, toggleFavorite } from '../../lib/favorites';
-import { useTheme } from '../../contexts/ThemeContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useToast } from '../../contexts/ToastContext';
 import { Listing } from '../../types';
 import { BannerSlider } from '../../components/BannerSlider';
-import { formatListingDate } from '../../utils/date';
 import { WebSideBanners } from '../../components/WebSideBanners';
 import { Pagination } from '../../components/Pagination';
-import { PlateCard } from '../../components/PlateCard'; // Added PlateCard import
+import { CarCard } from '../../components/CarCard';
+import { PlateCard } from '../../components/PlateCard';
+import { WebFooter } from '../../components/WebFooter.web';
+import { SeoHead } from '../../components/web/SeoHead';
+import {
+    useWebTokens, useBreakpoints, Container, SectionHeader, Segmented, Card, Button, WebGrid,
+    HoverLift, EmptyState, Loading, FONT, HEADER_HEIGHT, carCardProps, WebTokens,
+} from '../../components/web/WebKit';
 
 type FilterType = 'cash' | 'credit' | 'barter' | 'urgent';
+type TopTab = 'transport' | 'plates';
 
 const HOME_LISTINGS_CACHE_KEY = 'home_listings_cache';
 const HOME_PLATES_CACHE_KEY = 'home_plates_cache';
+const PAGE_SIZE = 40;
+const LISTING_COLUMNS = 'id, make, model, price, currency, image_url, images, location, created_at, mileage, engine, year, is_credit, is_barter, is_vip, is_urgent, is_new, short_id';
 
 const Typewriter = ({ words, color, style }: { words: string[], color: string, style?: StyleProp<TextStyle> }) => {
     const [currentWordIndex, setCurrentWordIndex] = useState(0);
@@ -64,155 +66,128 @@ const Typewriter = ({ words, color, style }: { words: string[], color: string, s
     }, [displayedText, isDeleting, currentWordIndex, words]);
 
     return (
-        <Text style={[style, { color, fontFamily: 'RethinkSans_800ExtraBold' }]}>
-            {displayedText}<Text style={{ color, opacity: cursorVisible ? 1 : 0 }}>|</Text>
+        <Text style={[style, { color }]}>
+            {displayedText}<Text style={{ color, opacity: cursorVisible ? 1 : 0, fontFamily: FONT.regular }}>|</Text>
         </Text>
     );
 };
 
-/* ─── Premium Car Card ──────────────────────────────────── */
-const CarCard = ({ car, isFavorite, onToggleFavorite, onPress }: any) => {
-    const { colors, isDark } = useTheme();
-    const [hovered, setHovered] = useState(false);
-    const formattedPrice = car.price.toLocaleString().replace(/,/g, '.');
-    const displayDate = formatListingDate(car.created_at);
+const TYPEWRITER_WORDS = ['avtomobili tap', 'nömrəni tap', 'qiyməti müqayisə et'];
 
-    let allImages: string[] = [];
-    try {
-        if (Array.isArray(car.images) && car.images.length > 0) allImages = car.images;
-        else if (typeof car.images === 'string') allImages = JSON.parse(car.images);
-    } catch { }
-    if (!allImages.length && car.image_url) allImages = [car.image_url];
-    const mainImage = allImages[0] || '';
-
-    return (
-        <TouchableOpacity
-            style={[
-                styles.card,
-                { backgroundColor: colors.card, borderColor: hovered ? colors.primary + '60' : colors.border },
-                hovered && { transform: [{ translateY: -4 }], boxShadow: `0 16px 40px rgba(0,0,0,${isDark ? '0.4' : '0.12'})` } as any
-            ]}
-            onPress={() => onPress(car.short_id || car.id)}
-            activeOpacity={1}
-            {...{ onMouseEnter: () => setHovered(true), onMouseLeave: () => setHovered(false) } as any}
-        >
-            {/* Image */}
-            <View style={[styles.cardImgWrap, { backgroundColor: isDark ? '#2C2C2E' : '#E5E5EA' }]}>
-                {mainImage ? (
-                    <Image
-                        source={{ uri: mainImage }}
-                        style={[styles.cardImg, hovered && { transform: [{ scale: 1.04 }] } as any]}
-                        resizeMode="cover"
-                    />
-                ) : (
-                    <View style={[styles.cardImg, { justifyContent: 'center', alignItems: 'center' }]}>
-                        <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Şəkil yoxdur</Text>
-                    </View>
-                )}
-
-                {/* Gradient overlay on image bottom */}
-                <LinearGradient
-                    colors={['transparent', 'rgba(0,0,0,0.55)']}
-                    style={StyleSheet.absoluteFill}
-                    start={{ x: 0, y: 0.5 }}
-                    end={{ x: 0, y: 1 }}
-                />
-
-                {/* Badges top-left */}
-                <View style={styles.badgesRow}>
-                    {car.is_credit && <View style={[styles.badge, { backgroundColor: '#007AFF' }]}><Text style={styles.badgeText}>Kredit</Text></View>}
-                    {car.is_barter && <View style={[styles.badge, { backgroundColor: '#FF9500' }]}><Text style={styles.badgeText}>Barter</Text></View>}
-                    {car.is_new && <View style={[styles.badge, { backgroundColor: '#34C759' }]}><Text style={styles.badgeText}>Yeni</Text></View>}
-                </View>
-
-                {/* VIP bottom-left */}
-                {car.is_vip && (
-                    <View style={[styles.vipBadge, { backgroundColor: 'rgba(0,0,0,0.65)', borderColor: '#FFD700' }]}>
-                        <Crown size={9} color="#FFD700" fill="#FFD700" />
-                        <Text style={{ color: '#FFD700', fontSize: 8, fontFamily: 'RethinkSans_800ExtraBold', marginLeft: 3 }}>VIP</Text>
-                    </View>
-                )}
-
-                {/* Urgent badge */}
-                {car.is_urgent && (
-                    <View style={[styles.vipBadge, { backgroundColor: 'rgba(255,59,48,0.85)', borderColor: '#FF3B30', bottom: car.is_vip ? 34 : 8 }]}>
-                        <AlertTriangle size={9} color="#FFF" fill="#FFF" />
-                        <Text style={{ color: '#FFF', fontSize: 8, fontFamily: 'RethinkSans_800ExtraBold', marginLeft: 3 }}>TƏCİLİ</Text>
-                    </View>
-                )}
-
-                {/* Price overlay bottom-right */}
-                <View style={styles.priceOverlay}>
-                    <Text style={styles.priceOverlayText}>
-                        {formattedPrice} {car.currency === 'AZN' ? '₼' : car.currency}
-                    </Text>
-                </View>
-
-                {/* Heart top-right */}
-                <TouchableOpacity
-                    style={[styles.heartBtn, { backgroundColor: isFavorite ? 'rgba(255,59,48,0.15)' : (isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.85)') }]}
-                    onPress={(e: any) => { e.stopPropagation?.(); onToggleFavorite(car.id); }}
-                >
-                    <Heart size={15} color={isFavorite ? '#FF3B30' : (isDark ? '#FFF' : '#666')} fill={isFavorite ? '#FF3B30' : 'transparent'} />
-                </TouchableOpacity>
-            </View>
-
-            {/* Content */}
-            <View style={styles.cardBody}>
-                <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
-                    {car.make} {car.model}
-                </Text>
-                <Text style={[styles.cardSpecs, { color: colors.textSecondary }]}>
-                    {car.year} · {car.engine} L · {car.mileage?.toLocaleString()} km
-                </Text>
-                <View style={styles.cardFooterRow}>
-                    <Text style={[styles.cardLoc, { color: colors.textSecondary }]} numberOfLines={1}>
-                        📍 {car.location}
-                    </Text>
-                    <Text style={[styles.cardDate, { color: colors.textSecondary }]}>{displayDate}</Text>
-                </View>
-            </View>
-        </TouchableOpacity>
-    );
+// Applies every filter app/filter.tsx can return (same as the mobile home screen)
+const applyAdvancedFilters = (query: any, f: Record<string, any>) => {
+    if (f.minPrice) query = query.gte('price', parseFloat(f.minPrice));
+    if (f.maxPrice) query = query.lte('price', parseFloat(f.maxPrice));
+    if (f.minYear) query = query.gte('year', parseInt(f.minYear, 10));
+    if (f.maxYear) query = query.lte('year', parseInt(f.maxYear, 10));
+    if (f.minMileage) query = query.gte('mileage', parseInt(f.minMileage, 10));
+    if (f.maxMileage) query = query.lte('mileage', parseInt(f.maxMileage, 10));
+    if (f.minEngine) query = query.gte('engine', f.minEngine);
+    if (f.maxEngine) query = query.lte('engine', f.maxEngine);
+    if (f.city) query = query.ilike('location', `%${f.city}%`);
+    if (f.bodyType) query = query.eq('body_type', f.bodyType);
+    if (f.fuelType) query = query.eq('fuel_type', f.fuelType);
+    if (f.gearbox) query = query.eq('gearbox', f.gearbox);
+    if (f.transmission) query = query.eq('transmission', f.transmission);
+    if (f.color) query = query.eq('color', f.color);
+    if (f.market) query = query.eq('market', f.market);
+    if (f.isNew) query = query.eq('is_new', true);
+    if (f.isCredit) query = query.eq('is_credit', true);
+    if (f.isBarter) query = query.eq('is_barter', true);
+    return query;
 };
 
-/* ─── Main Screen ───────────────────────────────────────── */
+const countActiveFilters = (f: Record<string, any>) => [
+    f.minPrice || f.maxPrice, f.minYear || f.maxYear, f.minMileage || f.maxMileage, f.minEngine || f.maxEngine,
+    f.city, f.bodyType, f.fuelType, f.gearbox, f.transmission, f.color, f.market, f.isNew, f.isCredit, f.isBarter,
+].filter(Boolean).length;
+
+// Runs a Supabase query with a 15 s timeout and one retry after a short pause
+// (covers a flaky first request on a cold start)
+const withRetry = async (build: () => PromiseLike<{ data: any; count: number | null; error: any }>) => {
+    const attempt = async () => {
+        const result = await Promise.race([
+            build(),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Request timeout')), 15000)),
+        ]);
+        if (result.error) throw result.error;
+        return result;
+    };
+    try {
+        return await attempt();
+    } catch {
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+        return attempt();
+    }
+};
+
+// Defined outside the screen so inputs keep focus between renders
+const Field = ({ t, isMobile, label, value, placeholder, onPress }: {
+    t: WebTokens; isMobile: boolean; label: string; value?: string; placeholder: string; onPress: () => void;
+}) => (
+    <TouchableOpacity style={[styles.field, isMobile && styles.fieldMobile]} onPress={onPress} activeOpacity={0.7}>
+        <Text style={[styles.fieldLabel, { color: t.textSecondary }]}>{label}</Text>
+        <Text style={[styles.fieldValue, { color: value ? t.text : t.placeholder }]} numberOfLines={1}>{value || placeholder}</Text>
+    </TouchableOpacity>
+);
+
+const PlateInput = ({ t, isMobile, label, ...props }: { t: WebTokens; isMobile: boolean; label: string } & React.ComponentProps<typeof TextInput>) => (
+    <View style={[styles.field, isMobile && styles.fieldMobile, { cursor: 'text' } as any]}>
+        <Text style={[styles.fieldLabel, { color: t.textSecondary }]}>{label}</Text>
+        <TextInput
+            {...props}
+            placeholderTextColor={t.placeholder}
+            style={[styles.fieldValue, styles.plateInput, { color: t.text }]}
+        />
+    </View>
+);
+
 export default function WebHomeScreen() {
     const router = useRouter();
-    const { colors, isDark } = useTheme();
+    const t = useWebTokens();
     const { settings } = useSettings();
     const { showToast } = useToast();
-    const { width } = useWindowDimensions();
-    const isMobile = width < 768;
-    const isTablet = width < 1024;
+    const { width, isMobile } = useBreakpoints();
 
     const [listings, setListings] = useState<Listing[]>([]);
     const [vipListings, setVipListings] = useState<Listing[]>([]);
     const [urgentListings, setUrgentListings] = useState<Listing[]>([]);
     const [favorites, setFavorites] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(false);
+    const [totalCount, setTotalCount] = useState<number | null>(null);
 
-    // Plate State
-    const [activeTopTab, setActiveTopTab] = useState<'transport' | 'plates'>('transport');
-    const [plates, setPlates] = useState<any[]>([]); // Using any or importing Plate type
+    const [activeTopTab, setActiveTopTab] = useState<TopTab>('transport');
+    const [plates, setPlates] = useState<any[]>([]);
     const [plateSearchRegion, setPlateSearchRegion] = useState('');
     const [plateSearchSeries, setPlateSearchSeries] = useState('');
     const [plateSearchNumber, setPlateSearchNumber] = useState('');
-    const [platesPage, setPlatesPage] = useState(1);
+    const platesKey = `${plateSearchRegion}|${plateSearchSeries}|${plateSearchNumber}`;
+    const [platesPageState, setPlatesPageState] = useState({ key: platesKey, page: 1 });
+    const platesPage = platesPageState.key === platesKey ? platesPageState.page : 1;
+    const setPlatesPage = (p: number) => setPlatesPageState({ key: platesKey, page: p });
     const [totalPlatesPages, setTotalPlatesPages] = useState(1);
 
     const [activeFilterType, setActiveFilterType] = useState<FilterType>('cash');
-    const [searchQuery, setSearchQuery] = useState('');
     const [todayCount, setTodayCount] = useState<number>(0);
     const [selectedBrand, setSelectedBrand] = useState<any>(null);
     const [selectedModel, setSelectedModel] = useState<any>(null);
-    const [advancedFilters, setAdvancedFilters] = useState<any>({});
+    const [advancedFilters, setAdvancedFilters] = useState<Record<string, any>>({});
 
-    const [page, setPage] = useState(1);
+    // Page numbers reset to 1 whenever the query they belong to changes
+    const listingsKey = JSON.stringify([activeFilterType, selectedBrand?.id, selectedModel?.id, advancedFilters]);
+    const [pageState, setPageState] = useState({ key: listingsKey, page: 1 });
+    const page = pageState.key === listingsKey ? pageState.page : 1;
+    const setPage = (p: number) => setPageState({ key: listingsKey, page: p });
     const [totalPages, setTotalPages] = useState(1);
-    const PAGE_SIZE = 40;
 
-    const logoUrl = isDark ? settings.site_logo_dark : settings.site_logo_light;
+    // Whether something is already on screen; a refetch then updates silently
+    const hasListings = useRef(false);
+    const hasPlates = useRef(false);
+    const scrollRef = useRef<any>(null);
+    const gridY = useRef(0);
+
+    const activeFilterCount = countActiveFilters(advancedFilters);
 
     const handleBrandSelect = () => {
         const eventName = 'select_brand_home_web';
@@ -240,18 +215,18 @@ export default function WebHomeScreen() {
     const handleFilterPress = () => {
         const eventName = 'apply_filters_home_web';
         const sub = DeviceEventEmitter.addListener(eventName, (filters) => {
-            setAdvancedFilters(filters);
+            // Drop empty values so "no filters" really is an empty object
+            const clean = Object.fromEntries(Object.entries(filters || {}).filter(([, v]) => v !== '' && v != null));
+            setAdvancedFilters(clean);
             sub.remove();
-            // We use setTimeout because state updates batching in mixed listeners might need a tick
-            setTimeout(() => fetchListings(), 50);
         });
-        router.push({ pathname: '/filter', params: { eventName } });
+        router.push({ pathname: '/filter', params: { eventName, initialFilters: JSON.stringify(advancedFilters) } });
     };
 
     const handleResetSearch = () => {
         setSelectedBrand(null);
         setSelectedModel(null);
-        setSearchQuery('');
+        setAdvancedFilters({});
     };
 
     const handleResetPlateSearch = () => {
@@ -260,154 +235,140 @@ export default function WebHomeScreen() {
         setPlateSearchNumber('');
     };
 
-    const fetchTodayCount = useCallback(async () => {
+    const showAllUrgent = () => {
+        setActiveFilterType('urgent');
+        scrollToGrid();
+    };
+
+    const scrollToGrid = () => scrollRef.current?.scrollTo({ y: Math.max(0, gridY.current - 80), animated: true });
+
+    const fetchListings = useCallback(async () => {
+        if (!hasListings.current) setLoading(true);
         try {
-            const startOfToday = new Date();
-            startOfToday.setHours(0, 0, 0, 0);
+            const { data, count } = await withRetry(() => {
+                let query = supabase
+                    .from('listings')
+                    .select(LISTING_COLUMNS, { count: 'exact' })
+                    .eq('status', 'approved')
+                    .order('is_vip', { ascending: false })
+                    .order('created_at', { ascending: false });
+                if (activeFilterType === 'credit') query = query.eq('is_credit', true);
+                if (activeFilterType === 'barter') query = query.eq('is_barter', true);
+                if (activeFilterType === 'urgent') query = query.eq('is_urgent', true);
+                if (selectedBrand) query = query.eq('make', selectedBrand.name);
+                if (selectedModel) query = query.eq('model', selectedModel.name);
+                query = applyAdvancedFilters(query, advancedFilters);
+                return query.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
+            });
 
-            const { count, error } = await supabase
-                .from('listings')
-                .select('*', { count: 'exact', head: true })
-                .eq('status', 'approved')
-                .gte('created_at', startOfToday.toISOString());
-
-            if (!error && count !== null) {
-                setTodayCount(count);
+            const rows = (data || []) as Listing[];
+            setListings(rows);
+            hasListings.current = rows.length > 0;
+            setLoadError(false);
+            if (count !== null) {
+                setTotalCount(count);
+                setTotalPages(Math.max(1, Math.ceil(count / PAGE_SIZE)));
             }
-        } catch (err) {
-            console.error('Error fetching today count:', err);
-        }
-    }, []);
 
-    const fetchListings = useCallback(async (retryCount = 0) => {
-        try {
-            if (listings.length === 0) setLoading(true);
-            let query = supabase
-                .from('listings')
-                .select('id, make, model, price, currency, image_url, images, location, created_at, mileage, engine, year, is_credit, is_barter, is_vip, is_urgent, is_new, short_id', { count: 'exact' })
-                .eq('status', 'approved')
-                .order('is_vip', { ascending: false })
-                .order('created_at', { ascending: false });
-
-            if (activeFilterType === 'credit') query = query.eq('is_credit', true);
-            if (activeFilterType === 'barter') query = query.eq('is_barter', true);
-            if (activeFilterType === 'urgent') query = query.eq('is_urgent', true);
-            if (searchQuery.trim()) query = query.or(`make.ilike.%${searchQuery}%,model.ilike.%${searchQuery}%`);
-            if (selectedBrand) query = query.eq('make', selectedBrand.name);
-            if (selectedModel) query = query.eq('model', selectedModel.name);
-
-            if (advancedFilters.minYear) query = query.gte('year', advancedFilters.minYear);
-            if (advancedFilters.maxYear) query = query.lte('year', advancedFilters.maxYear);
-            if (advancedFilters.minPrice) query = query.gte('price', advancedFilters.minPrice);
-            if (advancedFilters.maxPrice) query = query.lte('price', advancedFilters.maxPrice);
-            if (advancedFilters.bodyType) query = query.eq('body_type', advancedFilters.bodyType);
-            query = query.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
-
-            const timeoutPromise = new Promise<{ data: null; count: null; error: Error }>((resolve) =>
-                setTimeout(() => resolve({ data: null, count: null, error: new Error('Request timeout') }), 15000)
-            );
-
-            const { data, count, error: supabaseError } = (await Promise.race([query, timeoutPromise])) as any;
-            if (supabaseError) throw supabaseError;
-
-            if (data) {
-                setListings(data as Listing[]);
-                setVipListings((data as Listing[]).filter(l => l.is_vip).slice(0, 6));
-                setUrgentListings((data as Listing[]).filter(l => l.is_urgent).slice(0, 6));
-                if (count !== null) setTotalPages(Math.ceil(count / PAGE_SIZE));
-
-                const isDefaultFeed = page === 1 && !selectedBrand && !selectedModel && activeFilterType === 'cash' && !searchQuery.trim() && Object.keys(advancedFilters).length === 0;
-                if (isDefaultFeed && data.length > 0) {
-                    AsyncStorage.setItem(HOME_LISTINGS_CACHE_KEY, JSON.stringify(data)).catch(() => {});
-                }
+            const isDefaultFeed = page === 1 && !selectedBrand && !selectedModel && activeFilterType === 'cash' && Object.keys(advancedFilters).length === 0;
+            if (isDefaultFeed) {
+                setVipListings(rows.filter(l => l.is_vip).slice(0, 8));
+                setUrgentListings(rows.filter(l => l.is_urgent).slice(0, 8));
+                if (rows.length > 0) AsyncStorage.setItem(HOME_LISTINGS_CACHE_KEY, JSON.stringify(rows)).catch(() => {});
             }
         } catch (err) {
             console.error('Error fetching web listings:', err);
-            if (retryCount < 1) {
-                setTimeout(() => fetchListings(retryCount + 1), 1200);
-            }
+            if (!hasListings.current) setLoadError(true);
+        } finally {
+            setLoading(false);
         }
-        finally { setLoading(false); }
-    }, [activeFilterType, searchQuery, selectedBrand, selectedModel, advancedFilters, page, listings.length]);
+    }, [activeFilterType, selectedBrand, selectedModel, advancedFilters, page]);
 
-    const fetchPlates = useCallback(async (retryCount = 0) => {
+    const fetchPlates = useCallback(async () => {
+        if (!hasPlates.current) setLoading(true);
         try {
-            if (plates.length === 0) setLoading(true);
-            let query = supabase
-                .from('plates')
-                .select('id, region, series, number, price, description, is_vip, created_at, status', { count: 'exact' })
-                .eq('status', 'approved')
-                .order('is_vip', { ascending: false })
-                .order('created_at', { ascending: false });
+            const { data, count } = await withRetry(() => {
+                let query = supabase
+                    .from('plates')
+                    .select('id, region, series, number, price, description, is_vip, created_at, status', { count: 'exact' })
+                    .eq('status', 'approved')
+                    .order('is_vip', { ascending: false })
+                    .order('created_at', { ascending: false });
+                if (plateSearchRegion) query = query.eq('region', plateSearchRegion);
+                if (plateSearchSeries) query = query.ilike('series', `${plateSearchSeries}%`);
+                if (plateSearchNumber) query = query.ilike('number', `${plateSearchNumber}%`);
+                return query.range((platesPage - 1) * PAGE_SIZE, platesPage * PAGE_SIZE - 1);
+            });
 
-            if (plateSearchRegion) query = query.eq('region', plateSearchRegion);
-            if (plateSearchSeries) query = query.ilike('series', `${plateSearchSeries}%`);
-            if (plateSearchNumber) query = query.ilike('number', `${plateSearchNumber}%`);
+            const rows = data || [];
+            setPlates(rows);
+            hasPlates.current = rows.length > 0;
+            setLoadError(false);
+            if (count !== null) setTotalPlatesPages(Math.max(1, Math.ceil(count / PAGE_SIZE)));
 
-            query = query.range((platesPage - 1) * PAGE_SIZE, platesPage * PAGE_SIZE - 1);
-
-            const timeoutPromise = new Promise<{ data: null; count: null; error: Error }>((resolve) =>
-                setTimeout(() => resolve({ data: null, count: null, error: new Error('Request timeout') }), 15000)
-            );
-
-            const { data, count, error: err } = (await Promise.race([query, timeoutPromise])) as any;
-            if (err) throw err;
-
-            if (data) {
-                setPlates(data);
-                if (count !== null) setTotalPlatesPages(Math.ceil(count / PAGE_SIZE));
-
-                const isDefaultPlates = platesPage === 1 && !plateSearchRegion && !plateSearchSeries && !plateSearchNumber;
-                if (isDefaultPlates && data.length > 0) {
-                    AsyncStorage.setItem(HOME_PLATES_CACHE_KEY, JSON.stringify(data)).catch(() => {});
-                }
+            const isDefaultPlates = platesPage === 1 && !plateSearchRegion && !plateSearchSeries && !plateSearchNumber;
+            if (isDefaultPlates && rows.length > 0) {
+                AsyncStorage.setItem(HOME_PLATES_CACHE_KEY, JSON.stringify(rows)).catch(() => {});
             }
         } catch (err) {
             console.error('Error fetching web plates:', err);
-            if (retryCount < 1) {
-                setTimeout(() => fetchPlates(retryCount + 1), 1200);
-            }
+            if (!hasPlates.current) setLoadError(true);
+        } finally {
+            setLoading(false);
         }
-        finally { setLoading(false); }
-    }, [plateSearchRegion, plateSearchSeries, plateSearchNumber, platesPage, plates.length]);
-
-    useEffect(() => {
-        setPage(1);
-    }, [activeFilterType, searchQuery, selectedBrand, selectedModel, advancedFilters]);
-
-    useEffect(() => {
-        setPlatesPage(1);
-    }, [plateSearchRegion, plateSearchSeries, plateSearchNumber]);
+    }, [plateSearchRegion, plateSearchSeries, plateSearchNumber, platesPage]);
 
     useEffect(() => {
         AsyncStorage.getItem(HOME_LISTINGS_CACHE_KEY).then((cached) => {
-            if (cached) {
-                try {
-                    const parsed = JSON.parse(cached);
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                        setListings((prev) => (prev.length === 0 ? parsed : prev));
-                        setVipListings((prev) => (prev.length === 0 ? parsed.filter((l: any) => l.is_vip).slice(0, 6) : prev));
-                        setUrgentListings((prev) => (prev.length === 0 ? parsed.filter((l: any) => l.is_urgent).slice(0, 6) : prev));
-                        setLoading(false);
-                    }
-                } catch (e) {}
-            }
+            if (!cached) return;
+            try {
+                const parsed = JSON.parse(cached);
+                if (Array.isArray(parsed) && parsed.length > 0 && !hasListings.current) {
+                    hasListings.current = true;
+                    setListings(parsed);
+                    setVipListings(parsed.filter((l: any) => l.is_vip).slice(0, 8));
+                    setUrgentListings(parsed.filter((l: any) => l.is_urgent).slice(0, 8));
+                    setLoading(false);
+                }
+            } catch { }
+        }).catch(() => {});
+        AsyncStorage.getItem(HOME_PLATES_CACHE_KEY).then((cached) => {
+            if (!cached) return;
+            try {
+                const parsed = JSON.parse(cached);
+                if (Array.isArray(parsed) && parsed.length > 0 && !hasPlates.current) {
+                    hasPlates.current = true;
+                    setPlates(parsed);
+                }
+            } catch { }
         }).catch(() => {});
 
         getFavorites().then(setFavorites);
-        fetchTodayCount();
-    }, [fetchTodayCount]);
+
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        (async () => {
+            const { count, error } = await supabase
+                .from('listings')
+                .select('id', { count: 'exact', head: true })
+                .eq('status', 'approved')
+                .gte('created_at', startOfToday.toISOString());
+            if (!error && count !== null) setTodayCount(count);
+        })().catch((err) => console.error('Error fetching today count:', err));
+    }, []);
+
+    // Each tab refetches only when its own query changes
+    useEffect(() => {
+        if (activeTopTab !== 'transport') return;
+        const timer = setTimeout(() => fetchListings(), 250);
+        return () => clearTimeout(timer);
+    }, [fetchListings, activeTopTab]);
 
     useEffect(() => {
-        const t = setTimeout(() => {
-            if (activeTopTab === 'transport') {
-                fetchListings();
-            } else {
-                fetchPlates();
-            }
-        }, 350);
-        return () => clearTimeout(t);
-    }, [fetchListings, fetchPlates, activeTopTab]);
+        if (activeTopTab !== 'plates') return;
+        const timer = setTimeout(() => fetchPlates(), 250);
+        return () => clearTimeout(timer);
+    }, [fetchPlates, activeTopTab]);
 
     const handleToggleFavorite = useCallback(async (id: string) => {
         const isFav = await toggleFavorite(id);
@@ -415,369 +376,192 @@ export default function WebHomeScreen() {
         showToast(isFav ? 'Seçilmişlərə əlavə edildi' : 'Seçilmişlərdən silindi', 'success');
     }, [showToast]);
 
-    const filterBtns = [
-        { type: 'cash' as FilterType, label: 'Hamısı', icon: Wallet, color: '#FF3B30' },
-        { type: 'credit' as FilterType, label: 'Kredit', icon: Percent, color: '#AF52DE' },
-        { type: 'barter' as FilterType, label: 'Barter', icon: ArrowLeftRight, color: '#FF9500' },
-        { type: 'urgent' as FilterType, label: 'Təcili', icon: Zap, color: '#FF3B30' },
-    ];
+    const openListing = (car: Listing) => router.push(`/listing/${car.short_id || car.id}` as any);
+
+    const renderCar = (car: Listing) => (
+        <HoverLift>
+            <CarCard
+                {...carCardProps(car)}
+                isFavorite={favorites.includes(car.id)}
+                onToggleFavorite={handleToggleFavorite}
+                onPress={() => openListing(car)}
+            />
+        </HoverLift>
+    );
+
+    const isTransport = activeTopTab === 'transport';
+    const items = isTransport ? listings : plates;
+    const hasSearch = !!(selectedBrand || selectedModel || activeFilterCount);
+    const hasPlateSearch = !!(plateSearchRegion || plateSearchSeries || plateSearchNumber);
+    const heroSize = isMobile ? { fontSize: 38, lineHeight: 44, letterSpacing: -1.2 } : width < 1024 ? { fontSize: 56, lineHeight: 62 } : null;
+
+    const divider = <View style={[isMobile ? styles.dividerH : styles.dividerV, { backgroundColor: t.hairline }]} />;
 
     return (
         <ScrollView
-            style={{ flex: 1, backgroundColor: colors.background }}
-            contentContainerStyle={{ paddingTop: isMobile ? 60 : 76, flexGrow: 1 }}
+            ref={scrollRef}
+            style={{ flex: 1, backgroundColor: t.bg }}
+            contentContainerStyle={{ paddingTop: isMobile ? HEADER_HEIGHT.mobile : HEADER_HEIGHT.desktop, flexGrow: 1 }}
             showsVerticalScrollIndicator={false}
         >
-
-            {/* ═══ HERO ══════════════════════════════════════════════ */}
-            <View style={styles.hero}>
-                {/* Gradient base */}
-                <LinearGradient
-                    colors={['#0A0A1A', '#12122A', '#1A0A0F']}
-                    style={StyleSheet.absoluteFill}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                />
-
-                {/* Decorative blurred orbs */}
-                <View style={[styles.orb, styles.orbRed]} />
-                <View style={[styles.orb, styles.orbPurple]} />
-                <View style={[styles.orb, styles.orbBlue]} />
-
-                {/* Grid pattern overlay */}
-                <View style={styles.gridPattern} />
-
-                <View style={[styles.heroInner, isMobile && { paddingHorizontal: 20, paddingTop: 44, paddingBottom: 36 }]}>
-                    {/* Pill badge */}
-                    <View style={styles.heroPill}>
-                        <Zap size={12} color="#FF3B30" fill="#FF3B30" />
-                        <Text style={styles.heroPillText}>Naxçıvan'ın #1 Avtomobil Platforması</Text>
-                    </View>
-
-                    {/* Headline */}
-                    <Text style={[styles.heroH1, isMobile && { fontSize: 34, lineHeight: 42 }]}>
+            <SeoHead
+                title="Naxçıvan Avto — Avtomobil və nömrə elanları"
+                description="Naxçıvanda avtomobil və qeydiyyat nişanı elanları: satış, kredit və barter. Elanınızı pulsuz yerləşdirin."
+                path="/"
+            />
+            {/* ═══ HERO ═══ */}
+            <View style={[styles.hero, { backgroundColor: t.surface, borderBottomColor: t.hairline }]}>
+                <Container style={[styles.heroInner, isMobile && { paddingTop: 36, paddingBottom: 32 }]}>
+                    <Text style={[styles.eyebrow, { color: t.textSecondary }]}>Naxçıvan Avto</Text>
+                    <Text role="heading" aria-level={1} style={[styles.heroTitle, { color: t.text }, heroSize]}>
                         Xəyalındakı{'\n'}
-                        <Typewriter
-                            words={['avtomobili tap', 'nömrəni tap', 'qiyməti müqayisə et']}
-                            color="#FF3B30"
-                            style={[styles.heroH1, isMobile && { fontSize: 34, lineHeight: 42 }]}
-                        />
+                        <Typewriter words={TYPEWRITER_WORDS} color={t.accent} style={[styles.heroTitle, heroSize]} />
+                    </Text>
+                    <Text style={[styles.heroSub, { color: t.textSecondary }, isMobile && { fontSize: 16, lineHeight: 24 }]}>
+                        Avtomobil və qeydiyyat nişanı elanları — şəffaf qiymət, kredit və barter imkanı ilə.
                     </Text>
 
-                    <Text style={[styles.heroSub, isMobile && { fontSize: 14, marginBottom: 28 }]}>
-                        Minlərlə elan, şəffaf qiymət, etibarlı satıcı — hamısı bir platformada.
-                    </Text>
+                    <Segmented<TopTab>
+                        options={[{ value: 'transport', label: 'Nəqliyyat' }, { value: 'plates', label: 'Nömrələr' }]}
+                        value={activeTopTab}
+                        onChange={setActiveTopTab}
+                        style={{ alignSelf: 'center', marginBottom: 20 }}
+                    />
 
-                    {/* Unified Search Container */}
+                    <View style={[styles.searchBar, { backgroundColor: t.surface, borderColor: t.hairlineStrong, boxShadow: t.shadow } as any, isMobile && styles.searchBarMobile]}>
+                        {isTransport ? (
+                            <>
+                                <Field t={t} isMobile={isMobile} label="Marka" value={selectedBrand?.name} placeholder="Bütün markalar" onPress={handleBrandSelect} />
+                                {divider}
+                                <Field t={t} isMobile={isMobile} label="Model" value={selectedModel?.name} placeholder={selectedBrand ? 'Bütün modellər' : 'Əvvəlcə marka'} onPress={handleModelSelect} />
+                            </>
+                        ) : (
+                            <>
+                                <PlateInput t={t} isMobile={isMobile} label="Region" placeholder="90" value={plateSearchRegion} onChangeText={(v) => setPlateSearchRegion(v.replace(/\D/g, ''))} keyboardType="number-pad" maxLength={2} />
+                                {divider}
+                                <PlateInput t={t} isMobile={isMobile} label="Seriya" placeholder="AA" value={plateSearchSeries} onChangeText={(v) => setPlateSearchSeries(v.toUpperCase())} autoCapitalize="characters" maxLength={2} />
+                                {divider}
+                                <PlateInput t={t} isMobile={isMobile} label="Nömrə" placeholder="000" value={plateSearchNumber} onChangeText={(v) => setPlateSearchNumber(v.replace(/\D/g, ''))} keyboardType="number-pad" maxLength={3} />
+                            </>
+                        )}
 
-                    {/* Top Tab Toggle */}
-                    <View style={styles.webTogglePill}>
-                        <TouchableOpacity
-                            style={[styles.webToggleItem, activeTopTab === 'transport' && { backgroundColor: isDark ? '#333' : 'rgba(255,255,255,0.15)' }]}
-                            onPress={() => setActiveTopTab('transport')}
-                        >
-                            <Text style={[styles.webToggleText, { color: activeTopTab === 'transport' ? '#FFF' : 'rgba(255,255,255,0.5)' }]}>Nəqliyyat</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.webToggleItem, activeTopTab === 'plates' && { backgroundColor: isDark ? '#333' : 'rgba(255,255,255,0.15)' }]}
-                            onPress={() => setActiveTopTab('plates')}
-                        >
-                            <Text style={[styles.webToggleText, { color: activeTopTab === 'plates' ? '#FFF' : 'rgba(255,255,255,0.5)' }]}>Nömrələr</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {activeTopTab === 'transport' ? (
-                        <View style={[styles.unifiedSearchContainer, isMobile && { flexDirection: 'column', height: 'auto', borderRadius: 16, padding: 12, gap: 12 }]}>
-                            <TouchableOpacity style={[styles.searchInputItem, isMobile && { width: '100%', paddingLeft: 0 }]} onPress={handleBrandSelect}>
-                                <Text style={[styles.inputLabel, { color: 'rgba(255,255,255,0.55)' }]}>Marka</Text>
-                                <View style={styles.inputValueRow}>
-                                    <Text style={[styles.inputValue, { color: selectedBrand ? '#FFF' : 'rgba(255,255,255,0.35)' }]} numberOfLines={1}>
-                                        {selectedBrand ? selectedBrand.name : 'Seçin'}
-                                    </Text>
-                                </View>
-                            </TouchableOpacity>
-
-                            <View style={[styles.verticalDivider, isMobile && { width: '100%', height: 1, marginHorizontal: 0, marginVertical: 4 }]} />
-
-                            <TouchableOpacity style={[styles.searchInputItem, isMobile && { width: '100%', paddingLeft: 0 }]} onPress={handleModelSelect}>
-                                <Text style={[styles.inputLabel, { color: 'rgba(255,255,255,0.55)' }]}>Model</Text>
-                                <View style={styles.inputValueRow}>
-                                    <Text style={[styles.inputValue, { color: selectedModel ? '#FFF' : 'rgba(255,255,255,0.35)' }]} numberOfLines={1}>
-                                        {selectedModel ? selectedModel.name : 'Seçin'}
-                                    </Text>
-                                </View>
-                            </TouchableOpacity>
-
-                            {!!(selectedBrand || selectedModel || searchQuery) && (
-                                <TouchableOpacity onPress={handleResetSearch} style={styles.resetButton}>
-                                    <X size={16} color="rgba(255,255,255,0.55)" />
+                        <View style={[styles.searchActions, isMobile && { paddingTop: 10 }]}>
+                            {(isTransport ? hasSearch : hasPlateSearch) && (
+                                <TouchableOpacity
+                                    onPress={isTransport ? handleResetSearch : handleResetPlateSearch}
+                                    style={[styles.clearBtn, { backgroundColor: t.fill }]}
+                                    accessibilityLabel="Axtarışı təmizlə"
+                                >
+                                    <X size={15} color={t.textSecondary} />
                                 </TouchableOpacity>
                             )}
-
-                            <View style={[isMobile ? { flexDirection: 'row', width: '100%', justifyContent: 'space-between', gap: 10, marginTop: 4 } : { flexDirection: 'row', alignItems: 'center' }]}>
-                                <TouchableOpacity style={[styles.smallActionBtn, isMobile && { flex: 1, marginLeft: 0 }]} onPress={handleFilterPress}>
-                                    <SlidersHorizontal size={20} color="#FFF" />
-                                    {isMobile && <Text style={{ color: '#FFF', marginLeft: 8, fontFamily: 'RethinkSans_600SemiBold' }}>Ətraflı</Text>}
-                                </TouchableOpacity>
-
-                                <TouchableOpacity style={[styles.searchActionSubmit, isMobile && { flex: 1, marginLeft: 0 }]} onPress={() => fetchListings()}>
-                                    <LinearGradient
-                                        colors={['#FF3B30', '#FF6B35']}
-                                        style={styles.searchActionSubmitGrad}
-                                        start={{ x: 0, y: 0 }}
-                                        end={{ x: 1, y: 0 }}
-                                    >
-                                        <Search size={18} color="#FFF" />
-                                        <Text style={styles.searchBtnText}>Axtar</Text>
-                                    </LinearGradient>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    ) : (
-                        <View style={[styles.unifiedSearchContainer, isMobile && { flexDirection: 'column', height: 'auto', borderRadius: 16, padding: 12, gap: 12 }]}>
-                            <View style={[styles.searchInputItem, isMobile && { width: '100%', paddingLeft: 0 }]}>
-                                <Text style={[styles.inputLabel, { color: 'rgba(255,255,255,0.55)' }]}>Region</Text>
-                                <TextInput
-                                    style={[styles.inputValue, { color: '#FFF', padding: 0, fontSize: 18, height: 24, outlineStyle: 'none' } as any]}
-                                    placeholder="90"
-                                    placeholderTextColor="rgba(255,255,255,0.35)"
-                                    value={plateSearchRegion}
-                                    onChangeText={setPlateSearchRegion}
-                                    keyboardType="number-pad"
-                                    maxLength={2}
+                            {isTransport && (
+                                <Button
+                                    variant="secondary"
+                                    title={activeFilterCount ? `Filtr · ${activeFilterCount}` : 'Filtr'}
+                                    icon={<SlidersHorizontal size={16} color={t.text} />}
+                                    onPress={handleFilterPress}
+                                    style={isMobile ? { flex: 1 } : undefined}
                                 />
-                            </View>
-
-                            <View style={[styles.verticalDivider, isMobile && { width: '100%', height: 1, marginHorizontal: 0, marginVertical: 4 }]} />
-
-                            <View style={[styles.searchInputItem, isMobile && { width: '100%', paddingLeft: 0 }]}>
-                                <Text style={[styles.inputLabel, { color: 'rgba(255,255,255,0.55)' }]}>Seriya</Text>
-                                <TextInput
-                                    style={[styles.inputValue, { color: '#FFF', padding: 0, fontSize: 18, height: 24, outlineStyle: 'none' } as any]}
-                                    placeholder="AA"
-                                    placeholderTextColor="rgba(255,255,255,0.35)"
-                                    value={plateSearchSeries}
-                                    onChangeText={(text) => setPlateSearchSeries(text.toUpperCase())}
-                                    maxLength={2}
-                                    autoCapitalize="characters"
-                                />
-                            </View>
-
-                            <View style={[styles.verticalDivider, isMobile && { width: '100%', height: 1, marginHorizontal: 0, marginVertical: 4 }]} />
-
-                            <View style={[styles.searchInputItem, isMobile && { width: '100%', paddingLeft: 0 }]}>
-                                <Text style={[styles.inputLabel, { color: 'rgba(255,255,255,0.55)' }]}>Nömrə</Text>
-                                <TextInput
-                                    style={[styles.inputValue, { color: '#FFF', padding: 0, fontSize: 18, height: 24, outlineStyle: 'none' } as any]}
-                                    placeholder="000"
-                                    placeholderTextColor="rgba(255,255,255,0.35)"
-                                    value={plateSearchNumber}
-                                    onChangeText={setPlateSearchNumber}
-                                    keyboardType="number-pad"
-                                    maxLength={3}
-                                />
-                            </View>
-
-                            {!!(plateSearchRegion || plateSearchSeries || plateSearchNumber) && (
-                                <TouchableOpacity onPress={handleResetPlateSearch} style={styles.resetButton}>
-                                    <X size={16} color="rgba(255,255,255,0.55)" />
-                                </TouchableOpacity>
                             )}
-
-                            <View style={[isMobile ? { flexDirection: 'row', width: '100%', justifyContent: 'space-between', gap: 10, marginTop: 4 } : { flexDirection: 'row', alignItems: 'center' }]}>
-                                <TouchableOpacity style={[styles.searchActionSubmit, { flex: 1, marginLeft: 0 }]} onPress={() => fetchPlates()}>
-                                    <LinearGradient
-                                        colors={['#FF3B30', '#FF6B35']}
-                                        style={styles.searchActionSubmitGrad}
-                                        start={{ x: 0, y: 0 }}
-                                        end={{ x: 1, y: 0 }}
-                                    >
-                                        <Search size={18} color="#FFF" />
-                                        <Text style={styles.searchBtnText}>Axtar</Text>
-                                    </LinearGradient>
-                                </TouchableOpacity>
-                            </View>
+                            <Button
+                                title="Axtar"
+                                icon={<Search size={16} color="#FFF" strokeWidth={2.4} />}
+                                onPress={() => { (isTransport ? fetchListings : fetchPlates)(); scrollToGrid(); }}
+                                style={isMobile ? { flex: 1 } : undefined}
+                            />
                         </View>
-                    )}
-
-                    {/* Today's Count */}
-                    <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, fontFamily: 'RethinkSans_500Medium', marginBottom: 24, textAlign: 'center' }}>
-                        Bu gün: <Text style={{ color: '#FF3B30', fontFamily: 'RethinkSans_700Bold' }}>{todayCount}</Text> yeni elan əlavə edilib
-                    </Text>
-
-                    {/* Stats row */}
-                    <View style={styles.statsRow}>
-                        {[
-                            { val: `${listings.length}+`, label: 'Aktiv Elan', icon: TrendingUp },
-                            { val: '100%', label: 'Etibarlı', icon: Star },
-                            { val: '7/24', label: 'Dəstək', icon: Zap },
-                        ].map(({ val, label, icon: Icon }, i) => (
-                            <React.Fragment key={i}>
-                                {i > 0 && <View style={styles.statDivider} />}
-                                <View style={styles.statItem}>
-                                    <Text style={styles.statVal}>{val}</Text>
-                                    <Text style={styles.statLabel}>{label}</Text>
-                                </View>
-                            </React.Fragment>
-                        ))}
                     </View>
-                </View>
 
-                {/* Wave bottom */}
-                <View style={styles.heroWave} />
+                    <Text style={[styles.heroMeta, { color: t.textSecondary }]}>
+                        {totalCount != null && <><Text style={{ color: t.text, fontFamily: FONT.semibold }}>{totalCount.toLocaleString('az')}</Text> aktiv elan · </>}
+                        bu gün <Text style={{ color: t.text, fontFamily: FONT.semibold }}>+{todayCount}</Text> yeni
+                    </Text>
+                </Container>
             </View>
 
-            {/* ═══ BANNER ════════════════════════════════════════════ */}
-            {width < 1024 && (settings.home_banner_url || settings.home_banner_url_2) && (
-                <View style={[styles.sectionWrap, isMobile && { marginHorizontal: 16 }]}>
+            {width < 1024 && !!(settings.home_banner_url || settings.home_banner_url_2) && (
+                <Container style={{ marginTop: 24 }}>
                     <BannerSlider
                         images={[settings.home_banner_url, settings.home_banner_url_2, settings.home_banner_url_3]}
                         height={isMobile ? 120 : 180}
                     />
-                </View>
+                </Container>
             )}
 
-            {/* ═══ URGENT LISTINGS ════════════════════════════════ */}
-            {urgentListings.length > 0 && (
-                <View style={[styles.vipSection, { backgroundColor: isDark ? '#1A0505' : '#FFF5F5', borderTopColor: isDark ? '#3C1515' : '#FFE5E5', borderBottomColor: isDark ? '#3C1515' : '#FFE5E5' }]}>
-                    <View style={styles.sectionWrap}>
-                        <View style={styles.sectionHeaderRow}>
-                            <View style={styles.sectionTitleGroup}>
-                                <AlertTriangle size={20} color="#FF3B30" fill="#FF3B30" />
-                                <Text style={[styles.sectionTitle, { color: colors.text }]}>Təcili Elanlar</Text>
-                                <View style={[styles.newBadge, { backgroundColor: '#FF3B30' }]}>
-                                    <Text style={styles.newBadgeText}>TƏCİLİ</Text>
-                                </View>
-                            </View>
-                            <TouchableOpacity style={styles.seeAllBtn} onPress={() => setActiveFilterType('cash')}>
-                                <Text style={[styles.seeAllText, { color: colors.primary }]}>Hamısına bax</Text>
-                                <ChevronRight size={16} color={colors.primary} />
-                            </TouchableOpacity>
-                        </View>
+            {/* ═══ URGENT + VIP rails ═══ */}
+            {isTransport && [
+                { key: 'urgent', title: 'Təcili elanlar', subtitle: 'Sahibi tez satmaq istəyir', data: urgentListings },
+                { key: 'vip', title: 'VIP elanlar', subtitle: 'Seçilmiş premium elanlar', data: vipListings },
+            ].filter(r => r.data.length > 0).map((rail) => (
+                <Container key={rail.key} style={{ marginTop: isMobile ? 32 : 48 }}>
+                    <SectionHeader title={rail.title} subtitle={rail.subtitle} actionLabel={rail.key === 'urgent' ? 'Hamısına bax' : undefined} onAction={rail.key === 'urgent' ? showAllUrgent : undefined} />
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={{ marginHorizontal: isMobile ? -16 : -32 }}
+                        contentContainerStyle={{ paddingHorizontal: isMobile ? 16 : 32, gap: 16, paddingTop: 4 }}
+                    >
+                        {rail.data.map(car => (
+                            <View key={car.id} style={{ width: isMobile ? 220 : 260 }}>{renderCar(car)}</View>
+                        ))}
+                    </ScrollView>
+                </Container>
+            ))}
 
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: isMobile ? -16 : -32 }} contentContainerStyle={{ paddingHorizontal: isMobile ? 16 : 32, gap: isMobile ? 12 : 16 }}>
-                            {urgentListings.map(car => (
-                                <View key={car.id} style={styles.vipCardWrap}>
-                                    <CarCard
-                                        car={car}
-                                        isFavorite={favorites.includes(car.id)}
-                                        onToggleFavorite={handleToggleFavorite}
-                                        onPress={(id: string) => router.push(`/listing/${id}`)}
-                                    />
-                                </View>
-                            ))}
-                        </ScrollView>
-                    </View>
-                </View>
-            )}
-
-            {/* ═══ VIP SHOWCASE ═══════════════════════════════════ */}
-            {vipListings.length > 0 && (
-                <View style={[styles.vipSection, { backgroundColor: isDark ? '#1C1C1E' : '#F7F7FA', borderTopColor: isDark ? '#2C2C2E' : '#E5E5EA', borderBottomColor: isDark ? '#2C2C2E' : '#E5E5EA' }]}>
-                    <View style={styles.sectionWrap}>
-                        <View style={styles.sectionHeaderRow}>
-                            <View style={styles.sectionTitleGroup}>
-                                <Crown size={20} color="#FFD700" fill="#FFD700" />
-                                <Text style={[styles.sectionTitle, { color: colors.text }]}>VIP Elanlar</Text>
-                                <View style={[styles.newBadge, { backgroundColor: '#FFD700' }]}>
-                                    <Text style={styles.newBadgeText}>Premium</Text>
-                                </View>
-                            </View>
-                            <TouchableOpacity style={styles.seeAllBtn} onPress={() => setActiveFilterType('cash')}>
-                                <Text style={[styles.seeAllText, { color: colors.primary }]}>Hamısına bax</Text>
-                                <ChevronRight size={16} color={colors.primary} />
-                            </TouchableOpacity>
-                        </View>
-
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: isMobile ? -16 : -32 }} contentContainerStyle={{ paddingHorizontal: isMobile ? 16 : 32, gap: isMobile ? 12 : 16 }}>
-                            {vipListings.map(car => (
-                                <View key={car.id} style={styles.vipCardWrap}>
-                                    <CarCard
-                                        car={car}
-                                        isFavorite={favorites.includes(car.id)}
-                                        onToggleFavorite={handleToggleFavorite}
-                                        onPress={(id: string) => router.push(`/listing/${id}`)}
-                                    />
-                                </View>
-                            ))}
-                        </ScrollView>
-                    </View>
-                </View>
-            )}
-
-            {/* ═══ LISTINGS GRID & BANNERS ════════════════════════════════ */}
+            {/* ═══ GRID ═══ */}
             <View style={{ flexDirection: 'row', justifyContent: 'center', width: '100%' }}>
                 <WebSideBanners side="left" />
 
-                <View style={[styles.sectionWrap, isMobile && { paddingHorizontal: 16, marginTop: 28 }, { flex: 1, marginTop: 28 }]}>
-                    {/* Section header + filters */}
-                    <View style={styles.sectionHeaderRow}>
-                        <View style={styles.sectionTitleGroup}>
-                            <TrendingUp size={20} color={colors.primary} />
-                            <Text style={[styles.sectionTitle, { color: colors.text }]}>Son {activeTopTab === 'transport' ? 'Elanlar' : 'Nömrələr'}</Text>
-                            {!loading && (
-                                <Text style={[styles.listingCount, { color: colors.textSecondary }]}>{activeTopTab === 'transport' ? listings.length : plates.length} {activeTopTab === 'transport' ? 'elan' : 'nömrə'}</Text>
-                            )}
-                        </View>
-
-                        {activeTopTab === 'transport' && (
-                            <View style={styles.filterRow}>
-                                {filterBtns.map(({ type, label, icon: Icon, color }) => (
-                                    <TouchableOpacity
-                                        key={type}
-                                        style={[
-                                            styles.filterChip,
-                                            {
-                                                backgroundColor: activeFilterType === type ? color : (isDark ? '#2C2C2E' : '#F2F2F7'),
-                                                borderColor: activeFilterType === type ? color : 'transparent',
-                                            }
-                                        ]}
-                                        onPress={() => setActiveFilterType(type)}
-                                    >
-                                        <Icon size={13} color={activeFilterType === type ? '#FFF' : colors.textSecondary} />
-                                        <Text style={[styles.filterChipText, { color: activeFilterType === type ? '#FFF' : colors.textSecondary }]}>
-                                            {label}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                        )}
+                <Container style={{ flex: 1, marginTop: isMobile ? 32 : 56 }}>
+                    <View onLayout={(e) => { gridY.current = e.nativeEvent.layout.y; }}>
+                        <SectionHeader
+                            title={isTransport ? 'Son elanlar' : 'Qeydiyyat nişanları'}
+                            subtitle={!loading ? `${items.length} ${isTransport ? 'elan' : 'nömrə'} göstərilir` : undefined}
+                            right={isTransport ? (
+                                <Segmented<FilterType>
+                                    options={[
+                                        { value: 'cash', label: 'Hamısı' },
+                                        { value: 'credit', label: 'Kredit' },
+                                        { value: 'barter', label: 'Barter' },
+                                        { value: 'urgent', label: 'Təcili' },
+                                    ]}
+                                    value={activeFilterType}
+                                    onChange={setActiveFilterType}
+                                    fullWidth={isMobile}
+                                    style={isMobile ? { width: '100%' } : undefined}
+                                />
+                            ) : undefined}
+                        />
                     </View>
 
                     {loading ? (
-                        <View style={{ paddingVertical: 80, alignItems: 'center' }}>
-                            <ActivityIndicator size="large" color={colors.primary} />
-                            <Text style={{ color: colors.textSecondary, marginTop: 16, fontFamily: 'RethinkSans_500Medium' }}>Elanlar yüklənir...</Text>
-                        </View>
-                    ) : (activeTopTab === 'transport' ? listings.length === 0 : plates.length === 0) ? (
-                        <View style={{ paddingVertical: 80, alignItems: 'center', gap: 12 }}>
-                            <Text style={{ fontSize: 40 }}>🔍</Text>
-                            <Text style={{ color: colors.text, fontFamily: 'RethinkSans_700Bold', fontSize: 18 }}>Nəticə tapılmadı</Text>
-                            <Text style={{ color: colors.textSecondary, fontFamily: 'RethinkSans_400Regular' }}>Axtarış kriteriyalarını dəyişin</Text>
-                            <TouchableOpacity onPress={() => {
-                                if (activeTopTab === 'transport') {
-                                    setSearchQuery('');
-                                    setActiveFilterType('cash');
-                                } else {
-                                    handleResetPlateSearch();
-                                }
-                            }} style={[styles.resetBtn, { backgroundColor: colors.primary }]}>
-                                <Text style={{ color: '#FFF', fontFamily: 'RethinkSans_700Bold' }}>Sıfırla</Text>
-                            </TouchableOpacity>
-                        </View>
+                        <Loading label={isTransport ? 'Elanlar yüklənir…' : 'Nömrələr yüklənir…'} />
+                    ) : loadError && items.length === 0 ? (
+                        <EmptyState
+                            title="Bağlantı alınmadı"
+                            subtitle="İnternet bağlantınızı yoxlayıb yenidən cəhd edin."
+                            action={<Button title="Yenidən cəhd et" onPress={() => (isTransport ? fetchListings() : fetchPlates())} />}
+                        />
+                    ) : items.length === 0 ? (
+                        <EmptyState
+                            icon={<Search size={28} color={t.textSecondary} />}
+                            title="Nəticə tapılmadı"
+                            subtitle="Axtarış meyarlarını dəyişin və ya filtrləri sıfırlayın."
+                            action={<Button variant="secondary" title="Sıfırla" onPress={() => {
+                                if (isTransport) { handleResetSearch(); setActiveFilterType('cash'); } else handleResetPlateSearch();
+                            }} />}
+                        />
+                    ) : isTransport ? (
+                        <WebGrid data={listings} keyExtractor={(c) => c.id} renderItem={(car) => renderCar(car)} minItemWidth={isMobile ? 150 : 220} gap={isMobile ? 12 : 16} />
                     ) : (
-                        <View style={[styles.grid, activeTopTab === 'transport' ? (isMobile && { gap: 14 }) : { gap: 16 }]}>
-                            {activeTopTab === 'transport' ? listings.map(car => (
-                                <View key={car.id} style={[styles.gridItem, isMobile && { flexBasis: '48%', maxWidth: '50%' }]}>
-                                    <CarCard
-                                        car={car}
-                                        isFavorite={favorites.includes(car.id)}
-                                        onToggleFavorite={handleToggleFavorite}
-                                        onPress={(id: string) => router.push(`/listing/${id}`)}
-                                    />
-                                </View>
-                            )) : plates.map((plate, index) => (
-                                <View key={plate.id} style={[isMobile ? { flexBasis: '48%', maxWidth: '50%' } : { flexBasis: '23%', maxWidth: '25%' }]}>
+                        <WebGrid
+                            data={plates}
+                            keyExtractor={(p: any) => p.id}
+                            minItemWidth={isMobile ? 150 : 220}
+                            gap={isMobile ? 12 : 16}
+                            renderItem={(plate: any) => (
+                                <HoverLift>
                                     <PlateCard
                                         region={plate.region}
                                         series={plate.series}
@@ -785,671 +569,73 @@ export default function WebHomeScreen() {
                                         price={plate.price}
                                         description={plate.description}
                                         isVip={plate.is_vip}
-                                        index={index}
-                                        onPress={() => router.push(`/plate/${plate.id}`)}
+                                        onPress={() => router.push(`/plate/${plate.id}` as any)}
                                     />
-                                </View>
-                            ))}
-                        </View>
+                                </HoverLift>
+                            )}
+                        />
                     )}
 
-                    {!loading && (activeTopTab === 'transport' ? totalPages > 1 : totalPlatesPages > 1) && (
+                    {!loading && (isTransport ? totalPages > 1 : totalPlatesPages > 1) && (
                         <Pagination
-                            currentPage={activeTopTab === 'transport' ? page : platesPage}
-                            totalPages={activeTopTab === 'transport' ? totalPages : totalPlatesPages}
+                            currentPage={isTransport ? page : platesPage}
+                            totalPages={isTransport ? totalPages : totalPlatesPages}
                             onPageChange={(p) => {
-                                if (activeTopTab === 'transport') {
-                                    setPage(p);
-                                } else {
-                                    setPlatesPage(p);
-                                }
-                                if (Platform.OS === 'web') {
-                                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                                }
+                                (isTransport ? setPage : setPlatesPage)(p);
+                                scrollToGrid();
                             }}
                         />
                     )}
-                </View>
+                </Container>
 
                 <WebSideBanners side="right" />
             </View>
 
-            {/* ═══ CTA STRIP ════════════════════════════════════════ */}
-            <LinearGradient
-                colors={['#FF3B30', '#FF6B35', '#FF9500']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.ctaStrip}
-            >
-                <View style={[styles.ctaStripInner, isMobile && { flexDirection: 'column', gap: 16, paddingHorizontal: 24, alignItems: 'flex-start' }]}>
-                    <View>
-                        <Text style={[styles.ctaStripTitle, isMobile && { fontSize: 18 }]}>Avtomobilinizi satmaq istəyirsiniz?</Text>
-                        <Text style={styles.ctaStripSub}>Elanınızı dərc edin, alıcılar sizi tapsın.</Text>
+            {/* ═══ CTA ═══ */}
+            <Container style={{ marginTop: isMobile ? 32 : 56, marginBottom: isMobile ? 40 : 72 }}>
+                <Card padding={isMobile ? 24 : 40} style={[styles.cta, isMobile && { flexDirection: 'column', alignItems: 'flex-start' }]}>
+                    <View style={{ flexShrink: 1, gap: 6 }}>
+                        <Text style={[styles.ctaTitle, { color: t.text }, isMobile && { fontSize: 22 }]}>Avtomobilinizi satırsınız?</Text>
+                        <Text style={[styles.ctaSub, { color: t.textSecondary }]}>Elanı bir neçə dəqiqəyə yerləşdirin — alıcılar sizi tapsın.</Text>
                     </View>
-                    <TouchableOpacity style={styles.ctaStripBtn} onPress={() => router.push('/add-listing' as any)}>
-                        <Text style={styles.ctaStripBtnText}>Elan ver →</Text>
-                    </TouchableOpacity>
-                </View>
-            </LinearGradient>
+                    <Button title="Elan ver" size="lg" icon={<Plus size={18} color="#FFF" strokeWidth={2.6} />} onPress={() => router.push('/add-listing' as any)} />
+                </Card>
+            </Container>
 
-            {/* ═══ FOOTER ═══════════════════════════════════════════ */}
-            <View style={styles.footer}>
-                <View style={[styles.footerInner, isMobile && { paddingHorizontal: 24, paddingVertical: 36, gap: 28 }]}>
-                    {/* Brand */}
-                    <View style={styles.footerBrand}>
-                        {logoUrl ? (
-                            <Image source={{ uri: logoUrl }} style={{ width: 110, height: 48 }} resizeMode="contain" />
-                        ) : (
-                            <View>
-                                <Text style={styles.footerLogoMain}>NAXÇIVAN</Text>
-                                <Text style={[styles.footerLogoSub, { color: '#FF3B30' }]}>AVTO</Text>
-                            </View>
-                        )}
-                        <Text style={styles.footerTagline}>
-                            Naxçıvan'ın ən etibarlı{'\n'}avtomobil platforması
-                        </Text>
-                        {/* Social dots */}
-                        <View style={styles.footerSocials}>
-                            {[settings.instagram, settings.whatsapp, settings.tiktok].filter(Boolean).map((url, i) => (
-                                <View key={i} style={styles.socialDot} />
-                            ))}
-                        </View>
-                    </View>
-
-                    {/* Links */}
-                    <View style={styles.footerCol}>
-                        <Text style={styles.footerColTitle}>Keçidlər</Text>
-                        {[
-                            { label: 'Ana Səhifə', href: '/' },
-                            { label: 'Seçilmişlər', href: '/favorites' },
-                            { label: 'Müqayisə', href: '/compare' },
-                            { label: 'Əlaqə', href: '/contact' },
-                            { label: 'Məxfilik Siyasəti', href: '/privacy' },
-                        ].map(link => (
-                            <TouchableOpacity key={link.href} onPress={() => router.push(link.href as any)}>
-                                <Text style={styles.footerLink}>{link.label}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-
-                    {/* Contact */}
-                    <View style={styles.footerCol}>
-                        <Text style={styles.footerColTitle}>Əlaqə</Text>
-                        {settings.phone_1 && <Text style={styles.footerContact}>📞 {settings.phone_1}</Text>}
-                        {settings.phone && !settings.phone_1 && <Text style={styles.footerContact}>📞 {settings.phone}</Text>}
-                        {settings.email && <Text style={styles.footerContact}>✉️ {settings.email}</Text>}
-                        {settings.address && <Text style={styles.footerContact}>📍 {settings.address}</Text>}
-                        {settings.website && <Text style={styles.footerContact}>🌐 {settings.website}</Text>}
-                    </View>
-                </View>
-
-                <View style={[styles.footerBottom, isMobile && { paddingHorizontal: 24, flexDirection: 'column', alignItems: 'center' }]}>
-                    <Text style={[styles.footerCopy, isMobile && { textAlign: 'center' }]}>© 2025 Naxçıvan Avto. Bütün hüquqlar qorunur.</Text>
-                    <Text style={[styles.footerDev, isMobile && { textAlign: 'center' }]}>Hazırladı: İlkin Rzayev / Novo Media · +994 51 500 00 77</Text>
-                </View>
-            </View>
+            <WebFooter />
         </ScrollView>
     );
 }
 
-const CARD_HEIGHT_IMG = 195;
-
 const styles = StyleSheet.create({
-
-    /* ── Hero ─────────────────────────── */
-    hero: {
-        minHeight: 560,
-        overflow: 'hidden',
-        position: 'relative',
-        justifyContent: 'center',
-    },
-    orb: {
-        position: 'absolute',
-        borderRadius: 999,
-        filter: 'blur(90px)' as any,
-        opacity: 0.45,
-    },
-    orbRed: {
-        width: 420,
-        height: 420,
-        backgroundColor: '#FF3B30',
-        top: -100,
-        left: '5%' as any,
-    },
-    orbPurple: {
-        width: 360,
-        height: 360,
-        backgroundColor: '#7B2FFF',
-        top: 60,
-        right: '10%' as any,
-    },
-    orbBlue: {
-        width: 300,
-        height: 300,
-        backgroundColor: '#0055FF',
-        bottom: -60,
-        left: '40%' as any,
-    },
-    gridPattern: {
-        ...StyleSheet.absoluteFill,
-        backgroundImage: 'linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)' as any,
-        backgroundSize: '50px 50px' as any,
-    },
-    heroInner: {
-        maxWidth: 860,
-        alignSelf: 'center',
+    hero: { borderBottomWidth: StyleSheet.hairlineWidth },
+    heroInner: { alignItems: 'center', paddingTop: 72, paddingBottom: 56 },
+    eyebrow: { fontSize: 15, fontFamily: FONT.semibold, marginBottom: 12 },
+    heroTitle: { fontSize: 72, lineHeight: 78, fontFamily: FONT.heavy, letterSpacing: -2.4, textAlign: 'center' },
+    heroSub: { fontSize: 19, lineHeight: 28, fontFamily: FONT.regular, textAlign: 'center', maxWidth: 560, marginTop: 18, marginBottom: 32 },
+    searchBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
         width: '100%',
-        alignItems: 'center',
-        paddingHorizontal: 32,
-        paddingTop: 80,
-        paddingBottom: 48,
-        zIndex: 2,
-    },
-    heroPill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        backgroundColor: 'rgba(255,59,48,0.15)',
-        borderWidth: 1,
-        borderColor: 'rgba(255,59,48,0.3)',
-        borderRadius: 20,
-        paddingHorizontal: 16,
-        paddingVertical: 7,
-        marginBottom: 28,
-    },
-    heroPillText: {
-        color: 'rgba(255,180,170,0.9)',
-        fontFamily: 'RethinkSans_600SemiBold',
-        fontSize: 13,
-        letterSpacing: 0.5,
-    },
-    heroH1: {
-        color: '#FFF',
-        fontSize: 58,
-        fontFamily: 'RethinkSans_800ExtraBold',
-        textAlign: 'center',
-        lineHeight: 68,
-        marginBottom: 16,
-        textShadowColor: 'rgba(0,0,0,0.3)' as any,
-        textShadowOffset: { width: 0, height: 2 },
-        textShadowRadius: 8,
-    },
-    heroSub: {
-        color: 'rgba(255,255,255,0.55)',
-        fontSize: 17,
-        fontFamily: 'RethinkSans_400Regular',
-        textAlign: 'center',
-        marginBottom: 40,
-        lineHeight: 26,
-        maxWidth: 500,
-    },
-    unifiedSearchContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.08)',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.15)',
-        borderRadius: 22,
-        padding: 6,
-        height: 64,
-        width: '100%',
-        maxWidth: 680,
-        marginBottom: 40,
-    },
-    searchInputItem: {
-        flex: 1,
-        justifyContent: 'center',
-        paddingLeft: 12,
-        cursor: 'pointer' as any,
-    },
-    inputLabel: {
-        fontSize: 10,
-        fontFamily: 'RethinkSans_600SemiBold',
-        marginBottom: 2,
-    },
-    inputValueRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    inputValue: {
-        fontSize: 15,
-        fontFamily: 'RethinkSans_700Bold',
-    },
-    verticalDivider: {
-        width: 1,
-        height: '50%',
-        backgroundColor: 'rgba(255,255,255,0.15)',
-        marginHorizontal: 8,
-    },
-    resetButton: {
-        padding: 8,
-        marginRight: 4,
-        cursor: 'pointer' as any,
-    },
-    smallActionBtn: {
-        flexDirection: 'row',
-        height: 48,
-        paddingHorizontal: 16,
-        borderRadius: 16,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginLeft: 6,
-        backgroundColor: 'rgba(255,255,255,0.1)',
-        cursor: 'pointer' as any,
-    },
-    searchActionSubmit: {
-        marginLeft: 6,
-        cursor: 'pointer' as any,
-        borderRadius: 16,
-        overflow: 'hidden',
-    },
-    searchActionSubmitGrad: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        paddingHorizontal: 24,
-        height: 48,
-    },
-    searchBtnText: {
-        color: '#FFF',
-        fontFamily: 'RethinkSans_700Bold',
-        fontSize: 15,
-    },
-    statsRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 32,
-    },
-    statDivider: {
-        width: 1,
-        height: 40,
-        backgroundColor: 'rgba(255,255,255,0.15)',
-    },
-    statItem: {
-        alignItems: 'center',
-        gap: 4,
-    },
-    statVal: {
-        color: '#FF6B35',
-        fontSize: 28,
-        fontFamily: 'RethinkSans_800ExtraBold',
-    },
-    statLabel: {
-        color: 'rgba(255,255,255,0.5)',
-        fontSize: 13,
-        fontFamily: 'RethinkSans_500Medium',
-    },
-    heroWave: {
-        position: 'absolute',
-        bottom: -1,
-        left: 0,
-        right: 0,
-        height: 32,
-        backgroundColor: 'transparent',
-        borderTopLeftRadius: 32,
-        borderTopRightRadius: 32,
-    },
-
-    // Mobile style Toggle - adapted for Web Hero
-    webTogglePill: {
-        flexDirection: 'row',
-        borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.08)',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.15)',
-        padding: 4,
-        height: 48,
-        alignItems: 'center',
-        alignSelf: 'center',
-        marginBottom: 20,
-    },
-    webToggleItem: {
-        paddingHorizontal: 20,
-        height: '100%',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderRadius: 16,
-    },
-    webToggleText: {
-        fontSize: 14,
-        fontFamily: 'RethinkSans_600SemiBold',
-    },
-
-    /* ── Shared section ───────────────── */
-    sectionWrap: {
-        maxWidth: 1280,
-        alignSelf: 'center',
-        width: '100%',
-        paddingHorizontal: 32,
-        marginTop: 48,
-        marginBottom: 8,
-    },
-    sectionHeaderRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 24,
-        flexWrap: 'wrap',
-        gap: 12,
-    },
-    sectionTitleGroup: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-    },
-    sectionTitle: {
-        fontSize: 24,
-        fontFamily: 'RethinkSans_800ExtraBold',
-    },
-    listingCount: {
-        fontSize: 14,
-        fontFamily: 'RethinkSans_500Medium',
-    },
-    newBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 6,
-    },
-    newBadgeText: {
-        color: '#000',
-        fontSize: 11,
-        fontFamily: 'RethinkSans_800ExtraBold',
-    },
-    seeAllBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    seeAllText: {
-        fontSize: 14,
-        fontFamily: 'RethinkSans_600SemiBold',
-    },
-    filterRow: {
-        flexDirection: 'row',
-        gap: 8,
-    },
-    filterChip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        paddingHorizontal: 14,
-        paddingVertical: 8,
-        borderRadius: 20,
-        borderWidth: 1,
-    },
-    filterChipText: {
-        fontFamily: 'RethinkSans_600SemiBold',
-        fontSize: 13,
-    },
-    resetBtn: {
-        paddingHorizontal: 24,
-        paddingVertical: 12,
-        borderRadius: 14,
-        marginTop: 8,
-    },
-
-    /* ── VIP section ──────────────────── */
-    vipSection: {
-        borderTopWidth: 1,
-        borderBottomWidth: 1,
-        paddingVertical: 8,
-    },
-    vipCardWrap: {
-        width: 260,
-    },
-
-    /* ── Grid ─────────────────────────── */
-    grid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 20,
-    },
-    gridItem: {
-        flexBasis: 260,
-        flexGrow: 1,
-        maxWidth: 320,
-    },
-
-    /* ── Car Card ─────────────────────── */
-    card: {
+        maxWidth: 760,
         borderRadius: 18,
-        overflow: 'hidden',
-        borderWidth: 1,
-        ...Platform.select({
-            web: {
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-            } as any
-        })
+        borderWidth: StyleSheet.hairlineWidth,
+        padding: 8,
+        paddingLeft: 12,
+        minHeight: 68,
     },
-    cardImgWrap: {
-        height: CARD_HEIGHT_IMG,
-        position: 'relative',
-        overflow: 'hidden',
-    },
-    cardImg: {
-        width: '100%',
-        height: '100%',
-        ...Platform.select({
-            web: {
-                transition: 'transform 0.3s ease',
-            } as any
-        })
-    },
-    badgesRow: {
-        position: 'absolute',
-        top: 10,
-        left: 10,
-        flexDirection: 'row',
-        gap: 4,
-    },
-    badge: {
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 4,
-    },
-    badgeText: {
-        color: '#FFF',
-        fontSize: 10,
-        fontFamily: 'RethinkSans_700Bold',
-    },
-    vipBadge: {
-        position: 'absolute',
-        bottom: 10,
-        left: 10,
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 6,
-        paddingVertical: 3,
-        borderRadius: 6,
-        borderWidth: 1,
-    },
-    priceOverlay: {
-        position: 'absolute',
-        bottom: 10,
-        right: 10,
-    },
-    priceOverlayText: {
-        color: '#FFF',
-        fontSize: 17,
-        fontFamily: 'RethinkSans_800ExtraBold',
-        textShadowColor: 'rgba(0,0,0,0.6)' as any,
-        textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 4,
-    },
-    heartBtn: {
-        position: 'absolute',
-        top: 10,
-        right: 10,
-        width: 34,
-        height: 34,
-        borderRadius: 17,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backdropFilter: 'blur(8px)' as any,
-    },
-    cardBody: {
-        padding: 14,
-        gap: 4,
-    },
-    cardTitle: {
-        fontSize: 15,
-        fontFamily: 'RethinkSans_700Bold',
-    },
-    cardSpecs: {
-        fontSize: 12,
-        fontFamily: 'RethinkSans_500Medium',
-    },
-    cardFooterRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginTop: 2,
-    },
-    cardLoc: {
-        fontSize: 11,
-        fontFamily: 'RethinkSans_500Medium',
-        flex: 1,
-    },
-    cardDate: {
-        fontSize: 11,
-        fontFamily: 'RethinkSans_400Regular',
-    },
-
-    /* ── CTA Strip ────────────────────── */
-    ctaStrip: {
-        marginTop: 48,
-    },
-    ctaStripInner: {
-        maxWidth: 1280,
-        alignSelf: 'center',
-        width: '100%',
-        paddingHorizontal: 48,
-        paddingVertical: 40,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: 24,
-    },
-    ctaStripTitle: {
-        color: '#FFF',
-        fontSize: 24,
-        fontFamily: 'RethinkSans_800ExtraBold',
-        marginBottom: 6,
-    },
-    ctaStripSub: {
-        color: 'rgba(255,255,255,0.75)',
-        fontSize: 15,
-        fontFamily: 'RethinkSans_400Regular',
-    },
-    ctaStripBtn: {
-        backgroundColor: '#FFF',
-        paddingHorizontal: 32,
-        paddingVertical: 14,
-        borderRadius: 20,
-    },
-    ctaStripBtnText: {
-        color: '#FF3B30',
-        fontFamily: 'RethinkSans_800ExtraBold',
-        fontSize: 16,
-    },
-
-    /* ── Footer ───────────────────────── */
-    footer: {
-        marginTop: 0,
-        backgroundColor: '#080810',
-        borderTopWidth: 1,
-        borderTopColor: '#1A1A2E',
-    },
-    footerInner: {
-        maxWidth: 1280,
-        alignSelf: 'center',
-        width: '100%',
-        paddingHorizontal: 48,
-        paddingVertical: 56,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: 48,
-    },
-    footerBrand: {
-        maxWidth: 260,
-        gap: 14,
-    },
-    footerLogoMain: {
-        fontSize: 17,
-        fontFamily: 'RethinkSans_800ExtraBold',
-        color: '#FFF',
-        letterSpacing: 3,
-    },
-    footerLogoSub: {
-        fontSize: 11,
-        fontFamily: 'RethinkSans_800ExtraBold',
-        letterSpacing: 5,
-    },
-    footerTagline: {
-        color: 'rgba(255,255,255,0.4)',
-        fontSize: 14,
-        fontFamily: 'RethinkSans_400Regular',
-        lineHeight: 22,
-    },
-    footerSocials: {
-        flexDirection: 'row',
-        gap: 8,
-    },
-    socialDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: '#FF3B30',
-    },
-    footerCol: {
-        gap: 12,
-    },
-    footerColTitle: {
-        color: '#FFF',
-        fontSize: 13,
-        fontFamily: 'RethinkSans_800ExtraBold',
-        textTransform: 'uppercase',
-        letterSpacing: 1.5,
-        marginBottom: 4,
-    },
-    footerLink: {
-        color: 'rgba(255,255,255,0.45)',
-        fontSize: 14,
-        fontFamily: 'RethinkSans_500Medium',
-        cursor: 'pointer' as any,
-    },
-    footerContact: {
-        color: 'rgba(255,255,255,0.45)',
-        fontSize: 14,
-        fontFamily: 'RethinkSans_500Medium',
-        lineHeight: 22,
-    },
-    footerBottom: {
-        maxWidth: 1280,
-        alignSelf: 'center',
-        width: '100%',
-        paddingHorizontal: 48,
-        paddingVertical: 24,
-        borderTopWidth: 1,
-        borderTopColor: '#1A1A2E',
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: 8,
-    },
-    footerCopy: {
-        color: 'rgba(255,255,255,0.3)',
-        fontSize: 13,
-        fontFamily: 'RethinkSans_500Medium',
-    },
-    footerDev: {
-        color: 'rgba(255,255,255,0.2)',
-        fontSize: 12,
-        fontFamily: 'RethinkSans_400Regular',
-    },
+    searchBarMobile: { flexDirection: 'column', alignItems: 'stretch', padding: 12, borderRadius: 16 },
+    field: { flex: 1, minWidth: 0, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 6, cursor: 'pointer' as any },
+    fieldMobile: { flex: 0, paddingHorizontal: 4, paddingVertical: 10 },
+    fieldLabel: { fontSize: 12, fontFamily: FONT.semibold, marginBottom: 2 },
+    fieldValue: { fontSize: 16, fontFamily: FONT.semibold },
+    plateInput: { padding: 0, height: 24, outlineStyle: 'none' } as any,
+    dividerV: { width: StyleSheet.hairlineWidth, height: 32 },
+    dividerH: { height: StyleSheet.hairlineWidth },
+    searchActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    clearBtn: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', cursor: 'pointer' as any },
+    heroMeta: { fontSize: 14, fontFamily: FONT.regular, marginTop: 18 },
+    cta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 20 },
+    ctaTitle: { fontSize: 28, fontFamily: FONT.heavy, letterSpacing: -0.6 },
+    ctaSub: { fontSize: 16, fontFamily: FONT.regular },
 });

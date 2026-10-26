@@ -385,7 +385,11 @@ export default function FilterScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: {
+    flex: 1,
+    // On the web this opens as a page: keep it a readable sheet-width column
+    ...Platform.select({ web: { width: '100%', maxWidth: 640, alignSelf: 'center' } as any }),
+  },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
     flexDirection: 'row',
