@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Naxçıvan Avto",
+    "name": "Naxcivan Avto",
     "slug": "naxcivan-avto",
     "version": "1.4.1",
     "orientation": "portrait",
@@ -15,6 +15,7 @@
         "applinks:naxavto.com"
       ],
       "infoPlist": {
+        "CFBundleDisplayName": "Naxçıvan Avto",
         "ITSAppUsesNonExemptEncryption": false,
         "UIRequiresFullScreen": true
       }
