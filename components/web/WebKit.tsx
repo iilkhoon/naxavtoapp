@@ -357,6 +357,45 @@ export function TextField({ label, hint, error, style, inputStyle, left, right, 
   );
 }
 
+/** Looks like a TextField, opens a picker */
+export function SelectField({ label, value, placeholder, onPress, style }: {
+  label?: string; value?: string; placeholder: string; onPress: () => void; style?: StyleProp<ViewStyle>;
+}) {
+  const t = useWebTokens();
+  return (
+    <View style={[{ gap: 6 }, style]}>
+      {!!label && <Text style={[styles.fieldLabel, { color: t.textSecondary }]}>{label}</Text>}
+      <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={[styles.field, { backgroundColor: t.fill, borderColor: 'transparent' }, web({ cursor: 'pointer' })]}>
+        <Text style={[styles.fieldInput, { color: value ? t.text : t.placeholder, lineHeight: 44 }]} numberOfLines={1}>{value || placeholder}</Text>
+        <Text style={[styles.chevron, { color: t.textTertiary, transform: [{ rotate: '90deg' }] }]}>›</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+export function Checkbox({ checked, onChange, label, description }: {
+  checked: boolean; onChange: (v: boolean) => void; label: string; description?: string;
+}) {
+  const t = useWebTokens();
+  return (
+    <TouchableOpacity
+      onPress={() => onChange(!checked)}
+      activeOpacity={0.7}
+      role="checkbox"
+      aria-checked={checked}
+      style={[{ flexDirection: 'row', alignItems: 'center', gap: 12 }, web({ cursor: 'pointer' })]}
+    >
+      <View style={[styles.checkbox, checked ? { backgroundColor: t.accent, borderColor: t.accent } : { borderColor: t.hairlineStrong }]}>
+        {checked && <Text style={styles.checkmark}>✓</Text>}
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.rowTitle, { color: t.text }]}>{label}</Text>
+        {!!description && <Text style={[styles.rowSubtitle, { color: t.textSecondary }]}>{description}</Text>}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 /** iOS-style inset grouped list */
 export function GroupedList({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
   const t = useWebTokens();
@@ -531,6 +570,8 @@ const styles = StyleSheet.create({
   field: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 44, borderRadius: 10, paddingHorizontal: 12, borderWidth: 1 },
   fieldInput: { flex: 1, height: '100%', fontSize: 15, fontFamily: FONT.medium, padding: 0 },
   fieldHint: { fontSize: 12, fontFamily: FONT.medium, marginLeft: 2 },
+  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center' },
+  checkmark: { color: '#FFF', fontSize: 14, fontFamily: FONT.bold, marginTop: -1 },
   grouped: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   groupSeparator: { height: StyleSheet.hairlineWidth, marginLeft: 16 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingHorizontal: 16, paddingVertical: 10 },

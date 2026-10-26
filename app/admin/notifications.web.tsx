@@ -1,23 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    TextInput,
-    TouchableOpacity,
-    ActivityIndicator,
-    ScrollView,
-    Platform
-} from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import { Send, CheckCircle } from 'lucide-react-native';
 import { formatDate } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
-import { Send, Bell, MessageSquare, CheckCircle, Smartphone } from 'lucide-react-native';
-import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
+import { Card, Button, TextField, GroupCaption, useWebTokens, useBreakpoints, FONT } from '../../components/web/WebKit';
+import { AdminPage } from '../../components/web/AdminKit';
+
+const FUNCTION_URL = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/sendNotification`;
 
 export default function SendNotificationWeb() {
-    const { colors, isDark } = useTheme();
+    const t = useWebTokens();
+    const { isTablet } = useBreakpoints();
     const { showToast } = useToast();
 
     const [title, setTitle] = useState('');
@@ -26,225 +21,117 @@ export default function SendNotificationWeb() {
     const [sentCount, setSentCount] = useState(0);
     const [history, setHistory] = useState<any[]>([]);
 
-    useFocusEffect(
-        useCallback(() => {
-            fetchHistory();
-        }, [])
-    );
+    const fetchHistory = useCallback(async () => {
+        const { data, error } = await supabase.from('sent_notifications').select('*').order('created_at', { ascending: false }).limit(15);
+        if (!error && data) setHistory(data);
+    }, []);
 
-    const fetchHistory = async () => {
-        try {
-            const { data, error } = await supabase
-                .from('sent_notifications')
-                .select('*')
-                .order('created_at', { ascending: false })
-                .limit(15);
-
-            if (!error && data) {
-                setHistory(data);
-            }
-        } catch (err) {
-            console.error('Error fetching notification history:', err);
-        }
-    };
+    useFocusEffect(useCallback(() => { fetchHistory(); }, [fetchHistory]));
 
     const handleSend = async () => {
         if (!title.trim() || !body.trim()) {
-            showToast('Zəhmət olmasa başlıq və mesajı daxil edin', 'error');
+            showToast('Başlıq və mesajı daxil edin', 'error');
             return;
         }
-
         setLoading(true);
         try {
-            const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+            const { data: sessionData } = await supabase.auth.getSession();
             const accessToken = sessionData?.session?.access_token;
-
-            if (sessionError || !accessToken) {
+            if (!accessToken) {
                 showToast('Sessiya tapılmadı. Yenidən daxil olun.', 'error');
-                setLoading(false);
                 return;
             }
 
-            const response = await fetch(
-                'https://cqpsvgahjayvvnbqwdcn.supabase.co/functions/v1/sendNotification',
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${accessToken}`,
-                    },
-                    body: JSON.stringify({
-                        title: title.trim(),
-                        body: body.trim(),
-                    }),
-                }
-            );
-
-            const responseData = await response.json();
-
-            if (!response.ok) {
-                const msg = responseData?.error ?? `Server xətası: ${response.status}`;
-                showToast(msg, 'error');
-                return;
-            }
-
-            const successCount: number = responseData?.sent ?? 0;
-            setSentCount(successCount);
-            showToast(`${successCount} istifadəçiyə bildiriş göndərildi!`, 'success');
-
-            await supabase.from('sent_notifications').insert({
-                title: title.trim(),
-                body: body.trim(),
-                sent_count: successCount
+            // Plain fetch with the user's token: functions.invoke sometimes sent the anon key
+            const response = await fetch(FUNCTION_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+                body: JSON.stringify({ title: title.trim(), body: body.trim() }),
             });
+            const responseData = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                showToast(responseData?.error ?? `Server xətası: ${response.status}`, 'error');
+                return;
+            }
 
+            const count: number = responseData?.sent ?? 0;
+            setSentCount(count);
+            showToast(`${count} istifadəçiyə bildiriş göndərildi`, 'success');
+            await supabase.from('sent_notifications').insert({ title: title.trim(), body: body.trim(), sent_count: count });
             fetchHistory();
             setTitle('');
             setBody('');
-
         } catch (error: any) {
-            console.error('[Notification] Unhandled error:', error);
-            showToast(error.message ?? 'Bildiriş göndərilmədi.', 'error');
+            showToast(error?.message ?? 'Bildiriş göndərilmədi', 'error');
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
-            <View style={styles.header}>
-                <Text style={[styles.pageTitle, { color: colors.text }]}>Bildiriş Göndər</Text>
-                <Text style={[styles.pageSubtitle, { color: colors.textSecondary }]}>
-                    Bütün tətbiq istifadəçilərinə anlıq bildiriş (Push Notification) göndərin.
-                </Text>
-            </View>
-
-            <View style={styles.mainGrid}>
-                {/* Form Section */}
-                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <View style={styles.formGroup}>
-                        <Text style={[styles.label, { color: colors.textSecondary }]}>Bildiriş Başlığı</Text>
-                        <TextInput
-                            style={[styles.input, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border }]}
-                            placeholder="Məs: Yeni Elanlar Var!"
-                            placeholderTextColor={colors.placeholder}
-                            value={title}
-                            onChangeText={setTitle}
-                        />
-                    </View>
-
-                    <View style={styles.formGroup}>
-                        <Text style={[styles.label, { color: colors.textSecondary }]}>Mesaj mətni</Text>
-                        <TextInput
-                            style={[styles.input, styles.textArea, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border }]}
-                            placeholder="İstifadəçilərə nə demək istəyirsiniz?"
-                            placeholderTextColor={colors.placeholder}
-                            value={body}
-                            onChangeText={setBody}
-                            multiline
-                            numberOfLines={4}
-                        />
-                    </View>
-
-                    <TouchableOpacity
-                        style={[styles.sendBtn, { backgroundColor: colors.primary }]}
-                        onPress={handleSend}
-                        disabled={loading}
-                    >
-                        {loading ? (
-                            <ActivityIndicator color="#FFF" />
-                        ) : (
-                            <>
-                                <Send size={18} color="#FFF" />
-                                <Text style={styles.sendBtnText}>İndi Göndər</Text>
-                            </>
-                        )}
-                    </TouchableOpacity>
-
+        <AdminPage title="Bildirişlər" subtitle="Bütün tətbiq istifadəçilərinə push bildiriş göndərin" maxWidth={1040}>
+            <View style={[styles.grid, isTablet && { flexDirection: 'column' }]}>
+                <Card style={[{ flex: 1.4, gap: 18 }, isTablet && { width: '100%' }]} padding={24}>
+                    <TextField label="Başlıq" placeholder="Məs: Yeni elanlar var!" value={title} onChangeText={setTitle} maxLength={65} />
+                    <TextField label="Mesaj" placeholder="İstifadəçilərə nə demək istəyirsiniz?" value={body} onChangeText={setBody} multiline maxLength={240} hint={`${body.length}/240`} />
+                    <Button title="İndi göndər" size="lg" icon={<Send size={17} color="#FFF" />} loading={loading} onPress={handleSend} />
                     {sentCount > 0 && (
-                        <View style={[styles.successBanner, { backgroundColor: '#22C55E15', borderColor: '#22C55E30' }]}>
-                            <CheckCircle size={16} color="#22C55E" />
-                            <Text style={[styles.successText, { color: '#22C55E' }]}>
-                                Sonuncu bildiriş {sentCount} nəfərə uğurla çatdırıldı.
-                            </Text>
+                        <View style={[styles.success, { backgroundColor: `${t.success}1A` }]}>
+                            <CheckCircle size={16} color={t.success} />
+                            <Text style={[styles.successText, { color: t.success }]}>Sonuncu bildiriş {sentCount} nəfərə çatdırıldı.</Text>
                         </View>
                     )}
-                </View>
+                </Card>
 
-                {/* Preview & History Section */}
-                <View style={styles.sideCol}>
-                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Ön Baxış (Mobil)</Text>
-                    <View style={[styles.previewCard, { backgroundColor: isDark ? '#2A2A2A' : '#F5F5F5', borderColor: colors.border }]}>
-                        <View style={styles.previewHeader}>
-                            <View style={styles.previewIconWrap}>
-                                <Smartphone size={10} color="#FFF" />
-                            </View>
-                            <Text style={styles.previewAppName}>NAXÇIVAN AVTO</Text>
-                            <Text style={styles.previewTime}>İndi</Text>
+                <View style={[{ flex: 1 }, isTablet && { width: '100%' }]}>
+                    <GroupCaption>Ön baxış</GroupCaption>
+                    {/* iOS lock-screen notification */}
+                    <View style={[styles.preview, { backgroundColor: t.isDark ? 'rgba(44,44,46,0.9)' : 'rgba(255,255,255,0.9)', borderColor: t.hairline, boxShadow: t.shadow } as any]}>
+                        <View style={styles.previewHead}>
+                            <View style={[styles.previewIcon, { backgroundColor: t.accent }]}><Text style={styles.previewIconText}>N</Text></View>
+                            <Text style={[styles.previewApp, { color: t.textSecondary }]}>NAXÇIVAN AVTO</Text>
+                            <Text style={[styles.previewApp, { color: t.textSecondary }]}>indi</Text>
                         </View>
-                        <Text style={[styles.previewTitle, { color: colors.text }]} numberOfLines={1}>
-                            {title || 'Sizin Başlıq'}
-                        </Text>
-                        <Text style={[styles.previewBody, { color: colors.textSecondary }]} numberOfLines={2}>
-                            {body || 'Göndərəcəyiniz bildiriş mətni burada belə görünəcək...'}
-                        </Text>
+                        <Text style={[styles.previewTitle, { color: t.text }]} numberOfLines={1}>{title || 'Bildiriş başlığı'}</Text>
+                        <Text style={[styles.previewBody, { color: t.text }]} numberOfLines={3}>{body || 'Göndərəcəyiniz mətn burada belə görünəcək.'}</Text>
                     </View>
 
-                    <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginTop: 24 }]}>Son Göndərilənlər</Text>
-                    <View style={styles.historyList}>
+                    <GroupCaption style={{ marginTop: 28 }}>Son göndərilənlər</GroupCaption>
+                    <Card padding={0} style={{ overflow: 'hidden' }}>
                         {history.length === 0 ? (
-                            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Tarixçə boşdur.</Text>
-                        ) : (
-                            history.map((item) => (
-                                <View key={item.id} style={[styles.historyItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                                    <View style={styles.historyTop}>
-                                        <Text style={[styles.historyTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
-                                        <Text style={[styles.historySent, { color: colors.primary }]}>{item.sent_count} nəfər</Text>
-                                    </View>
-                                    <Text style={[styles.historyDate, { color: colors.textSecondary }]}>
-                                        {formatDate(item.created_at)} {new Date(item.created_at).toLocaleTimeString('az-AZ', { hour: '2-digit', minute: '2-digit' })}
+                            <Text style={[styles.empty, { color: t.textSecondary }]}>Hələ bildiriş göndərilməyib.</Text>
+                        ) : history.map((item, i) => (
+                            <View key={item.id} style={[styles.historyRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.hairline }]}>
+                                <View style={{ flex: 1, minWidth: 0 }}>
+                                    <Text style={[styles.historyTitle, { color: t.text }]} numberOfLines={1}>{item.title}</Text>
+                                    <Text style={[styles.historyDate, { color: t.textSecondary }]}>
+                                        {formatDate(item.created_at)} · {new Date(item.created_at).toLocaleTimeString('az-AZ', { hour: '2-digit', minute: '2-digit' })}
                                     </Text>
                                 </View>
-                            ))
-                        )}
-                    </View>
+                                <Text style={[styles.historyCount, { color: t.textSecondary }]}>{item.sent_count} nəfər</Text>
+                            </View>
+                        ))}
+                    </Card>
                 </View>
             </View>
-        </ScrollView>
+        </AdminPage>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1 },
-    content: { padding: 32, maxWidth: 1200, alignSelf: 'center', width: '100%' },
-    header: { marginBottom: 32 },
-    pageTitle: { fontSize: 28, fontFamily: 'RethinkSans_800ExtraBold', marginBottom: 8 },
-    pageSubtitle: { fontSize: 16, fontFamily: 'RethinkSans_400Regular' },
-    mainGrid: { flexDirection: 'row', gap: 32 },
-    card: { flex: 1.5, padding: 32, borderRadius: 24, borderWidth: 1, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
-    sideCol: { flex: 1 },
-    sectionTitle: { fontSize: 12, fontFamily: 'RethinkSans_700Bold', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 },
-    formGroup: { marginBottom: 24 },
-    label: { fontSize: 14, fontFamily: 'RethinkSans_600SemiBold', marginBottom: 8 },
-    input: { height: 50, borderWidth: 1, borderRadius: 12, paddingHorizontal: 16, fontSize: 15, fontFamily: 'RethinkSans_500Medium' },
-    textArea: { height: 120, paddingTop: 16, textAlignVertical: 'top' },
-    sendBtn: { flexDirection: 'row', height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', gap: 10, marginTop: 8 },
-    sendBtnText: { color: '#FFF', fontSize: 16, fontFamily: 'RethinkSans_700Bold' },
-    successBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 20, padding: 12, borderRadius: 12, borderWidth: 1 },
-    successText: { fontSize: 13, fontFamily: 'RethinkSans_600SemiBold' },
-
-    previewCard: { padding: 16, borderRadius: 16, borderWidth: 1, marginBottom: 16 },
-    previewHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
-    previewIconWrap: { width: 18, height: 18, borderRadius: 4, backgroundColor: '#FF3B30', justifyContent: 'center', alignItems: 'center' },
-    previewAppName: { fontSize: 10, color: '#888', fontWeight: 'bold', flex: 1 },
-    previewTime: { fontSize: 10, color: '#888' },
-    previewTitle: { fontSize: 14, fontFamily: 'RethinkSans_700Bold', marginBottom: 2 },
-    previewBody: { fontSize: 13, fontFamily: 'RethinkSans_400Regular' },
-
-    historyList: { gap: 12 },
-    historyItem: { padding: 16, borderRadius: 16, borderWidth: 1 },
-    historyTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-    historyTitle: { fontSize: 14, fontFamily: 'RethinkSans_700Bold', flex: 1, marginRight: 8 },
-    historySent: { fontSize: 12, fontFamily: 'RethinkSans_700Bold' },
-    historyDate: { fontSize: 12, fontFamily: 'RethinkSans_400Regular' }
+    grid: { flexDirection: 'row', alignItems: 'flex-start', gap: 28 },
+    success: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 10 },
+    successText: { fontSize: 13, fontFamily: FONT.semibold },
+    preview: { padding: 14, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, backdropFilter: 'blur(20px)' as any },
+    previewHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+    previewIcon: { width: 20, height: 20, borderRadius: 5, justifyContent: 'center', alignItems: 'center' },
+    previewIconText: { color: '#FFF', fontSize: 11, fontFamily: FONT.heavy },
+    previewApp: { fontSize: 12, fontFamily: FONT.medium, flex: 1 },
+    previewTitle: { fontSize: 15, fontFamily: FONT.semibold },
+    previewBody: { fontSize: 14, fontFamily: FONT.regular, marginTop: 1, lineHeight: 19 },
+    empty: { padding: 18, fontSize: 14, fontFamily: FONT.regular },
+    historyRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
+    historyTitle: { fontSize: 14, fontFamily: FONT.semibold },
+    historyDate: { fontSize: 12, fontFamily: FONT.regular, marginTop: 2 },
+    historyCount: { fontSize: 13, fontFamily: FONT.medium },
 });

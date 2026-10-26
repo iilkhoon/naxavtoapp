@@ -1,331 +1,116 @@
 import React, { useState, useEffect } from 'react';
-import {
-    View, Text, StyleSheet, ScrollView,
-    ActivityIndicator, TouchableOpacity, TextInput, Platform
-} from 'react-native';
-import {
-    Users, Search, ArrowLeft, ChevronRight, UserPlus, Mail, Calendar, Shield
-} from 'lucide-react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { Users, UserPlus, Shield } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
-import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { formatDate } from '../../lib/utils';
+import { Button, Badge, Segmented, EmptyState, Card, useWebTokens, FONT } from '../../components/web/WebKit';
+import { AdminPage, Toolbar, SearchField, DataTable, CellText } from '../../components/web/AdminKit';
+
+type Scope = 'admins' | 'all';
 
 export default function AdminUsersWeb() {
     const router = useRouter();
-    const { colors, isDark } = useTheme();
+    const t = useWebTokens();
     const { showToast } = useToast();
+    const { isSuperAdmin, loading: authLoading } = useAuth();
 
     const [loading, setLoading] = useState(true);
     const [users, setUsers] = useState<any[]>([]);
+    const [scope, setScope] = useState<Scope>('admins');
     const [searchQuery, setSearchQuery] = useState('');
-    const [filteredUsers, setFilteredUsers] = useState<any[]>([]);
 
     useEffect(() => {
-        fetchUsers();
-    }, []);
+        if (authLoading || !isSuperAdmin) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                let query = supabase.from('profiles').select('*').order('created_at', { ascending: false });
+                if (scope === 'admins') query = query.eq('role', 'admin');
+                const { data, error } = await query;
+                if (error) throw error;
+                if (!cancelled) setUsers(data || []);
+            } catch (e: any) {
+                showToast('İstifadəçilər yüklənərkən xəta: ' + e.message, 'error');
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [scope, isSuperAdmin, authLoading, showToast]);
 
-    useEffect(() => {
-        if (!searchQuery) {
-            setFilteredUsers(users);
-            return;
-        }
-
-        const query = searchQuery.toLowerCase();
-        const filtered = users.filter(user => 
-            (user.full_name?.toLowerCase().includes(query)) || 
-            (user.email?.toLowerCase().includes(query))
+    if (!authLoading && !isSuperAdmin) {
+        return (
+            <AdminPage title="Admin istifadəçilər">
+                <Card>
+                    <EmptyState icon={<Shield size={28} color={t.textSecondary} />} title="Giriş yoxdur" subtitle="Bu bölməyə yalnız superadminlər daxil ola bilər." />
+                </Card>
+            </AdminPage>
         );
-        setFilteredUsers(filtered);
-    }, [searchQuery, users]);
+    }
 
-    const fetchUsers = async () => {
-        setLoading(true);
-        try {
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .order('created_at', { ascending: false });
+    const q = searchQuery.trim().toLowerCase();
+    const filtered = q
+        ? users.filter((u) => u.full_name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q))
+        : users;
 
-            if (error) throw error;
-            setUsers(data || []);
-            setFilteredUsers(data || []);
-        } catch (e: any) {
-            showToast('İstifadəçilər yüklənərkən xəta: ' + e.message, 'error');
-        } finally {
-            setLoading(false);
-        }
-    };
+    const roleBadge = (u: any) =>
+        u.is_superadmin ? <Badge label="Superadmin" tone="blue" /> : u.role === 'admin' ? <Badge label="Admin" tone="accent" /> : <Badge label="İstifadəçi" />;
 
     return (
-        <View style={[styles.container, { backgroundColor: colors.background }]}>
-            {/* Header */}
-            <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-                <View style={styles.headerLeft}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                        <ArrowLeft size={24} color={colors.text} />
-                    </TouchableOpacity>
-                    <View>
-                        <Text style={[styles.headerTitle, { color: colors.text }]}>İstifadəçilər</Text>
-                        <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>Sistemdəki bütün istifadəçilərin siyahısı</Text>
-                    </View>
-                </View>
-                
-                <TouchableOpacity 
-                    style={[styles.addButton, { backgroundColor: colors.primary }]}
-                    onPress={() => router.push('/admin/add-user')}
-                >
-                    <UserPlus size={20} color="#FFF" />
-                    <Text style={styles.addButtonText}>Yeni İstifadəçi</Text>
-                </TouchableOpacity>
-            </View>
+        <AdminPage
+            title="Admin istifadəçilər"
+            subtitle={`${users.length} ${scope === 'admins' ? 'admin' : 'istifadəçi'}`}
+            actions={<Button size="sm" title="Yeni admin" icon={<UserPlus size={14} color="#FFF" />} onPress={() => router.push('/admin/add-user')} />}
+        >
+            <Toolbar>
+                <Segmented<Scope>
+                    options={[{ value: 'admins', label: 'Adminlər' }, { value: 'all', label: 'Hamısı' }]}
+                    value={scope}
+                    onChange={(v) => { setLoading(true); setScope(v); }}
+                />
+                <SearchField value={searchQuery} onChangeText={setSearchQuery} placeholder="Ad və ya email" />
+            </Toolbar>
 
-            <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-                {/* Search and Stats Row */}
-                <View style={styles.topRow}>
-                    <View style={[styles.searchContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <Search size={20} color={colors.textSecondary} />
-                        <TextInput
-                            style={[styles.searchInput, { color: colors.text }]}
-                            placeholder="Ad və ya email ilə axtar..."
-                            placeholderTextColor={colors.placeholder}
-                            value={searchQuery}
-                            onChangeText={setSearchQuery}
-                        />
-                    </View>
-                    
-                    <View style={[styles.statsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <Users size={20} color={colors.primary} />
-                        <Text style={[styles.statsText, { color: colors.text }]}>
-                            Cəmi: <Text style={{ fontWeight: 'bold' }}>{users.length}</Text>
-                        </Text>
-                    </View>
-                </View>
-
-                {loading ? (
-                    <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color={colors.primary} />
-                    </View>
-                ) : (
-                    <View style={[styles.tableCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <View style={[styles.tableHeader, { borderBottomColor: colors.border }]}>
-                            <Text style={[styles.columnHeader, { flex: 2, color: colors.textSecondary }]}>İstifadəçi</Text>
-                            <Text style={[styles.columnHeader, { flex: 2, color: colors.textSecondary }]}>Email</Text>
-                            <Text style={[styles.columnHeader, { flex: 1, color: colors.textSecondary }]}>Rol</Text>
-                            <Text style={[styles.columnHeader, { flex: 1, color: colors.textSecondary }]}>Qeydiyyat</Text>
-                            <View style={{ width: 40 }} />
-                        </View>
-
-                        {filteredUsers.length === 0 ? (
-                            <View style={styles.emptyState}>
-                                <Text style={{ color: colors.textSecondary }}>İstifadəçi tapılmadı</Text>
+            <DataTable
+                loading={loading}
+                data={filtered}
+                keyExtractor={(u) => u.id}
+                onRowPress={(u) => router.push(`/admin/user-detail?id=${u.id}` as any)}
+                emptyIcon={<Users size={28} color={t.textSecondary} />}
+                emptyTitle="İstifadəçi tapılmadı"
+                columns={[
+                    {
+                        key: 'user',
+                        title: 'İstifadəçi',
+                        flex: 2,
+                        render: (u) => (
+                            <View style={styles.userCell}>
+                                <View style={[styles.avatar, { backgroundColor: t.fill }]}>
+                                    <Text style={[styles.avatarText, { color: t.text }]}>
+                                        {(u.full_name?.charAt(0) || u.email?.charAt(0) || 'U').toUpperCase()}
+                                    </Text>
+                                </View>
+                                <View style={{ flex: 1, minWidth: 0 }}>
+                                    <CellText title={u.full_name || 'Adsız istifadəçi'} subtitle={u.email} />
+                                </View>
                             </View>
-                        ) : (
-                            filteredUsers.map((user) => (
-                                <TouchableOpacity 
-                                    key={user.id} 
-                                    style={[styles.tableRow, { borderBottomColor: colors.border }]}
-                                    onPress={() => router.push(`/admin/user-detail?id=${user.id}`)}
-                                >
-                                    <View style={[styles.cell, { flex: 2 }]}>
-                                        <View style={[styles.avatar, { backgroundColor: colors.primary + '15' }]}>
-                                            <Text style={[styles.avatarText, { color: colors.primary }]}>
-                                                {user.full_name?.charAt(0) || user.email?.charAt(0).toUpperCase() || 'U'}
-                                            </Text>
-                                        </View>
-                                        <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1}>
-                                            {user.full_name || 'Adsız İstifadəçi'}
-                                        </Text>
-                                    </View>
-                                    
-                                    <View style={[styles.cell, { flex: 2 }]}>
-                                        <Mail size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
-                                        <Text style={[styles.userEmail, { color: colors.textSecondary }]} numberOfLines={1}>
-                                            {user.email}
-                                        </Text>
-                                    </View>
-
-                                    <View style={[styles.cell, { flex: 1 }]}>
-                                        <View style={[styles.roleBadge, { backgroundColor: user.role === 'admin' ? '#FF3B3020' : '#34C75920' }]}>
-                                            <Shield size={12} color={user.role === 'admin' ? '#FF3B30' : '#34C759'} style={{ marginRight: 4 }} />
-                                            <Text style={[styles.roleText, { color: user.role === 'admin' ? '#FF3B30' : '#34C759' }]}>
-                                                {user.role === 'admin' ? 'Admin' : 'İstifadəçi'}
-                                            </Text>
-                                        </View>
-                                    </View>
-
-                                    <View style={[styles.cell, { flex: 1 }]}>
-                                        <Calendar size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
-                                        <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-                                            {formatDate(user.created_at)}
-                                        </Text>
-                                    </View>
-
-                                    <ChevronRight size={20} color={colors.border} />
-                                </TouchableOpacity>
-                            ))
-                        )}
-                    </View>
-                )}
-            </ScrollView>
-        </View>
+                        ),
+                    },
+                    { key: 'role', title: 'Rol', flex: 1, render: roleBadge },
+                    { key: 'created', title: 'Qeydiyyat', flex: 1, align: 'right', hideOnMobile: true, render: (u) => <CellText title={u.created_at ? formatDate(u.created_at) : '—'} /> },
+                    { key: 'go', title: '', width: 16, align: 'right', render: () => <Text style={[styles.chevron, { color: t.textTertiary }]}>›</Text> },
+                ]}
+            />
+        </AdminPage>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: 24,
-        paddingHorizontal: 40,
-        borderBottomWidth: 1,
-    },
-    headerLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 16,
-    },
-    backButton: {
-        padding: 8,
-        borderRadius: 12,
-    },
-    headerTitle: {
-        fontSize: 24,
-        fontFamily: 'RethinkSans_800ExtraBold',
-    },
-    headerSubtitle: {
-        fontSize: 14,
-        fontFamily: 'RethinkSans_400Regular',
-    },
-    addButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-        borderRadius: 12,
-        gap: 8,
-    },
-    addButtonText: {
-        color: '#FFF',
-        fontWeight: 'bold',
-        fontSize: 15,
-    },
-    content: {
-        flex: 1,
-    },
-    scrollContent: {
-        padding: 40,
-        paddingTop: 24,
-        maxWidth: 1200,
-        alignSelf: 'center',
-        width: '100%',
-    },
-    topRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 24,
-        gap: 16,
-    },
-    searchContainer: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderRadius: 14,
-        borderWidth: 1,
-        gap: 12,
-    },
-    searchInput: {
-        flex: 1,
-        fontSize: 15,
-        fontFamily: 'RethinkSans_400Regular',
-        outlineStyle: 'none',
-    } as any,
-    statsCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-        borderRadius: 14,
-        borderWidth: 1,
-        gap: 10,
-    },
-    statsText: {
-        fontSize: 15,
-        fontFamily: 'RethinkSans_400Regular',
-    },
-    tableCard: {
-        borderRadius: 20,
-        borderWidth: 1,
-        overflow: 'hidden',
-    },
-    tableHeader: {
-        flexDirection: 'row',
-        padding: 16,
-        paddingHorizontal: 24,
-        borderBottomWidth: 1,
-    },
-    columnHeader: {
-        fontSize: 13,
-        fontFamily: 'RethinkSans_700Bold',
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-    },
-    tableRow: {
-        flexDirection: 'row',
-        padding: 16,
-        paddingHorizontal: 24,
-        borderBottomWidth: 1,
-        alignItems: 'center',
-    },
-    cell: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    avatar: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12,
-    },
-    avatarText: {
-        fontSize: 14,
-        fontWeight: 'bold',
-    },
-    userName: {
-        fontSize: 15,
-        fontFamily: 'RethinkSans_700Bold',
-    },
-    userEmail: {
-        fontSize: 14,
-        fontFamily: 'RethinkSans_400Regular',
-    },
-    roleBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 8,
-    },
-    roleText: {
-        fontSize: 12,
-        fontFamily: 'RethinkSans_700Bold',
-    },
-    emptyState: {
-        padding: 40,
-        alignItems: 'center',
-    },
-    loadingContainer: {
-        padding: 100,
-        alignItems: 'center',
-    }
+    userCell: { flexDirection: 'row', alignItems: 'center', gap: 12, width: '100%' },
+    avatar: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+    avatarText: { fontSize: 15, fontFamily: FONT.bold },
+    chevron: { fontSize: 22, fontFamily: FONT.medium },
 });

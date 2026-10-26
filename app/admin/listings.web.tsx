@@ -1,74 +1,52 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-    View, Text, StyleSheet, TouchableOpacity, ScrollView,
-    ActivityIndicator, TextInput, Image, useWindowDimensions, Platform
-} from 'react-native';
-import {
-    Car, Hash, Clock, CheckCircle, Trash2, Edit, Eye, Search, X,
-    RefreshCw, ChevronRight, ArrowLeft
-} from 'lucide-react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Image, StyleSheet } from 'react-native';
+import { Car, Hash, CheckCircle, Trash2, Edit, Eye, RefreshCw } from 'lucide-react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { formatDate } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
-import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
-import { useAuth } from '../../contexts/AuthContext';
-import { WebHeader } from '../../components/WebHeader.web';
-import { WebFooter } from '../../components/WebFooter.web';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { PlateVisual } from '../../components/PlateVisual';
 import { Listing, Plate } from '../../types';
+import { Segmented, Stat, Button, Badge, useWebTokens, useBreakpoints, formatMoney } from '../../components/web/WebKit';
+import { AdminPage, Toolbar, SearchField, DataTable, IconAction, CellText } from '../../components/web/AdminKit';
 
 type ActiveTab = 'cars' | 'plates';
 type StatusTab = 'approved' | 'pending';
-
-function StatCard({ label, value, icon: Icon, color, bg }: any) {
-    return (
-        <View style={[styles.statCard, { backgroundColor: bg }]}>
-            <View style={[styles.statIcon, { backgroundColor: color + '20' }]}>
-                <Icon size={22} color={color} />
-            </View>
-            <Text style={[styles.statValue, { color }]}>{value}</Text>
-            <Text style={styles.statLabel}>{label}</Text>
-        </View>
-    );
-}
+type Item = (Listing | Plate) & { title?: string };
 
 export default function WebAdminListings() {
     const router = useRouter();
-    const { colors, isDark } = useTheme();
+    const t = useWebTokens();
+    const { isMobile } = useBreakpoints();
     const { showToast } = useToast();
-    const { user } = useAuth();
-    const { width } = useWindowDimensions();
-    const isMobile = width < 768;
 
     const [activeTab, setActiveTab] = useState<ActiveTab>('cars');
     const [statusTab, setStatusTab] = useState<StatusTab>('approved');
-    const [items, setItems] = useState<(Listing | Plate)[]>([]);
+    const [items, setItems] = useState<Item[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [stats, setStats] = useState({ totalCars: 0, pendingCars: 0, totalPlates: 0, pendingPlates: 0 });
     const [deleteId, setDeleteId] = useState<string | null>(null);
-    const [deleteModal, setDeleteModal] = useState(false);
 
-    useFocusEffect(useCallback(() => { fetchAll(); }, [activeTab, statusTab]));
+    const table = activeTab === 'cars' ? 'listings' : 'plates';
 
-    const fetchAll = async () => {
+    const fetchAll = useCallback(async () => {
         setLoading(true);
         try {
-            const table = activeTab === 'cars' ? 'listings' : 'plates';
             const sel = activeTab === 'cars'
-                ? 'id, short_id, title, price, image_url, make, model, year, created_at, is_vip, status'
+                ? 'id, short_id, title, price, currency, image_url, images, make, model, year, created_at, is_vip, is_urgent, status'
                 : 'id, short_id, region, series, number, price, created_at, is_vip, status';
-            const { data } = await supabase.from(table).select(sel).eq('status', statusTab).order('created_at', { ascending: false });
-            setItems((data || []) as any);
-
-            // Stats
-            const [carApproved, carPending, platApproved, platPending] = await Promise.all([
-                supabase.from('listings').select('id', { count: 'exact', head: true }).eq('status', 'approved'),
-                supabase.from('listings').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-                supabase.from('plates').select('id', { count: 'exact', head: true }).eq('status', 'approved'),
-                supabase.from('plates').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+            const head = { count: 'exact' as const, head: true };
+            const [{ data, error }, carApproved, carPending, platApproved, platPending] = await Promise.all([
+                supabase.from(activeTab === 'cars' ? 'listings' : 'plates').select(sel).eq('status', statusTab).order('created_at', { ascending: false }),
+                supabase.from('listings').select('id', head).eq('status', 'approved'),
+                supabase.from('listings').select('id', head).eq('status', 'pending'),
+                supabase.from('plates').select('id', head).eq('status', 'approved'),
+                supabase.from('plates').select('id', head).eq('status', 'pending'),
             ]);
+            if (error) throw error;
+            setItems((data || []) as any);
             setStats({
                 totalCars: carApproved.count || 0,
                 pendingCars: carPending.count || 0,
@@ -80,444 +58,165 @@ export default function WebAdminListings() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [activeTab, statusTab, showToast]);
+
+    useFocusEffect(useCallback(() => { fetchAll(); }, [fetchAll]));
 
     const approveItem = async (id: string) => {
-        const table = activeTab === 'cars' ? 'listings' : 'plates';
         const { error } = await supabase.from(table).update({ status: 'approved' }).eq('id', id);
-        if (error) { showToast('Xəta', 'error'); } else { showToast('Təsdiqləndi', 'success'); fetchAll(); }
+        if (error) {
+            showToast('Xəta: ' + error.message, 'error');
+            return;
+        }
+        showToast('Təsdiqləndi', 'success');
+        fetchAll();
     };
 
     const deleteItem = async () => {
         if (!deleteId) return;
-        setDeleteModal(false);
-        const table = activeTab === 'cars' ? 'listings' : 'plates';
-        await supabase.from(table).delete().eq('id', deleteId);
-        showToast('Silindi', 'success');
-        fetchAll();
+        const id = deleteId;
         setDeleteId(null);
+        const { error } = await supabase.from(table).delete().eq('id', id);
+        if (error) {
+            showToast('Silinmədi: ' + error.message, 'error');
+            return;
+        }
+        setItems((prev) => prev.filter((i) => i.id !== id));
+        showToast('Silindi', 'success');
     };
 
-    const filtered = items.filter(item => {
-        const q = searchQuery.toLowerCase();
+    const q = searchQuery.trim().toLowerCase();
+    const filtered = items.filter((item) => {
         if (!q) return true;
-        if (activeTab === 'cars') {
-            const c = item as Listing;
-            return `${c.make} ${c.model}`.toLowerCase().includes(q) || (c.short_id || '').includes(q);
-        } else {
-            const p = item as Plate;
-            return `${p.region} ${p.series} ${p.number}`.toLowerCase().includes(q) || (p.short_id || '').includes(q);
-        }
+        const text = activeTab === 'cars'
+            ? `${(item as Listing).make} ${(item as Listing).model} ${(item as Listing).year}`
+            : `${(item as Plate).region} ${(item as Plate).series} ${(item as Plate).number} ${(item as Plate).region}-${(item as Plate).series}-${(item as Plate).number}`;
+        return text.toLowerCase().includes(q) || (item.short_id || '').toLowerCase().includes(q);
     });
 
-    const statCards = [
-        { label: 'Aktiv Avtomobil', value: stats.totalCars, icon: Car, color: '#007AFF', bg: isDark ? '#1C1C1E' : '#FFF' },
-        { label: 'Gözləyən Avtomobil', value: stats.pendingCars, icon: Clock, color: '#FF9500', bg: isDark ? '#1C1C1E' : '#FFF' },
-        { label: 'Aktiv Nömrə', value: stats.totalPlates, icon: Hash, color: '#34C759', bg: isDark ? '#1C1C1E' : '#FFF' },
-        { label: 'Gözləyən Nömrə', value: stats.pendingPlates, icon: Clock, color: '#FF3B30', bg: isDark ? '#1C1C1E' : '#FFF' },
-    ];
+    const pendingCount = activeTab === 'cars' ? stats.pendingCars : stats.pendingPlates;
+    const approvedCount = activeTab === 'cars' ? stats.totalCars : stats.totalPlates;
+
+    const cover = (c: Listing) => (Array.isArray(c.images) && c.images[0]) || c.image_url;
 
     return (
-        <View style={{ flex: 1, backgroundColor: colors.background }}>
-            <ScrollView
-                style={{ flex: 1 }}
-                contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
-                showsVerticalScrollIndicator={false}
-            >
-                <View style={[styles.pageWrap, isMobile && { paddingHorizontal: 16 }]}>
-                    {/* Title */}
-                    <View style={styles.titleRow}>
-                        <View>
-                            <Text style={[styles.pageTitle, { color: colors.text }]}>Admin Panel</Text>
-                            <Text style={[styles.pageSub, { color: colors.textSecondary }]}>Elan idarəetməsi</Text>
-                        </View>
-                        <TouchableOpacity
-                            style={[styles.refreshBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-                            onPress={fetchAll}
-                        >
-                            <RefreshCw size={18} color={colors.primary} />
-                        </TouchableOpacity>
-                    </View>
+        <AdminPage
+            title="Elanlar"
+            subtitle="Təsdiq gözləyən və aktiv elanların idarəsi"
+            actions={<Button variant="secondary" size="sm" title="Yenilə" icon={<RefreshCw size={14} color={t.text} />} onPress={fetchAll} />}
+        >
+            <View style={[styles.stats, isMobile && { flexWrap: 'wrap' }]}>
+                <Stat label="Aktiv avtomobil" value={String(stats.totalCars)} />
+                <Stat label="Gözləyən avtomobil" value={String(stats.pendingCars)} tone={stats.pendingCars ? t.warning : undefined} />
+                <Stat label="Aktiv nömrə" value={String(stats.totalPlates)} />
+                <Stat label="Gözləyən nömrə" value={String(stats.pendingPlates)} tone={stats.pendingPlates ? t.warning : undefined} />
+            </View>
 
-                    {/* Stats */}
-                    <View style={[styles.statsRow, isMobile && { flexWrap: 'wrap' }]}>
-                        {statCards.map(s => (
-                            <StatCard key={s.label} {...s} />
-                        ))}
-                    </View>
+            <Toolbar>
+                <Segmented<ActiveTab>
+                    options={[{ value: 'cars', label: 'Avtomobillər' }, { value: 'plates', label: 'Nömrələr' }]}
+                    value={activeTab}
+                    onChange={(v) => { setActiveTab(v); setSearchQuery(''); }}
+                />
+                <Segmented<StatusTab>
+                    options={[{ value: 'approved', label: 'Aktiv', count: approvedCount }, { value: 'pending', label: 'Gözləyən', count: pendingCount }]}
+                    value={statusTab}
+                    onChange={setStatusTab}
+                />
+                <SearchField value={searchQuery} onChangeText={setSearchQuery} placeholder={activeTab === 'cars' ? 'Marka, model və ya ID' : 'Nömrə və ya ID'} />
+            </Toolbar>
 
-                    {/* Tabs + Filters */}
-                    <View style={[styles.controlsRow, isMobile && { flexDirection: 'column', gap: 12 }]}>
-                        {/* Type Tabs */}
-                        <View style={[styles.segControl, { backgroundColor: colors.card }]}>
-                            <TouchableOpacity
-                                style={[styles.segBtn, activeTab === 'cars' && { backgroundColor: colors.primary }]}
-                                onPress={() => { setActiveTab('cars'); setSearchQuery(''); }}
-                            >
-                                <Car size={16} color={activeTab === 'cars' ? '#FFF' : colors.textSecondary} />
-                                <Text style={[styles.segText, { color: activeTab === 'cars' ? '#FFF' : colors.textSecondary }]}>Avtomobillər</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.segBtn, activeTab === 'plates' && { backgroundColor: colors.primary }]}
-                                onPress={() => { setActiveTab('plates'); setSearchQuery(''); }}
-                            >
-                                <Hash size={16} color={activeTab === 'plates' ? '#FFF' : colors.textSecondary} />
-                                <Text style={[styles.segText, { color: activeTab === 'plates' ? '#FFF' : colors.textSecondary }]}>Nömrələr</Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        {/* Status Filter */}
-                        <View style={styles.statusRow}>
-                            <TouchableOpacity
-                                style={[styles.statusChip, { backgroundColor: statusTab === 'approved' ? colors.primary : colors.card, borderColor: colors.border, borderWidth: 1 }]}
-                                onPress={() => setStatusTab('approved')}
-                            >
-                                <Text style={[styles.statusText, { color: statusTab === 'approved' ? '#FFF' : colors.textSecondary }]}>Aktiv</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.statusChip, { backgroundColor: statusTab === 'pending' ? '#FF9500' : colors.card, borderColor: colors.border, borderWidth: 1 }]}
-                                onPress={() => setStatusTab('pending')}
-                            >
-                                <Text style={[styles.statusText, { color: statusTab === 'pending' ? '#FFF' : colors.textSecondary }]}>Gözləyən</Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        {/* Search */}
-                        <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                            <Search size={16} color={colors.textSecondary} />
-                            <TextInput
-                                style={[styles.searchInput, { color: colors.text }, Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}]}
-                                placeholder="Axtar..."
-                                placeholderTextColor={colors.textSecondary}
-                                value={searchQuery}
-                                onChangeText={setSearchQuery}
-                            />
-                            {searchQuery.length > 0 && (
-                                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                                    <X size={14} color={colors.textSecondary} />
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    </View>
-
-                    {/* List */}
-                    {loading ? (
-                        <View style={styles.loadingWrap}>
-                            <ActivityIndicator size="large" color={colors.primary} />
-                        </View>
-                    ) : filtered.length === 0 ? (
-                        <View style={styles.emptyWrap}>
-                            <Car size={48} color={colors.border} />
-                            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Elan tapılmadı</Text>
-                        </View>
-                    ) : (
-                        <View style={styles.listWrap}>
-                            {/* List header */}
-                            <View style={[styles.listHeader, isMobile && { display: 'none' as any }]}>
-                                <Text style={[styles.colHead, { color: colors.textSecondary, flex: 2 }]}>Elan</Text>
-                                <Text style={[styles.colHead, { color: colors.textSecondary, flex: 1, textAlign: 'right' }]}>Qiymət</Text>
-                                <Text style={[styles.colHead, { color: colors.textSecondary, flex: 1, textAlign: 'center' }]}>Tarix</Text>
-                                <Text style={[styles.colHead, { color: colors.textSecondary, width: 140, textAlign: 'center' }]}>Əməliyyat</Text>
-                            </View>
-
-                            {filtered.map((item) => {
-                                const iscar = activeTab === 'cars';
-                                const c = item as Listing;
-                                const p = item as Plate;
-                                const title = iscar ? `${c.make} ${c.model} ${c.year}` : `${p.region} ${p.series} ${p.number}`;
-                                const price = `${item.price} ₼`;
-                                const date = formatDate(item.created_at || '');
-                                return (
-                                    <View key={item.id} style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                                        {/* Thumbnail / Icon */}
-                                        <View style={styles.thumbWrap}>
-                                            {iscar && c.image_url ? (
-                                                <Image source={{ uri: c.image_url }} style={styles.thumb} resizeMode="cover" />
-                                            ) : (
-                                                <View style={[styles.thumb, { backgroundColor: isDark ? '#2C2C2E' : '#E5E5EA', justifyContent: 'center', alignItems: 'center' }]}>
-                                                    {iscar ? <Car size={22} color={colors.textSecondary} /> : <Hash size={22} color={colors.textSecondary} />}
-                                                </View>
-                                            )}
-                                        </View>
-
-                                        {/* Info */}
-                                        <View style={{ flex: 2, justifyContent: 'center' }}>
-                                            <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>{title}</Text>
-                                            <View style={styles.itemMeta}>
-                                                <Text style={[styles.itemId, { color: colors.textSecondary }]}>#{item.short_id || item.id.substring(0, 6)}</Text>
-                                                {(item as any).is_vip && <Text style={styles.vipBadge}>VIP</Text>}
+            <DataTable<Item>
+                loading={loading}
+                data={filtered}
+                keyExtractor={(i) => i.id}
+                emptyIcon={activeTab === 'cars' ? <Car size={28} color={t.textSecondary} /> : <Hash size={28} color={t.textSecondary} />}
+                emptyTitle={q ? 'Axtarışa uyğun elan yoxdur' : statusTab === 'pending' ? 'Təsdiq gözləyən elan yoxdur' : 'Elan yoxdur'}
+                columns={[
+                    {
+                        key: 'item',
+                        title: 'Elan',
+                        flex: 2.4,
+                        render: (item) => {
+                            const isCar = activeTab === 'cars';
+                            const c = item as Listing;
+                            const p = item as Plate;
+                            return (
+                                <View style={styles.itemCell}>
+                                    {isCar ? (
+                                        cover(c)
+                                            ? <Image source={{ uri: cover(c) }} accessibilityLabel={`${c.make} ${c.model}`} style={[styles.thumb, { backgroundColor: t.fill }]} resizeMode="cover" />
+                                            : <View style={[styles.thumb, styles.thumbIcon, { backgroundColor: t.fill }]}><Car size={18} color={t.textSecondary} /></View>
+                                    ) : (
+                                        <View style={[styles.thumb, styles.thumbIcon, { backgroundColor: t.fill, overflow: 'hidden' }]}>
+                                            <View style={{ transform: [{ scale: 0.22 }] }}>
+                                                <PlateVisual region={p.region} series={p.series} number={p.number} />
                                             </View>
                                         </View>
-
-                                        {/* Price */}
-                                        {!isMobile && (
-                                            <Text style={[styles.priceText, { color: colors.primary, flex: 1, textAlign: 'right' }]}>{price}</Text>
-                                        )}
-
-                                        {/* Date */}
-                                        {!isMobile && (
-                                            <Text style={[styles.dateText, { color: colors.textSecondary, flex: 1, textAlign: 'center' }]}>{date}</Text>
-                                        )}
-
-                                        {/* Actions */}
-                                        <View style={styles.actionBtns}>
-                                            {statusTab === 'pending' && (
-                                                <TouchableOpacity
-                                                    style={[styles.iconBtn, { backgroundColor: '#34C759' }]}
-                                                    onPress={() => approveItem(item.id)}
-                                                >
-                                                    <CheckCircle size={16} color="#FFF" />
-                                                </TouchableOpacity>
-                                            )}
-                                            <TouchableOpacity
-                                                style={[styles.iconBtn, { backgroundColor: '#007AFF' }]}
-                                                onPress={() => router.push(iscar ? `/listing/${item.id}` as any : `/plate/${item.id}` as any)}
-                                            >
-                                                <Eye size={16} color="#FFF" />
-                                            </TouchableOpacity>
-                                            <TouchableOpacity
-                                                style={[styles.iconBtn, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}
-                                                onPress={() => router.push(iscar ? `/admin/edit-listing/${item.id}` as any : `/admin/edit-plate/${item.id}` as any)}
-                                            >
-                                                <Edit size={16} color={colors.text} />
-                                            </TouchableOpacity>
-                                            <TouchableOpacity
-                                                style={[styles.iconBtn, { backgroundColor: 'rgba(255,59,48,0.1)' }]}
-                                                onPress={() => { setDeleteId(item.id); setDeleteModal(true); }}
-                                            >
-                                                <Trash2 size={16} color="#FF3B30" />
-                                            </TouchableOpacity>
-                                        </View>
+                                    )}
+                                    <View style={{ flex: 1, minWidth: 0 }}>
+                                        <CellText
+                                            title={isCar ? `${c.make} ${c.model}${c.year ? `, ${c.year}` : ''}` : `${p.region}-${p.series}-${p.number}`}
+                                            subtitle={`#${item.short_id || item.id.substring(0, 6)}${isMobile ? ` · ${formatMoney(item.price)}` : ''}`}
+                                        />
                                     </View>
-                                );
-                            })}
-                        </View>
-                    )}
-                </View>
-            </ScrollView>
+                                </View>
+                            );
+                        },
+                    },
+                    {
+                        key: 'tags',
+                        title: 'Status',
+                        flex: 1,
+                        hideOnMobile: true,
+                        render: (item: any) => (
+                            <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
+                                {item.is_vip && <Badge label="VIP" tone="warning" />}
+                                {item.is_urgent && <Badge label="Təcili" tone="accent" />}
+                                {!item.is_vip && !item.is_urgent && <Badge label={statusTab === 'pending' ? 'Gözləyir' : 'Aktiv'} tone={statusTab === 'pending' ? 'warning' : 'success'} />}
+                            </View>
+                        ),
+                    },
+                    { key: 'price', title: 'Qiymət', flex: 1, align: 'right', hideOnMobile: true, render: (item: any) => <CellText title={formatMoney(item.price, item.currency)} strong /> },
+                    { key: 'date', title: 'Tarix', flex: 1, align: 'right', hideOnMobile: true, render: (item) => <CellText title={formatDate(item.created_at || '')} /> },
+                    {
+                        key: 'actions',
+                        title: '',
+                        width: statusTab === 'pending' ? 152 : 112,
+                        align: 'right',
+                        render: (item) => {
+                            const isCar = activeTab === 'cars';
+                            return (
+                                <View style={styles.actions}>
+                                    {statusTab === 'pending' && <IconAction icon={CheckCircle} label="Təsdiqlə" tone="success" onPress={() => approveItem(item.id)} />}
+                                    <IconAction icon={Eye} label="Saytda bax" onPress={() => router.push((isCar ? `/listing/${item.short_id || item.id}` : `/plate/${item.short_id || item.id}`) as any)} />
+                                    <IconAction icon={Edit} label="Redaktə et" onPress={() => router.push((isCar ? `/admin/edit-listing/${item.id}` : `/admin/edit-plate/${item.id}`) as any)} />
+                                    <IconAction icon={Trash2} label="Sil" tone="accent" onPress={() => setDeleteId(item.id)} />
+                                </View>
+                            );
+                        },
+                    },
+                ]}
+            />
 
             <ConfirmModal
-                visible={deleteModal}
-                title="Sil"
-                message="Bu elanı silmək istədiyinizə əminsiniz?"
+                visible={!!deleteId}
+                title="Elanı silmək?"
+                message="Elan birdəfəlik silinəcək. Bu əməliyyatı geri qaytarmaq olmur."
                 onConfirm={deleteItem}
-                onCancel={() => setDeleteModal(false)}
+                onCancel={() => setDeleteId(null)}
                 confirmText="Sil"
                 cancelText="Ləğv et"
                 isDestructive
             />
-        </View>
+        </AdminPage>
     );
 }
 
 const styles = StyleSheet.create({
-    pageWrap: {
-        maxWidth: 1200,
-        alignSelf: 'center',
-        width: '100%',
-        paddingHorizontal: 32,
-        paddingTop: 32,
-        paddingBottom: 40,
-    },
-    titleRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 28,
-    },
-    pageTitle: {
-        fontSize: 30,
-        fontFamily: 'RethinkSans_800ExtraBold',
-        marginBottom: 4,
-    },
-    pageSub: {
-        fontSize: 14,
-        fontFamily: 'RethinkSans_500Medium',
-    },
-    refreshBtn: {
-        width: 44,
-        height: 44,
-        borderRadius: 14,
-        borderWidth: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    statsRow: {
-        flexDirection: 'row',
-        gap: 16,
-        marginBottom: 28,
-    },
-    statCard: {
-        flex: 1,
-        borderRadius: 20,
-        padding: 20,
-        gap: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-    },
-    statIcon: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    statValue: {
-        fontSize: 28,
-        fontFamily: 'RethinkSans_800ExtraBold',
-    },
-    statLabel: {
-        fontSize: 12,
-        fontFamily: 'RethinkSans_500Medium',
-        color: '#999',
-    },
-    controlsRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        marginBottom: 20,
-    },
-    segControl: {
-        flexDirection: 'row',
-        borderRadius: 14,
-        padding: 4,
-        gap: 4,
-    },
-    segBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        paddingHorizontal: 14,
-        paddingVertical: 9,
-        borderRadius: 10,
-    },
-    segText: {
-        fontSize: 13,
-        fontFamily: 'RethinkSans_600SemiBold',
-    },
-    statusRow: {
-        flexDirection: 'row',
-        gap: 8,
-    },
-    statusChip: {
-        paddingHorizontal: 14,
-        paddingVertical: 9,
-        borderRadius: 10,
-    },
-    statusText: {
-        fontSize: 13,
-        fontFamily: 'RethinkSans_600SemiBold',
-    },
-    searchBox: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        borderWidth: 1,
-        borderRadius: 12,
-        paddingHorizontal: 12,
-        height: 42,
-    },
-    searchInput: {
-        flex: 1,
-        fontSize: 14,
-        fontFamily: 'RethinkSans_500Medium',
-    },
-    loadingWrap: {
-        paddingTop: 60,
-        alignItems: 'center',
-    },
-    emptyWrap: {
-        paddingTop: 80,
-        alignItems: 'center',
-        opacity: 0.5,
-    },
-    emptyText: {
-        marginTop: 12,
-        fontSize: 16,
-        fontFamily: 'RethinkSans_600SemiBold',
-    },
-    listWrap: {
-        gap: 0,
-        borderRadius: 20,
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: 'transparent',
-    },
-    listHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-    },
-    colHead: {
-        fontSize: 12,
-        fontFamily: 'RethinkSans_600SemiBold',
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-    },
-    row: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        borderWidth: 1,
-        borderRadius: 16,
-        marginBottom: 10,
-        gap: 12,
-    },
-    thumbWrap: {
-        marginRight: 4,
-    },
-    thumb: {
-        width: 56,
-        height: 56,
-        borderRadius: 12,
-    },
-    itemTitle: {
-        fontSize: 15,
-        fontFamily: 'RethinkSans_700Bold',
-        marginBottom: 4,
-    },
-    itemMeta: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    itemId: {
-        fontSize: 12,
-        fontFamily: 'RethinkSans_500Medium',
-    },
-    vipBadge: {
-        fontSize: 10,
-        fontFamily: 'RethinkSans_800ExtraBold',
-        color: '#FFD700',
-        backgroundColor: 'rgba(255,215,0,0.12)',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 4,
-    },
-    priceText: {
-        fontSize: 15,
-        fontFamily: 'RethinkSans_700Bold',
-    },
-    dateText: {
-        fontSize: 13,
-        fontFamily: 'RethinkSans_500Medium',
-    },
-    actionBtns: {
-        flexDirection: 'row',
-        gap: 8,
-        width: 140,
-        justifyContent: 'flex-end',
-    },
-    iconBtn: {
-        width: 36,
-        height: 36,
-        borderRadius: 10,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
+    stats: { flexDirection: 'row', gap: 12, marginBottom: 24 },
+    itemCell: { flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 0, width: '100%' },
+    thumb: { width: 56, height: 42, borderRadius: 8 },
+    thumbIcon: { justifyContent: 'center', alignItems: 'center' },
+    actions: { flexDirection: 'row', gap: 6, justifyContent: 'flex-end' },
 });

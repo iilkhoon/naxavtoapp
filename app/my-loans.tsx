@@ -163,8 +163,8 @@ export default function MyLoans() {
           loans.map((loan, index) => {
             const loanSchedule = schedules[loan.id] || [];
             const totalPaid = loanSchedule.reduce((sum: number, s: any) => sum + Number(s.paid_amount || 0), 0);
-            const totalWithInterest = Number(loan.loan_amount) * (1 + Number(loan.interest_rate) / 100);
-            const totalRemaining = Math.max(0, totalWithInterest - totalPaid);
+            // Still due on the schedule (interest depends on the term, so derive it from the rows)
+            const totalRemaining = loanSchedule.reduce((sum: number, s: any) => sum + Math.max(0, Number(s.amount) - Number(s.paid_amount || 0)), 0);
             const paidCount = loanSchedule.filter((s: any) => s.status === 'paid').length;
             const overdueCount = loanSchedule.filter((s: any) => s.status === 'overdue').length;
             const nextPayment = loanSchedule.find((s: any) => s.status === 'pending' || s.status === 'overdue');

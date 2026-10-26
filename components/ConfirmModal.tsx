@@ -46,7 +46,7 @@ export const ConfirmModal = ({
                     { 
                         backgroundColor: colors.card, 
                         borderColor: colors.border,
-                        width: SCREEN_WIDTH * 0.85 
+                        width: Math.min(SCREEN_WIDTH * 0.85, 340),
                     }
                 ]}
             >

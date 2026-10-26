@@ -18,13 +18,14 @@ const CREDIT_SESSION_KEY = 'nax_credit_session';
 const money2 = (n: number) => `${n.toLocaleString('az-AZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₼`;
 
 // Per-loan figures shared by the summary and the schedule
-const loanFigures = (loan: any, schedule: any[]) => {
+const loanFigures = (schedule: any[]) => {
   const totalPaid = schedule.reduce((sum: number, s: any) => sum + Number(s.paid_amount || 0), 0);
-  const totalWithInterest = Number(loan.loan_amount) * (1 + Number(loan.interest_rate) / 100);
+  // What is still due on the schedule (interest depends on the term, so derive it from the rows)
+  const totalRemaining = schedule.reduce((sum: number, s: any) => sum + Math.max(0, Number(s.amount) - Number(s.paid_amount || 0)), 0);
   const paidCount = schedule.filter((s: any) => s.status === 'paid').length;
   return {
     totalPaid,
-    totalRemaining: Math.max(0, totalWithInterest - totalPaid),
+    totalRemaining,
     paidCount,
     overdueCount: schedule.filter((s: any) => s.status === 'overdue').length,
     nextPayment: schedule.find((s: any) => s.status === 'pending' || s.status === 'overdue'),
@@ -341,7 +342,7 @@ export default function MyLoans() {
 
   const renderLoan = (loan: any) => {
     const loanSchedule = schedules[loan.id] || [];
-    const f = loanFigures(loan, loanSchedule);
+    const f = loanFigures(loanSchedule);
     const expanded = isLargeScreen || expandedLoan === loan.id;
     const overdueNext = f.nextPayment?.status === 'overdue';
 

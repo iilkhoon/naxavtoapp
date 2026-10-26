@@ -1,62 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Platform, KeyboardAvoidingView, Modal, FlatList
-} from 'react-native';
-import {
-  ArrowLeft, Car, User, Phone, CreditCard, Calendar, Percent,
-  Check, DollarSign, Hash, ChevronDown, Shield, TrendingUp
-} from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { ChevronLeft } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
-import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
+import {
+  Card, Button, Segmented, TextField, SelectField, Checkbox, GroupCaption, useWebTokens, useBreakpoints, FONT, formatMoney,
+} from '../../components/web/WebKit';
+import { AdminPage, PickerModal, PickerItem } from '../../components/web/AdminKit';
 
-type PickerItem = { label: string; value: string };
-
-const InputField = ({ label, value, onChangeText, icon: Icon, placeholder, keyboardType = 'default', required = false, maxLength, autoCapitalize, colors }: any) => (
-  <View style={styles.fieldWrap}>
-    <Text style={[styles.fieldLabel, { color: colors.text }]}>
-      {label}{required && <Text style={{ color: '#FF3B30' }}> *</Text>}
-    </Text>
-    <View style={[styles.fieldInput, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <Icon size={18} color={colors.textSecondary} />
-      <TextInput
-        style={[styles.fieldInputText, { color: colors.text }]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.placeholder}
-        keyboardType={keyboardType}
-        maxLength={maxLength}
-        autoCapitalize={autoCapitalize}
-      />
-    </View>
-  </View>
-);
-
-const PickerField = ({ label, value, placeholder, onPress, required = false, colors }: any) => (
-  <View style={styles.fieldWrap}>
-    <Text style={[styles.fieldLabel, { color: colors.text }]}>
-      {label}{required && <Text style={{ color: '#FF3B30' }}> *</Text>}
-    </Text>
-    <TouchableOpacity
-      style={[styles.fieldInput, { backgroundColor: colors.card, borderColor: colors.border }]}
-      onPress={onPress}
-    >
-      <Car size={18} color={colors.textSecondary} />
-      <Text style={[styles.fieldInputText, { color: value ? colors.text : colors.placeholder, flex: 1 }]}>
-        {value || placeholder}
-      </Text>
-      <ChevronDown size={18} color={colors.textSecondary} />
-    </TouchableOpacity>
-  </View>
-);
+const money2 = (n: number) => `${n.toLocaleString('az-AZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₼`;
+const digits = (v: string) => v.replace(/[^0-9.]/g, '');
 
 export default function LoanCreate() {
   const router = useRouter();
-  const { colors, isDark } = useTheme();
+  const t = useWebTokens();
+  const { isTablet } = useBreakpoints();
   const { showToast } = useToast();
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
@@ -75,7 +35,8 @@ export default function LoanCreate() {
 
   // Car fields - using picker
   const [brands, setBrands] = useState<PickerItem[]>([]);
-  const [models, setModels] = useState<PickerItem[]>([]);
+  // Models are kept with the brand they belong to, so a brand change clears them without an effect
+  const [brandModels, setBrandModels] = useState<{ brandId: string; items: PickerItem[] }>({ brandId: '', items: [] });
   const [selectedBrandId, setSelectedBrandId] = useState('');
   const [selectedBrandName, setSelectedBrandName] = useState('');
   const [selectedModelName, setSelectedModelName] = useState('');
@@ -87,7 +48,6 @@ export default function LoanCreate() {
   const [pickerData, setPickerData] = useState<PickerItem[]>([]);
   const [pickerTitle, setPickerTitle] = useState('');
   const [pickerCallback, setPickerCallback] = useState<((item: PickerItem) => void) | null>(null);
-  const [pickerSearch, setPickerSearch] = useState('');
 
   // Finance fields
   const [totalPrice, setTotalPrice] = useState('');
@@ -139,18 +99,19 @@ export default function LoanCreate() {
 
   // Fetch models when brand changes
   useEffect(() => {
-    if (!selectedBrandId) { setModels([]); return; }
+    if (!selectedBrandId) return;
     (async () => {
       const { data } = await supabase.from('models').select('id, name').eq('brand_id', selectedBrandId).order('name');
-      if (data) setModels(data.map(m => ({ label: m.name, value: m.id })));
+      if (data) setBrandModels({ brandId: selectedBrandId, items: data.map(m => ({ label: m.name, value: m.id })) });
     })();
   }, [selectedBrandId]);
+
+  const models = brandModels.brandId === selectedBrandId ? brandModels.items : [];
 
   const openPicker = (title: string, data: PickerItem[], cb: (item: PickerItem) => void) => {
     setPickerTitle(title);
     setPickerData(data);
     setPickerCallback(() => cb);
-    setPickerSearch('');
     setPickerVisible(true);
   };
 
@@ -265,7 +226,11 @@ export default function LoanCreate() {
         }
 
         const { error: schedError } = await supabase.from('loan_schedule').insert(scheduleItems);
-        if (schedError) throw schedError;
+        if (schedError) {
+          // Don't leave a credit account without its payment schedule
+          await supabase.from('loan_accounts').delete().eq('id', loan.id);
+          throw schedError;
+        }
       }
 
       showToast(`${saleType === 'credit' ? 'Kredit' : 'Nağd satış'} uğurla yaradıldı! ID: ${loan.customer_unique_id}`, 'success');
@@ -277,347 +242,191 @@ export default function LoanCreate() {
     }
   };
 
-  // Note: InputField and PickerField are defined outside the component to prevent re-creation on every render
+  const fillFromCustomer = (item: PickerItem) => {
+    const c = pastCustomers.find((p) => p.customer_fin === item.value);
+    if (!c) return;
+    setCustomerName(c.customer_name || '');
+    setCustomerSurname(c.customer_surname || '');
+    setCustomerFatherName(c.customer_father_name || '');
+    setCustomerFin(c.customer_fin || '');
+    setCustomerIdCard(c.customer_id_card || '');
+    // YYYY-MM-DD → DD.MM.YYYY
+    const parts = (c.customer_birth_date || '').split('-');
+    if (parts.length === 3) setCustomerBirthDate(`${parts[2]}.${parts[1]}.${parts[0]}`);
+    setCustomerPhone(c.customer_phone || '');
+    setCustomerPhone2(c.customer_phone_2 || '');
+    setCustomerPhone3(c.customer_phone_3 || '');
+    showToast('Məlumatlar dolduruldu', 'success');
+  };
 
-  const filteredPickerData = pickerData.filter(item =>
-    item.label.toLowerCase().includes(pickerSearch.toLowerCase())
+  const pair = (a: React.ReactNode, b: React.ReactNode) => (
+    <View style={[styles.pair, isTablet && { flexDirection: 'column' }]}>
+      <View style={{ flex: 1 }}>{a}</View>
+      <View style={{ flex: 1 }}>{b}</View>
+    </View>
+  );
+
+  const summaryRow = (label: string, value: string, strong?: boolean, color?: string) => (
+    <View style={[styles.sumRow, { borderTopColor: t.hairline }]}>
+      <Text style={[styles.sumLabel, { color: strong ? t.text : t.textSecondary }, strong && { fontFamily: FONT.semibold }]}>{label}</Text>
+      <Text style={[styles.sumValue, { color: color || t.text }, strong && { fontFamily: FONT.heavy, fontSize: 18 }]}>{value}</Text>
+    </View>
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <ArrowLeft size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Yeni Satış</Text>
-        <View style={{ width: 32 }} />
-      </View>
+    <AdminPage title="Yeni satış" subtitle="Müştəri, avtomobil və ödəniş şərtləri" maxWidth={1100}>
+      <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/admin/loans' as any))} style={styles.back}>
+        <ChevronLeft size={18} color={t.accent} />
+        <Text style={[styles.backText, { color: t.accent }]}>Kredit paneli</Text>
+      </TouchableOpacity>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-
-          {/* Sale Type */}
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Satış Növü</Text>
-          <View style={styles.typeToggle}>
-            <TouchableOpacity
-              style={[styles.typeBtn, { backgroundColor: saleType === 'credit' ? colors.primary : colors.card, borderColor: colors.border }]}
-              onPress={() => setSaleType('credit')}
-            >
-              <CreditCard size={18} color={saleType === 'credit' ? '#FFF' : colors.textSecondary} />
-              <Text style={[styles.typeBtnText, { color: saleType === 'credit' ? '#FFF' : colors.text }]}>Kreditlə</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.typeBtn, { backgroundColor: saleType === 'cash' ? '#34C759' : colors.card, borderColor: colors.border }]}
-              onPress={() => setSaleType('cash')}
-            >
-              <DollarSign size={18} color={saleType === 'cash' ? '#FFF' : colors.textSecondary} />
-              <Text style={[styles.typeBtnText, { color: saleType === 'cash' ? '#FFF' : colors.text }]}>Nağd</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Customer Info */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 24, marginBottom: 16 }}>
-            <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 0, marginBottom: 0 }]}>👤 Müştəri Məlumatları</Text>
-            {pastCustomers.length > 0 && (
-              <TouchableOpacity
-                style={{ backgroundColor: colors.primary + '15', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 }}
-                onPress={() => {
-                  openPicker('Mövcud Müştəri Seç', pastCustomers.map(c => ({
-                    label: `${c.customer_name} ${c.customer_surname} (${c.customer_fin})`,
-                    value: c.customer_fin
-                  })), (item) => {
-                    const c = pastCustomers.find(p => p.customer_fin === item.value);
-                    if (c) {
-                      setCustomerName(c.customer_name || '');
-                      setCustomerSurname(c.customer_surname || '');
-                      setCustomerFatherName(c.customer_father_name || '');
-                      setCustomerFin(c.customer_fin || '');
-                      setCustomerIdCard(c.customer_id_card || '');
-                      
-                      // Format birth date back from YYYY-MM-DD to DD.MM.YYYY
-                      if (c.customer_birth_date) {
-                        const parts = c.customer_birth_date.split('-');
-                        if (parts.length === 3) setCustomerBirthDate(`${parts[2]}.${parts[1]}.${parts[0]}`);
-                      }
-                      
-                      setCustomerPhone(c.customer_phone || '');
-                      setCustomerPhone2(c.customer_phone_2 || '');
-                      setCustomerPhone3(c.customer_phone_3 || '');
-                      showToast('Məlumatlar dolduruldu', 'success');
-                    }
-                  });
-                }}
-              >
-                <Text style={{ color: colors.primary, fontFamily: 'RethinkSans_700Bold', fontSize: 13 }}>Təkrar Müştəri Seç</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          <InputField label="Ad" value={customerName} onChangeText={setCustomerName} icon={User} placeholder="Müştərinin adı" required colors={colors} />
-          <InputField label="Soyad" value={customerSurname} onChangeText={setCustomerSurname} icon={User} placeholder="Müştərinin soyadı" required colors={colors} />
-          <InputField label="Ata adı" value={customerFatherName} onChangeText={setCustomerFatherName} icon={User} placeholder="Atanın adı" colors={colors} />
-          <InputField label="FIN Kod" value={customerFin} onChangeText={handleFinInput} icon={Hash} placeholder="Məs: 1A2B3C4" required maxLength={7} autoCapitalize="characters" colors={colors} />
-          <InputField label="Şəxsiyyət vəsiqəsi (Seriya/Nömrə)" value={customerIdCard} onChangeText={setCustomerIdCard} icon={Shield} placeholder="Məs: AZE12345678" colors={colors} />
-
-          {/* Birth Date */}
-          <View style={styles.fieldWrap}>
-            <Text style={[styles.fieldLabel, { color: colors.text }]}>
-              Doğum Tarixi<Text style={{ color: '#FF3B30' }}> *</Text>
-            </Text>
-            <View style={[styles.fieldInput, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Calendar size={18} color={colors.textSecondary} />
-              <TextInput
-                style={[styles.fieldInputText, { color: colors.text }]}
-                value={customerBirthDate}
-                onChangeText={handleBirthInput}
-                placeholder="GG.AA.İİİİ"
-                placeholderTextColor={colors.placeholder}
-                keyboardType="number-pad"
-                maxLength={10}
-              />
-            </View>
-          </View>
-
-          <InputField label="Telefon 1" value={customerPhone} onChangeText={setCustomerPhone} icon={Phone} placeholder="+994 XX XXX XX XX" keyboardType="phone-pad" required colors={colors} />
-          <InputField label="Telefon 2" value={customerPhone2} onChangeText={setCustomerPhone2} icon={Phone} placeholder="İkinci nömrə (istəyə bağlı)" keyboardType="phone-pad" colors={colors} />
-          <InputField label="Telefon 3" value={customerPhone3} onChangeText={setCustomerPhone3} icon={Phone} placeholder="Üçüncü nömrə (istəyə bağlı)" keyboardType="phone-pad" colors={colors} />
-
-          {/* Car Info */}
-          <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 24 }]}>🚗 Maşın Məlumatları</Text>
-          <PickerField
-            label="Marka"
-            value={selectedBrandName}
-            placeholder="Marka seçin"
-            required
-            colors={colors}
-            onPress={() => openPicker('Marka Seçin', brands, (item) => {
-              setSelectedBrandId(item.value);
-              setSelectedBrandName(item.label);
-              setSelectedModelName('');
-            })}
+      <View style={[styles.layout, isTablet && { flexDirection: 'column' }]}>
+        <View style={{ flex: 1, minWidth: 0, gap: 24, width: isTablet ? '100%' : undefined }}>
+          <Segmented<'credit' | 'cash'>
+            options={[{ value: 'credit', label: 'Kreditlə satış' }, { value: 'cash', label: 'Nağd satış' }]}
+            value={saleType}
+            onChange={setSaleType}
           />
-          <PickerField
-            label="Model"
-            value={selectedModelName}
-            placeholder={selectedBrandName ? 'Model seçin' : 'Əvvəlcə marka seçin'}
-            required
-            colors={colors}
-            onPress={() => {
-              if (!selectedBrandId) { showToast('Əvvəlcə marka seçin', 'error'); return; }
-              openPicker('Model Seçin', models, (item) => setSelectedModelName(item.label));
-            }}
-          />
-          <PickerField
-            label="İl"
-            value={carYear}
-            placeholder="İl seçin"
-            required
-            colors={colors}
-            onPress={() => openPicker('İl Seçin', yearList, (item) => setCarYear(item.value))}
-          />
-          <InputField label="Avtomobil Nömrəsi" value={carPlate} onChangeText={(t: string) => setCarPlate(t.toUpperCase())} icon={Hash} placeholder="Məs: 50-AA-001" autoCapitalize="characters" colors={colors} />
 
-          {/* Finance Info */}
-          <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 24 }]}>💰 Maliyyə Məlumatları</Text>
-
-          {/* Profit Tracking Toggle */}
-          <TouchableOpacity
-            style={[styles.profitToggle, {
-              backgroundColor: hasPurchasePrice ? (isDark ? '#1a2e1a' : '#F0FFF0') : colors.card,
-              borderColor: hasPurchasePrice ? '#34C759' : colors.border,
-            }]}
-            onPress={() => setHasPurchasePrice(!hasPurchasePrice)}
-          >
-            <View style={[styles.checkbox, { borderColor: hasPurchasePrice ? '#34C759' : colors.border, backgroundColor: hasPurchasePrice ? '#34C759' : 'transparent' }]}>
-              {hasPurchasePrice && <Check size={14} color="#FFF" />}
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.profitToggleText, { color: colors.text }]}>Başqa qiymətə almışam</Text>
-              <Text style={[styles.profitToggleDesc, { color: colors.textSecondary }]}>
-                Mənfəəti hesablamaq üçün alış qiymətini daxil edin
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          {hasPurchasePrice && (
-            <InputField label="Alış Qiyməti (₼)" value={purchasePrice} onChangeText={setPurchasePrice} icon={DollarSign} placeholder="20000" keyboardType="numeric" required colors={colors} />
-          )}
-
-          <InputField label="Satış Qiyməti (₼)" value={totalPrice} onChangeText={setTotalPrice} icon={DollarSign} placeholder="25000" keyboardType="numeric" required colors={colors} />
-
-          {/* Profit Display */}
-          {hasPurchasePrice && Number(purchasePrice) > 0 && Number(totalPrice) > 0 && (
-            <View style={[styles.profitCard, {
-              backgroundColor: profit >= 0 ? (isDark ? '#1a2e1a' : '#F0FFF0') : (isDark ? '#2e1a1a' : '#FFF0F0'),
-              borderColor: profit >= 0 ? '#34C759' : '#FF3B30',
-            }]}>
-              <TrendingUp size={20} color={profit >= 0 ? '#34C759' : '#FF3B30'} />
-              <View>
-                <Text style={[styles.profitLabel, { color: colors.textSecondary }]}>Mənfəət</Text>
-                <Text style={[styles.profitValue, { color: profit >= 0 ? '#34C759' : '#FF3B30' }]}>
-                  {profit >= 0 ? '+' : ''}{profit.toLocaleString('az-AZ')} ₼
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {saleType === 'credit' && (
-            <>
-              <InputField label="İlkin Ödəniş (₼)" value={downPayment} onChangeText={setDownPayment} icon={DollarSign} placeholder="5000" keyboardType="numeric" colors={colors} />
-              <InputField label="Faiz (%)" value={interestRate} onChangeText={setInterestRate} icon={Percent} placeholder="0" keyboardType="numeric" colors={colors} />
-              <InputField label="Müddət (ay)" value={durationMonths} onChangeText={setDurationMonths} icon={Calendar} placeholder="12" keyboardType="number-pad" colors={colors} />
-
-              {/* Summary */}
-              <View style={[styles.summaryCard, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '30' }]}>
-                <Text style={[styles.summaryTitle, { color: colors.primary }]}>📋 Kredit Xülasəsi</Text>
-                <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Kredit məbləği:</Text>
-                  <Text style={[styles.summaryValue, { color: colors.text }]}>{loanAmount.toLocaleString('az-AZ')} ₼</Text>
-                </View>
-                {Number(interestRate) > 0 && (
-                  <View style={styles.summaryRow}>
-                    <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Faizlə toplam:</Text>
-                    <Text style={[styles.summaryValue, { color: '#FF9500' }]}>{totalWithInterest.toLocaleString('az-AZ', { minimumFractionDigits: 2 })} ₼</Text>
-                  </View>
-                )}
-                <View style={[styles.summaryRow, { borderTopWidth: 1, borderTopColor: colors.primary + '20', paddingTop: 12, marginTop: 4 }]}>
-                  <Text style={[styles.summaryLabel, { color: colors.text, fontFamily: 'RethinkSans_700Bold' }]}>Aylıq ödəniş:</Text>
-                  <Text style={[styles.summaryValue, { color: colors.primary, fontSize: 20 }]}>{monthlyPayment.toLocaleString('az-AZ', { minimumFractionDigits: 2 })} ₼</Text>
-                </View>
-              </View>
-            </>
-          )}
-
-          {/* Notes */}
-          <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 24 }]}>📝 Qeyd</Text>
-          <View style={[styles.fieldInput, { backgroundColor: colors.card, borderColor: colors.border, minHeight: 100, alignItems: 'flex-start', paddingTop: 14 }]}>
-            <TextInput
-              style={[styles.fieldInputText, { color: colors.text, minHeight: 80, textAlignVertical: 'top' }]}
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="Əlavə qeydlər..."
-              placeholderTextColor={colors.placeholder}
-              multiline
-            />
-          </View>
-
-          {/* Save Button */}
-          <TouchableOpacity
-            style={[styles.saveBtn, { backgroundColor: colors.primary, opacity: saving ? 0.6 : 1 }]}
-            onPress={handleSave}
-            disabled={saving}
-          >
-            <Check size={20} color="#FFF" />
-            <Text style={styles.saveBtnText}>
-              {saving ? 'Saxlanılır...' : saleType === 'credit' ? 'Kredit Yarat' : 'Nağd Satış Yarat'}
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
-
-      {/* Picker Modal */}
-      <Modal visible={pickerVisible} animationType="slide" transparent>
-        <View style={styles.pickerOverlay}>
-          <View style={[styles.pickerContent, { backgroundColor: colors.card }]}>
-            <View style={[styles.pickerHeader, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.pickerTitle, { color: colors.text }]}>{pickerTitle}</Text>
-              <TouchableOpacity onPress={() => setPickerVisible(false)} style={[styles.pickerClose, { backgroundColor: isDark ? '#333' : '#F0F0F0' }]}>
-                <Text style={{ color: colors.text, fontFamily: 'RethinkSans_700Bold' }}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={[styles.pickerSearch, { backgroundColor: isDark ? '#1a1a1e' : '#F8F8FA', borderColor: colors.border }]}>
-              <TextInput
-                style={[styles.pickerSearchText, { color: colors.text }]}
-                placeholder="Axtar..."
-                placeholderTextColor={colors.placeholder}
-                value={pickerSearch}
-                onChangeText={setPickerSearch}
-              />
-            </View>
-            <FlatList
-              data={filteredPickerData}
-              keyExtractor={(item) => item.value}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[styles.pickerItem, { borderBottomColor: colors.border }]}
-                  onPress={() => {
-                    if (pickerCallback) pickerCallback(item);
-                    setPickerVisible(false);
-                  }}
-                >
-                  <Text style={[styles.pickerItemText, { color: colors.text }]}>{item.label}</Text>
-                </TouchableOpacity>
+          <View>
+            <View style={styles.captionRow}>
+              <GroupCaption style={{ marginBottom: 0 }}>Müştəri</GroupCaption>
+              {pastCustomers.length > 0 && (
+                <Button
+                  variant="plain"
+                  size="sm"
+                  title="Mövcud müştəridən doldur"
+                  onPress={() => openPicker('Mövcud müştəri', pastCustomers.map((c) => ({ label: `${c.customer_name} ${c.customer_surname} · ${c.customer_fin}`, value: c.customer_fin })), fillFromCustomer)}
+                />
               )}
-              ListEmptyComponent={
-                <View style={{ padding: 40, alignItems: 'center' }}>
-                  <Text style={{ color: colors.textSecondary }}>Nəticə tapılmadı</Text>
-                </View>
-              }
-            />
+            </View>
+            <Card style={{ gap: 16 }}>
+              {pair(
+                <TextField label="Ad *" value={customerName} onChangeText={setCustomerName} placeholder="Müştərinin adı" />,
+                <TextField label="Soyad *" value={customerSurname} onChangeText={setCustomerSurname} placeholder="Müştərinin soyadı" />
+              )}
+              {pair(
+                <TextField label="Ata adı" value={customerFatherName} onChangeText={setCustomerFatherName} placeholder="Atasının adı" />,
+                <TextField label="Doğum tarixi *" value={customerBirthDate} onChangeText={handleBirthInput} placeholder="GG.AA.İİİİ" keyboardType="number-pad" maxLength={10} />
+              )}
+              {pair(
+                <TextField label="FİN kod *" value={customerFin} onChangeText={handleFinInput} placeholder="1A2B3C4" maxLength={7} autoCapitalize="characters" hint={`${customerFin.length}/7`} />,
+                <TextField label="Şəxsiyyət vəsiqəsi" value={customerIdCard} onChangeText={setCustomerIdCard} placeholder="AZE12345678" autoCapitalize="characters" />
+              )}
+              <TextField label="Telefon *" value={customerPhone} onChangeText={setCustomerPhone} placeholder="+994 XX XXX XX XX" keyboardType="phone-pad" />
+              {pair(
+                <TextField label="Telefon 2" value={customerPhone2} onChangeText={setCustomerPhone2} placeholder="İstəyə bağlı" keyboardType="phone-pad" />,
+                <TextField label="Telefon 3" value={customerPhone3} onChangeText={setCustomerPhone3} placeholder="İstəyə bağlı" keyboardType="phone-pad" />
+              )}
+            </Card>
+          </View>
+
+          <View>
+            <GroupCaption>Avtomobil</GroupCaption>
+            <Card style={{ gap: 16 }}>
+              {pair(
+                <SelectField
+                  label="Marka *"
+                  value={selectedBrandName}
+                  placeholder="Marka seçin"
+                  onPress={() => openPicker('Marka', brands, (item) => {
+                    setSelectedBrandId(item.value);
+                    setSelectedBrandName(item.label);
+                    setSelectedModelName('');
+                  })}
+                />,
+                <SelectField
+                  label="Model *"
+                  value={selectedModelName}
+                  placeholder={selectedBrandName ? 'Model seçin' : 'Əvvəlcə marka'}
+                  onPress={() => {
+                    if (!selectedBrandId) { showToast('Əvvəlcə marka seçin', 'error'); return; }
+                    openPicker('Model', models, (item) => setSelectedModelName(item.label));
+                  }}
+                />
+              )}
+              {pair(
+                <SelectField label="İl *" value={carYear} placeholder="İl seçin" onPress={() => openPicker('Buraxılış ili', yearList, (item) => setCarYear(item.value))} />,
+                <TextField label="Qeydiyyat nişanı" value={carPlate} onChangeText={(v) => setCarPlate(v.toUpperCase())} placeholder="50-AA-001" autoCapitalize="characters" />
+              )}
+            </Card>
+          </View>
+
+          <View>
+            <GroupCaption>Maliyyə</GroupCaption>
+            <Card style={{ gap: 16 }}>
+              {pair(
+                <TextField label="Satış qiyməti (₼) *" value={totalPrice} onChangeText={(v) => setTotalPrice(digits(v))} placeholder="25000" keyboardType="numeric" />,
+                saleType === 'credit'
+                  ? <TextField label="İlkin ödəniş (₼)" value={downPayment} onChangeText={(v) => setDownPayment(digits(v))} placeholder="5000" keyboardType="numeric" />
+                  : <View />
+              )}
+              {saleType === 'credit' && pair(
+                <TextField label="İllik faiz (%)" value={interestRate} onChangeText={(v) => setInterestRate(digits(v))} placeholder="0" keyboardType="numeric" />,
+                <TextField label="Müddət (ay)" value={durationMonths} onChangeText={(v) => setDurationMonths(v.replace(/\D/g, ''))} placeholder="12" keyboardType="number-pad" />
+              )}
+              <Checkbox checked={hasPurchasePrice} onChange={setHasPurchasePrice} label="Alış qiymətini qeyd et" description="Mənfəəti hesablamaq üçün avtomobilin alış qiyməti" />
+              {hasPurchasePrice && (
+                <TextField label="Alış qiyməti (₼)" value={purchasePrice} onChangeText={(v) => setPurchasePrice(digits(v))} placeholder="20000" keyboardType="numeric" />
+              )}
+              <TextField label="Qeyd" value={notes} onChangeText={setNotes} placeholder="Əlavə qeydlər" multiline />
+            </Card>
           </View>
         </View>
-      </Modal>
-    </View>
+
+        {/* Summary */}
+        <View style={[styles.summary, isTablet ? { width: '100%' } : { position: 'sticky' as any, top: 24 }]}>
+          <Card>
+            <Text style={[styles.sumTitle, { color: t.textSecondary }]}>{saleType === 'credit' ? 'Aylıq ödəniş' : 'Satış məbləği'}</Text>
+            <Text style={[styles.sumBig, { color: t.text }]}>
+              {saleType === 'credit' ? money2(monthlyPayment) : formatMoney(totalPrice || 0)}
+            </Text>
+            <View style={{ marginTop: 12 }}>
+              {summaryRow('Satış qiyməti', formatMoney(totalPrice || 0))}
+              {saleType === 'credit' && summaryRow('İlkin ödəniş', formatMoney(downPayment || 0))}
+              {saleType === 'credit' && summaryRow('Kredit məbləği', formatMoney(loanAmount))}
+              {saleType === 'credit' && Number(interestRate) > 0 && summaryRow('Faizlə cəmi', money2(totalWithInterest))}
+              {saleType === 'credit' && summaryRow('Müddət', `${durationMonths || 0} ay`)}
+              {hasPurchasePrice && Number(purchasePrice) > 0 && Number(totalPrice) > 0 &&
+                summaryRow('Mənfəət', `${profit >= 0 ? '+' : ''}${formatMoney(profit)}`, true, profit >= 0 ? t.success : t.accent)}
+            </View>
+            <Button
+              title={saleType === 'credit' ? 'Kredit yarat' : 'Nağd satışı qeyd et'}
+              size="lg"
+              fullWidth
+              loading={saving}
+              onPress={handleSave}
+              style={{ marginTop: 20 }}
+            />
+            {saleType === 'credit' && (
+              <Text style={[styles.note, { color: t.textTertiary }]}>Ödəniş cədvəli {durationMonths || 0} aylıq avtomatik yaradılacaq.</Text>
+            )}
+          </Card>
+        </View>
+      </View>
+
+      <PickerModal
+        visible={pickerVisible}
+        title={pickerTitle}
+        items={pickerData}
+        onSelect={(item) => pickerCallback?.(item)}
+        onClose={() => setPickerVisible(false)}
+      />
+    </AdminPage>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    padding: 16, paddingTop: Platform.OS === 'android' ? 10 : 0, borderBottomWidth: 1,
-  },
-  backBtn: { padding: 4 },
-  headerTitle: { fontSize: 18, fontFamily: 'RethinkSans_700Bold' },
-  scrollContent: { padding: 20, paddingBottom: 100 },
-  sectionTitle: { fontSize: 18, fontFamily: 'RethinkSans_800ExtraBold', marginBottom: 16 },
-  typeToggle: { flexDirection: 'row', gap: 12 },
-  typeBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, padding: 16, borderRadius: 16, borderWidth: 1,
-  },
-  typeBtnText: { fontSize: 15, fontFamily: 'RethinkSans_700Bold' },
-  fieldWrap: { marginBottom: 16 },
-  fieldLabel: { fontSize: 14, fontFamily: 'RethinkSans_600SemiBold', marginBottom: 8 },
-  fieldInput: {
-    flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 14,
-    borderWidth: 1, gap: 10,
-  },
-  fieldInputText: { flex: 1, fontSize: 15, fontFamily: 'RethinkSans_500Medium' },
-  profitToggle: {
-    flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 16,
-    borderWidth: 1, gap: 14, marginBottom: 16,
-  },
-  checkbox: {
-    width: 24, height: 24, borderRadius: 8, borderWidth: 2,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  profitToggleText: { fontSize: 15, fontFamily: 'RethinkSans_700Bold' },
-  profitToggleDesc: { fontSize: 12, fontFamily: 'RethinkSans_400Regular', marginTop: 2 },
-  profitCard: {
-    flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 16,
-    borderWidth: 1, gap: 14, marginBottom: 16,
-  },
-  profitLabel: { fontSize: 12, fontFamily: 'RethinkSans_500Medium' },
-  profitValue: { fontSize: 20, fontFamily: 'RethinkSans_800ExtraBold' },
-  summaryCard: { borderRadius: 20, padding: 20, borderWidth: 1, marginTop: 8 },
-  summaryTitle: { fontSize: 16, fontFamily: 'RethinkSans_700Bold', marginBottom: 14 },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  summaryLabel: { fontSize: 14, fontFamily: 'RethinkSans_500Medium' },
-  summaryValue: { fontSize: 16, fontFamily: 'RethinkSans_700Bold' },
-  saveBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    padding: 18, borderRadius: 16, gap: 10, marginTop: 32,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15, shadowRadius: 12, elevation: 4,
-  },
-  saveBtnText: { color: '#FFF', fontSize: 17, fontFamily: 'RethinkSans_700Bold' },
-  // Picker
-  pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  pickerContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '70%', overflow: 'hidden' },
-  pickerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1 },
-  pickerTitle: { fontSize: 18, fontFamily: 'RethinkSans_700Bold' },
-  pickerClose: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
-  pickerSearch: { margin: 16, padding: 12, borderRadius: 12, borderWidth: 1 },
-  pickerSearchText: { fontSize: 15, fontFamily: 'RethinkSans_500Medium' },
-  pickerItem: { padding: 16, borderBottomWidth: 1 },
-  pickerItemText: { fontSize: 16, fontFamily: 'RethinkSans_600SemiBold' },
+  back: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', marginTop: -12, marginBottom: 20, marginLeft: -4, cursor: 'pointer' as any },
+  backText: { fontSize: 15, fontFamily: FONT.medium },
+  layout: { flexDirection: 'row', alignItems: 'flex-start', gap: 28 },
+  captionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  pair: { flexDirection: 'row', gap: 16 },
+  summary: { width: 340 },
+  sumTitle: { fontSize: 14, fontFamily: FONT.medium },
+  sumBig: { fontSize: 34, fontFamily: FONT.heavy, letterSpacing: -1, marginTop: 2 },
+  sumRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 11, borderTopWidth: StyleSheet.hairlineWidth },
+  sumLabel: { fontSize: 14, fontFamily: FONT.regular },
+  sumValue: { fontSize: 14, fontFamily: FONT.semibold },
+  note: { fontSize: 12, fontFamily: FONT.regular, textAlign: 'center', marginTop: 10 },
 });
