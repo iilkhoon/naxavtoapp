@@ -13,7 +13,7 @@ import { compressImage } from '../../utils/imageOptimizer';
 import { AppSetting } from '../../types';
 import { haptics } from '../../utils/haptics';
 import {
-    AdminHeader, AdminScroll, Group, GroupRow, FieldRow, TextArea, Segmented, HeaderAction, LoadingView, useAdminColors, AdminColors, F,
+    AdminHeader, AdminScroll, Group, GroupRow, FieldRow, TextArea, Segmented, HeaderAction, LoadingView, useAdminColors, AdminColors, F, uploadPath,
 } from '../../components/admin/AdminUI';
 
 const DEFAULT_KEYS = [
@@ -107,7 +107,7 @@ export default function SettingsScreen() {
             if (result.canceled) return;
             setUploadingKey(key);
             const compressed = await compressImage(result.assets[0].uri);
-            const fileName = `settings/${key}_${Date.now()}.jpg`;
+            const fileName = uploadPath(`settings/${key}`);
             const { error } = await supabase.storage.from('images').upload(fileName, decode(compressed.base64!), { contentType: 'image/jpeg', upsert: true });
             if (error) throw error;
             const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(fileName);

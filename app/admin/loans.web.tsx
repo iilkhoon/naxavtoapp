@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Plus, CreditCard, RefreshCw, CheckCircle, Shield } from 'lucide-react-native';
+import { Plus, CreditCard, RefreshCw, CheckCircle, Shield, AlertTriangle } from 'lucide-react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { formatDate } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
@@ -10,6 +10,7 @@ import {
   Segmented, Stat, Button, Badge, Card, EmptyState, Loading, GroupCaption, useWebTokens, useBreakpoints, FONT, formatMoney,
 } from '../../components/web/WebKit';
 import { AdminPage, Toolbar, SearchField, DataTable, CellText } from '../../components/web/AdminKit';
+import { isAutoRisky, isManualRisky, setCustomerRisky } from '../../utils/loanRisk';
 
 type LoanAccount = {
   id: string;
@@ -32,6 +33,7 @@ type LoanAccount = {
   monthly_payment: number;
   status: string;
   profit: number;
+  notes: string;
   created_at: string;
 };
 
@@ -62,6 +64,7 @@ export default function AdminLoansWeb() {
   const [overdueItems, setOverdueItems] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [riskBusy, setRiskBusy] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -114,6 +117,24 @@ export default function AdminLoansWeb() {
   const q = searchQuery.trim().toLowerCase();
   const filteredLoans = q ? loans.filter((l) => matches(l, q)) : loans;
   const openLoan = (loan: LoanAccount) => router.push(`/admin/loan-detail?id=${loan.id}` as any);
+
+  const overdueByLoan = overdueItems.reduce((map: Record<string, any[]>, s: any) => {
+    (map[s.loan_id] = map[s.loan_id] || []).push(s);
+    return map;
+  }, {});
+
+  const toggleRisk = async (key: string, list: LoanAccount[], manual: boolean) => {
+    setRiskBusy(key);
+    try {
+      await setCustomerRisky(list, !manual);
+      showToast(manual ? 'Risk işarəsi götürüldü' : 'Müştəri riskli kimi işarələndi', 'success');
+      await fetchData();
+    } catch (e: any) {
+      showToast('Xəta: ' + e.message, 'error');
+    } finally {
+      setRiskBusy(null);
+    }
+  };
 
   // Customers grouped by FIN (or name when FIN is missing)
   const customers = Array.from(
@@ -220,6 +241,8 @@ export default function AdminLoansWeb() {
                   const c = list[0];
                   const active = list.filter((l) => l.status === 'active').length;
                   const profit = list.reduce((s, l) => s + Number(l.profit || 0), 0);
+                  const manual = isManualRisky(list);
+                  const auto = isAutoRisky(list, overdueByLoan);
                   return (
                     <Card key={key} padding={0} style={{ overflow: 'hidden' }}>
                       <View style={styles.customerHead}>
@@ -236,6 +259,13 @@ export default function AdminLoansWeb() {
                           <Badge label={active ? `${active} aktiv kredit` : 'Bağlanıb'} tone={active ? 'blue' : 'success'} />
                           {profit > 0 && <Text style={[styles.meta, { color: t.success }]}>+{formatMoney(profit)} mənfəət</Text>}
                         </View>
+                      </View>
+                      <View style={[styles.riskRow, { borderTopColor: t.hairline }, (manual || auto) && { backgroundColor: t.accentSoft }]}>
+                        <AlertTriangle size={15} color={manual || auto ? t.accent : t.textSecondary} />
+                        <Text style={[styles.riskText, { color: manual || auto ? t.accent : t.textSecondary }]}>
+                          {auto ? '30+ gün gecikmə — riskli' : manual ? 'Riskli kimi işarələnib' : 'Risk yoxdur'}
+                        </Text>
+                        <Button variant="plain" size="sm" title={manual ? 'İşarəni götür' : 'Riskli et'} loading={riskBusy === key} onPress={() => toggleRisk(key, list, manual)} />
                       </View>
                       {list.map((loan) => (
                         <TouchableOpacity key={loan.id} onPress={() => openLoan(loan)} style={[styles.customerLoan, { borderTopColor: t.hairline }]}>
@@ -303,6 +333,8 @@ const styles = StyleSheet.create({
   customerName: { fontSize: 16, fontFamily: FONT.semibold },
   customerLoan: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, cursor: 'pointer' as any },
   chevron: { fontSize: 20, fontFamily: FONT.medium },
+  riskRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 18, paddingRight: 8, minHeight: 44, borderTopWidth: StyleSheet.hairlineWidth },
+  riskText: { flex: 1, fontSize: 13, fontFamily: FONT.semibold },
   reports: { flexDirection: 'row', gap: 20, alignItems: 'flex-start' },
   reportRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 18, minHeight: 48 },
   reportLabel: { fontSize: 14, fontFamily: FONT.regular },

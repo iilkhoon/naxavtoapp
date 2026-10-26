@@ -3,7 +3,7 @@
 // inset grouped lists, hairline cards, iOS segmented controls, one accent colour.
 import React from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Platform,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Platform, Modal, FlatList,
   StyleProp, ViewStyle, TextStyle, TextInputProps, ScrollViewProps,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -309,6 +309,64 @@ export function TextArea(props: TextInputProps) {
   );
 }
 
+export type PickerOption = { label: string; value: string };
+
+/** Full-height sheet with a search field and a list to pick one option */
+export function PickerSheet({ visible, title, options, selected, onSelect, onClose }: {
+  visible: boolean; title: string; options: PickerOption[]; selected?: string;
+  onSelect: (option: PickerOption) => void; onClose: () => void;
+}) {
+  const c = useAdminColors();
+  const insets = useSafeAreaInsets();
+  const [query, setQuery] = React.useState('');
+  const q = query.trim().toLowerCase();
+  const list = q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options;
+  const close = () => { setQuery(''); onClose(); };
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : undefined} onRequestClose={close}>
+      <View style={{ flex: 1, backgroundColor: c.background, paddingTop: Platform.OS === 'ios' ? 12 : insets.top + 8 }}>
+        <View style={styles.sheetHead}>
+          <Text style={[styles.sheetTitle, { color: c.text }]}>{title}</Text>
+          <TouchableOpacity onPress={close} hitSlop={10} accessibilityRole="button">
+            <Text style={[styles.sheetDone, { color: c.primary }]}>Bağla</Text>
+          </TouchableOpacity>
+        </View>
+        <SearchBar value={query} onChangeText={setQuery} style={{ marginHorizontal: 16, marginBottom: 8 }} />
+        <FlatList
+          data={list}
+          keyExtractor={(o) => o.value}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: c.hairline }]} />}
+          ListEmptyComponent={<Text style={[styles.emptySubtitle, { color: c.textSecondary, marginTop: 32 }]}>Nəticə tapılmadı</Text>}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.sheetRow}
+              onPress={() => { haptics.tap(); onSelect(item); close(); }}
+              accessibilityRole="button"
+            >
+              <Text style={[styles.rowTitle, { color: c.text, fontFamily: F.medium, flex: 1 }]}>{item.label}</Text>
+              {selected === item.value && <Text style={[styles.sheetDone, { color: c.primary }]}>✓</Text>}
+            </TouchableOpacity>
+          )}
+        />
+      </View>
+    </Modal>
+  );
+}
+
+/** Grouped-form row that opens a picker */
+export function SelectRow({ label, value, placeholder, onPress }: { label: string; value?: string; placeholder: string; onPress: () => void }) {
+  const c = useAdminColors();
+  return (
+    <TouchableOpacity style={styles.fieldRow} onPress={() => { haptics.tap(); onPress(); }} activeOpacity={0.6} accessibilityRole="button">
+      <Text style={[styles.fieldLabel, { color: c.text }]} numberOfLines={1}>{label}</Text>
+      <Text style={[styles.fieldInput, { color: value ? c.text : c.tertiary, lineHeight: 50 }]} numberOfLines={1}>{value || placeholder}</Text>
+      <ChevronRight size={18} color={c.tertiary} />
+    </TouchableOpacity>
+  );
+}
+
 /* ─── Display ─────────────────────────────────────────────── */
 
 export function StatTile({ label, value, tone, style }: { label: string; value: string | number; tone?: string; style?: StyleProp<ViewStyle> }) {
@@ -355,6 +413,13 @@ export function LoadingView() {
   );
 }
 
+/** Unique storage path for an upload, e.g. `banners/home_1717171717_k3j9.jpg` */
+export const uploadPath = (prefix: string, ext = 'jpg') =>
+  `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
+
+/** Whole days since an ISO date (0 for future dates) */
+export const daysSince = (iso: string) => Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000));
+
 /** 95 000 ₼ */
 export const money = (value: number | string | null | undefined, currency = 'AZN') => {
   const n = Math.round(Number(value) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
@@ -394,6 +459,10 @@ const styles = StyleSheet.create({
   fieldLabel: { width: 120, fontSize: 15, fontFamily: F.semibold },
   fieldInput: { flex: 1, minHeight: 50, fontSize: 16, fontFamily: F.medium, textAlign: 'right', padding: 0 },
   textArea: { minHeight: 110, padding: 16, fontSize: 16, fontFamily: F.medium },
+  sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12 },
+  sheetTitle: { fontSize: 20, fontFamily: F.bold },
+  sheetDone: { fontSize: 17, fontFamily: F.semibold },
+  sheetRow: { flexDirection: 'row', alignItems: 'center', minHeight: 50, paddingHorizontal: 16 },
   stat: { flex: 1, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14, minWidth: 96 },
   statValue: { fontSize: 24, fontFamily: F.heavy, letterSpacing: -0.5 },
   statLabel: { fontSize: 12, fontFamily: F.medium, marginTop: 2 },

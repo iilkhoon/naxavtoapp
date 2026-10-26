@@ -1,27 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  Switch,
-  Alert,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Image
-} from 'react-native';
-import { supabase } from '../../../lib/supabase';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, ActivityIndicator, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Save, X, ChevronDown, Camera } from 'lucide-react-native';
-import { SelectionModal } from '../../../components/SelectionModal';
+import { Save, X, Camera } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
+import { supabase } from '../../../lib/supabase';
 import { useToast } from '../../../contexts/ToastContext';
-import { useTheme } from '../../../contexts/ThemeContext';
 import { compressImage } from '../../../utils/imageOptimizer';
+import { haptics } from '../../../utils/haptics';
+import {
+  AdminHeader, AdminScroll, Group, GroupRow, FieldRow, SelectRow, TextArea, AdminButton, HeaderAction, PickerSheet, LoadingView,
+  useAdminColors, F,
+} from '../../../components/admin/AdminUI';
+
+const MAX_IMAGES = 15;
 
 interface SelectedImage {
   uri: string;
@@ -34,7 +26,7 @@ export default function EditListingScreen() {
   const listingId = Array.isArray(id) ? id[0] : id;
   const router = useRouter();
   const { showToast } = useToast();
-  const { colors, isDark } = useTheme();
+  const colors = useAdminColors();
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -79,11 +71,6 @@ export default function EditListingScreen() {
   // Image State
   const [images, setImages] = useState<SelectedImage[]>([]);
 
-  useEffect(() => {
-    if (listingId) {
-        fetchInitialData();
-    }
-  }, [listingId]);
 
   const fetchInitialData = async () => {
     try {
@@ -166,16 +153,25 @@ export default function EditListingScreen() {
     }
   };
 
+  useEffect(() => {
+    if (!listingId) return;
+    // Deferred a tick so the loader's state updates never run synchronously in the effect
+    const timer = setTimeout(fetchInitialData, 0);
+    return () => clearTimeout(timer);
+    // fetchInitialData only depends on the id
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listingId]);
+
   const pickImage = async () => {
-    if (images.length >= 6) {
-      showToast('Maksimum 6 şəkil yükləyə bilərsiniz', 'info');
+    if (images.length >= MAX_IMAGES) {
+      showToast(`Ən çox ${MAX_IMAGES} şəkil ola bilər`, 'info');
       return;
     }
 
-    const remainingSlots = 6 - images.length;
+    const remainingSlots = MAX_IMAGES - images.length;
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: false,
       allowsMultipleSelection: true,
       selectionLimit: remainingSlots,
@@ -199,13 +195,13 @@ export default function EditListingScreen() {
         
         setImages(prev => {
             const combined = [...prev, ...newImages];
-            if (combined.length > 6) {
-                showToast('Maksimum 6 şəkil seçilə bilər', 'info');
-                return combined.slice(0, 6);
+            if (combined.length > MAX_IMAGES) {
+                showToast(`Ən çox ${MAX_IMAGES} şəkil ola bilər`, 'info');
+                return combined.slice(0, MAX_IMAGES);
             }
             return combined;
         });
-      } catch (e) {
+      } catch {
         showToast('Şəkilləri emal edərkən xəta baş verdi', 'error');
       } finally {
         setProcessingImages(false);
@@ -287,300 +283,135 @@ export default function EditListingScreen() {
 
       if (error) throw error;
 
-      showToast('Elan uğurla yeniləndi', 'success');
+      haptics.success();
+      showToast('Elan yeniləndi', 'success');
       router.back();
       
     } catch (error: any) {
+      haptics.error();
       showToast('Xəta: ' + error.message, 'error');
     } finally {
       setSaving(false);
     }
   };
 
-  const renderSelector = (label: string, value: string, placeholder: string, modalKey: string) => (
-    <View style={styles.formGroup}>
-      <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text>
-      <TouchableOpacity 
-        style={[styles.selector, { backgroundColor: colors.card, borderColor: colors.border }]} 
-        onPress={() => setActiveModal(modalKey)}
-      >
-        <Text style={[value ? styles.selectorText : styles.placeholderText, { color: value ? colors.text : colors.placeholder }]}>
-          {value || placeholder}
-        </Text>
-        <ChevronDown size={20} color={colors.textSecondary} />
-      </TouchableOpacity>
-    </View>
+  if (loading) return <LoadingView />;
+
+  // One picker sheet for every list-backed field
+  const pickers: Record<string, { title: string; items: any[]; value: string; set: (item: any) => void }> = {
+    brand: {
+      title: 'Marka', items: brands, value: make,
+      set: async (brand) => {
+        setMake(brand.name);
+        setModel('');
+        const { data } = await supabase.from('models').select('*').eq('brand_id', brand.id).order('name');
+        if (data) setModels(data);
+      },
+    },
+    model: { title: 'Model', items: models, value: model, set: (item) => setModel(item.name) },
+    bodyType: { title: 'Ban növü', items: bodyTypes, value: bodyType, set: (item) => setBodyType(item.name) },
+    color: { title: 'Rəng', items: colorsData, value: color, set: (item) => setColor(item.name) },
+    gearbox: { title: 'Sürətlər qutusu', items: gearboxes, value: gearbox, set: (item) => setGearbox(item.name) },
+    transmission: { title: 'Ötürücü', items: transmissions, value: transmission, set: (item) => setTransmission(item.name) },
+    market: { title: 'Bazar', items: markets, value: market, set: (item) => setMarket(item.name) },
+    fuelType: { title: 'Yanacaq', items: fuelTypes, value: fuelType, set: (item) => setFuelType(item.name) },
+  };
+  const picker = activeModal ? pickers[activeModal] : null;
+  const busy = saving || processingImages;
+
+  const toggle = (value: boolean, set: (v: boolean) => void) => (
+    <Switch value={value} onValueChange={(v) => { haptics.tap(); set(v); }} trackColor={{ false: colors.fill, true: colors.success }} />
   );
 
-  if (loading) {
-    return (
-        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-            <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-    );
-  }
-
   return (
-    <KeyboardAvoidingView 
-      style={{ flex: 1 }} 
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
-            <X size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Elanı Redaktə Et</Text>
-          <TouchableOpacity onPress={handleUpdate} disabled={saving || processingImages}>
-             {saving || processingImages ? <ActivityIndicator color={colors.primary} /> : <Save size={24} color={colors.primary} />}
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-            
-            <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>Şəkillər</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageList}>
-                    {images.length < 6 && (
-                        <TouchableOpacity style={[styles.addImageButton, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={pickImage} disabled={processingImages}>
-                            {processingImages ? <ActivityIndicator color={colors.primary} size="small" /> : <Camera size={28} color={colors.textSecondary} />}
-                            <Text style={[styles.addImageText, { color: colors.textSecondary }]}>{processingImages ? 'Sıxılır...' : 'Əlavə et'}</Text>
-                        </TouchableOpacity>
-                    )}
-
-                    {images.map((img, index) => (
-                        <View key={index} style={[styles.imagePreviewContainer, { borderColor: colors.border }]}>
-                            <Image source={{ uri: img.uri }} style={styles.imagePreview} />
-                            <TouchableOpacity 
-                                style={styles.removeImageButton} 
-                                onPress={() => removeImage(index)}
-                            >
-                                <X size={14} color="#FFF" />
-                            </TouchableOpacity>
-                            {index === 0 && (
-                                <View style={[styles.mainImageBadge, { backgroundColor: colors.primary }]}>
-                                    <Text style={styles.mainImageText}>Əsas</Text>
-                                </View>
-                            )}
-                            {img.isNew && (
-                                <View style={styles.newImageBadge}>
-                                    <Text style={styles.mainImageText}>Yeni</Text>
-                                </View>
-                            )}
-                        </View>
-                    ))}
-                </ScrollView>
-            </View>
-
-            <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>Əsas Məlumatlar</Text>
-                
-                {renderSelector('Marka', make, 'Marka seçin', 'brand')}
-                {renderSelector('Model', model, 'Model seçin', 'model')}
-                {renderSelector('Ban növü', bodyType, 'Ban növü seçin', 'bodyType')}
-                
-                <View style={styles.row}>
-                    <View style={[styles.formGroup, { flex: 1, marginRight: 10 }]}>
-                        <Text style={[styles.label, { color: colors.textSecondary }]}>İl</Text>
-                        <TextInput 
-                            style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]} 
-                            keyboardType="number-pad"
-                            value={year}
-                            onChangeText={(text) => setYear(text.replace(/[^0-9]/g, ''))}
-                            maxLength={4}
-                        />
-                    </View>
-                    <View style={[styles.formGroup, { flex: 1 }]}>
-                        <Text style={[styles.label, { color: colors.textSecondary }]}>Rəng</Text>
-                        <TouchableOpacity 
-                            style={[styles.selector, { backgroundColor: colors.card, borderColor: colors.border }]} 
-                            onPress={() => setActiveModal('color')}
-                        >
-                            <Text style={[color ? styles.selectorText : styles.placeholderText, { color: color ? colors.text : colors.placeholder }]} numberOfLines={1}>
-                            {color || 'Seçin'}
-                            </Text>
-                            <ChevronDown size={16} color={colors.textSecondary} />
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                <View style={styles.formGroup}>
-                    <Text style={[styles.label, { color: colors.textSecondary }]}>Qiymət (AZN)</Text>
-                    <TextInput 
-                        style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]} 
-                        keyboardType="number-pad"
-                        value={price}
-                        onChangeText={(text) => setPrice(text.replace(/[^0-9]/g, ''))}
-                    />
-                </View>
-            </View>
-
-            <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>Satıcı Məlumatları</Text>
-                <View style={styles.formGroup}>
-                    <Text style={[styles.label, { color: colors.textSecondary }]}>Ad Soyad</Text>
-                    <TextInput 
-                        style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]} 
-                        value={sellerName}
-                        onChangeText={setSellerName}
-                    />
-                </View>
-                <View style={styles.formGroup}>
-                    <Text style={[styles.label, { color: colors.textSecondary }]}>Əlaqə Nömrəsi</Text>
-                    <TextInput 
-                        style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]} 
-                        value={contactPhone}
-                        onChangeText={setContactPhone}
-                        keyboardType="phone-pad"
-                        placeholder="+994..."
-                        placeholderTextColor={colors.placeholder}
-                    />
-                </View>
-                <View style={styles.formGroup}>
-                    <Text style={[styles.label, { color: colors.textSecondary }]}>VIN Kod</Text>
-                    <TextInput 
-                        style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]} 
-                        value={vinCode}
-                        onChangeText={(text) => setVinCode(text.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-                        autoCapitalize="characters"
-                        maxLength={17} 
-                    />
-                </View>
-            </View>
-
-            <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>Texniki Göstəricilər</Text>
-                
-                <View style={styles.row}>
-                    <View style={[styles.formGroup, { flex: 1, marginRight: 10 }]}>
-                        <Text style={[styles.label, { color: colors.textSecondary }]}>Mühərrik (L)</Text>
-                        <TextInput 
-                            style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]} 
-                            value={engine}
-                            onChangeText={(text) => setEngine(text.replace(/[^0-9.,]/g, ''))}
-                            keyboardType="decimal-pad"
-                        />
-                    </View>
-                    <View style={[styles.formGroup, { flex: 1 }]}>
-                        <Text style={[styles.label, { color: colors.textSecondary }]}>Yürüş (km)</Text>
-                        <TextInput 
-                            style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]} 
-                            keyboardType="number-pad"
-                            value={mileage}
-                            onChangeText={(text) => setMileage(text.replace(/[^0-9]/g, ''))}
-                        />
-                    </View>
-                </View>
-
-                {renderSelector('Sürətlər qutusu', gearbox, 'Seçin', 'gearbox')}
-                {renderSelector('Ötürücü', transmission, 'Seçin', 'transmission')}
-                {renderSelector('Bazar', market, 'Seçin', 'market')}
-                {renderSelector('Yanacaq', fuelType, 'Seçin', 'fuelType')}
-            </View>
-
-            <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>Əlavə</Text>
-                
-                <View style={styles.formGroup}>
-                    <Text style={[styles.label, { color: colors.textSecondary }]}>Şəhər</Text>
-                    <TextInput 
-                        style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]} 
-                        value={location}
-                        onChangeText={setLocation}
-                    />
-                </View>
-
-                <View style={styles.formGroup}>
-                    <Text style={[styles.label, { color: colors.textSecondary }]}>Əlavə məlumat</Text>
-                    <TextInput 
-                        style={[styles.input, styles.textArea, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]} 
-                        value={description}
-                        onChangeText={setDescription}
-                        multiline
-                        numberOfLines={4}
-                        textAlignVertical="top"
-                    />
-                </View>
-
-                <View style={[styles.togglesContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <View style={[styles.toggleRow, { borderBottomColor: colors.border }]}>
-                        <Text style={[styles.toggleLabel, { color: colors.text }]}>Yeni avtomobildir?</Text>
-                        <Switch 
-                            value={isNew} 
-                            onValueChange={setIsNew}
-                            trackColor={{ false: '#333', true: colors.primary }}
-                        />
-                    </View>
-                    <View style={[styles.toggleRow, { borderBottomColor: colors.border }]}>
-                        <Text style={[styles.toggleLabel, { color: colors.text }]}>Kredit var?</Text>
-                        <Switch 
-                            value={isCredit} 
-                            onValueChange={setIsCredit}
-                            trackColor={{ false: '#333', true: colors.primary }}
-                        />
-                    </View>
-                    <View style={[styles.toggleRow, { borderBottomWidth: 0 }]}>
-                        <Text style={[styles.toggleLabel, { color: colors.text }]}>Barter var?</Text>
-                        <Switch 
-                            value={isBarter} 
-                            onValueChange={setIsBarter}
-                            trackColor={{ false: '#333', true: colors.primary }}
-                        />
-                    </View>
-                </View>
-            </View>
-
-            <TouchableOpacity style={[styles.submitButton, { backgroundColor: colors.primary }]} onPress={handleUpdate}>
-                <Save size={20} color="#FFF" style={{ marginRight: 8 }} />
-                <Text style={styles.submitButtonText}>Yadda Saxla</Text>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <AdminHeader
+        title="Elanı redaktə et"
+        subtitle={[make, model].filter(Boolean).join(' ')}
+        backLabel="Elanlar"
+        right={busy ? <ActivityIndicator color={colors.primary} /> : <HeaderAction icon={Save} label="Yadda saxla" onPress={handleUpdate} />}
+      />
+      <AdminScroll>
+        <Text style={[styles.caption, { color: colors.textSecondary }]}>ŞƏKİLLƏR · {images.length}/{MAX_IMAGES}</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.images}>
+          {images.length < MAX_IMAGES && (
+            <TouchableOpacity style={[styles.addImage, { backgroundColor: colors.card, borderColor: colors.hairline }]} onPress={() => { haptics.tap(); pickImage(); }} disabled={processingImages}>
+              {processingImages ? <ActivityIndicator color={colors.textSecondary} /> : <Camera size={24} color={colors.primary} />}
+              <Text style={[styles.addImageText, { color: colors.primary }]}>{processingImages ? 'Sıxılır' : 'Əlavə et'}</Text>
             </TouchableOpacity>
-
+          )}
+          {images.map((img, index) => (
+            <View key={img.uri + index} style={[styles.image, { backgroundColor: colors.fill }]}>
+              <Image source={{ uri: img.uri }} style={StyleSheet.absoluteFill} />
+              <TouchableOpacity style={styles.removeImage} onPress={() => { haptics.tap(); removeImage(index); }} hitSlop={6} accessibilityLabel="Şəkli sil">
+                <X size={13} color="#FFF" strokeWidth={3} />
+              </TouchableOpacity>
+              {index === 0 && <View style={[styles.imageTag, { backgroundColor: colors.primary }]}><Text style={styles.imageTagText}>Əsas</Text></View>}
+              {index !== 0 && img.isNew && <View style={[styles.imageTag, { backgroundColor: 'rgba(0,0,0,0.6)' }]}><Text style={styles.imageTagText}>Yeni</Text></View>}
+            </View>
+          ))}
         </ScrollView>
 
-        {/* Modals */}
-        <SelectionModal visible={activeModal === 'brand'} onClose={() => setActiveModal(null)} title="Marka Seçin" items={brands} onSelect={async (brand) => { setMake(brand.name); setModel(''); const { data } = await supabase.from('models').select('*').eq('brand_id', brand.id).order('name'); if (data) setModels(data); }} selectedId={make} />
-        <SelectionModal visible={activeModal === 'model'} onClose={() => setActiveModal(null)} title="Model Seçin" items={models} onSelect={(item) => setModel(item.name)} selectedId={model} />
-        <SelectionModal visible={activeModal === 'bodyType'} onClose={() => setActiveModal(null)} title="Ban növü" items={bodyTypes} onSelect={(item) => setBodyType(item.name)} selectedId={bodyType} />
-        <SelectionModal visible={activeModal === 'color'} onClose={() => setActiveModal(null)} title="Rəng" items={colorsData} onSelect={(item) => setColor(item.name)} selectedId={color} />
-        <SelectionModal visible={activeModal === 'gearbox'} onClose={() => setActiveModal(null)} title="Sürətlər qutusu" items={gearboxes} onSelect={(item) => setGearbox(item.name)} selectedId={gearbox} />
-        <SelectionModal visible={activeModal === 'transmission'} onClose={() => setActiveModal(null)} title="Ötürücü" items={transmissions} onSelect={(item) => setTransmission(item.name)} selectedId={transmission} />
-        <SelectionModal visible={activeModal === 'market'} onClose={() => setActiveModal(null)} title="Bazar" items={markets} onSelect={(item) => setMarket(item.name)} selectedId={market} />
-        <SelectionModal visible={activeModal === 'fuelType'} onClose={() => setActiveModal(null)} title="Yanacaq" items={fuelTypes} onSelect={(item) => setFuelType(item.name)} selectedId={fuelType} />
+        <Group title="Avtomobil">
+          <SelectRow label="Marka" value={make} placeholder="Seçin" onPress={() => setActiveModal('brand')} />
+          <SelectRow label="Model" value={model} placeholder={make ? 'Seçin' : 'Əvvəlcə marka'} onPress={() => setActiveModal('model')} />
+          <FieldRow label="İl" value={year} onChangeText={(t) => setYear(t.replace(/\D/g, ''))} keyboardType="number-pad" maxLength={4} placeholder="2020" />
+          <FieldRow label="Qiymət, ₼" value={price} onChangeText={(t) => setPrice(t.replace(/\D/g, ''))} keyboardType="number-pad" placeholder="0" />
+          <SelectRow label="Ban növü" value={bodyType} placeholder="Seçin" onPress={() => setActiveModal('bodyType')} />
+          <SelectRow label="Rəng" value={color} placeholder="Seçin" onPress={() => setActiveModal('color')} />
+        </Group>
 
-      </View>
+        <Group title="Texniki">
+          <FieldRow label="Mühərrik, L" value={engine} onChangeText={(t) => setEngine(t.replace(/[^0-9.,]/g, ''))} keyboardType="decimal-pad" placeholder="2.0" />
+          <FieldRow label="Yürüş, km" value={mileage} onChangeText={(t) => setMileage(t.replace(/\D/g, ''))} keyboardType="number-pad" placeholder="0" />
+          <SelectRow label="Sürətlər qutusu" value={gearbox} placeholder="Seçin" onPress={() => setActiveModal('gearbox')} />
+          <SelectRow label="Ötürücü" value={transmission} placeholder="Seçin" onPress={() => setActiveModal('transmission')} />
+          <SelectRow label="Yanacaq" value={fuelType} placeholder="Seçin" onPress={() => setActiveModal('fuelType')} />
+          <SelectRow label="Bazar" value={market} placeholder="Seçin" onPress={() => setActiveModal('market')} />
+          <FieldRow label="VIN" value={vinCode} onChangeText={(t) => setVinCode(t.toUpperCase().replace(/[^A-Z0-9]/g, ''))} autoCapitalize="characters" maxLength={17} placeholder="17 simvol" />
+        </Group>
+
+        <Group title="Seçimlər">
+          <GroupRow title="Yeni avtomobil" right={toggle(isNew, setIsNew)} />
+          <GroupRow title="Kredit mümkündür" right={toggle(isCredit, setIsCredit)} />
+          <GroupRow title="Barter mümkündür" right={toggle(isBarter, setIsBarter)} />
+        </Group>
+
+        <Group title="Satıcı">
+          <FieldRow label="Ad Soyad" value={sellerName} onChangeText={setSellerName} placeholder="Satıcı" />
+          <FieldRow label="Telefon" value={contactPhone} onChangeText={setContactPhone} keyboardType="phone-pad" placeholder="+994 …" />
+          <FieldRow label="Şəhər" value={location} onChangeText={setLocation} placeholder="Naxçıvan" />
+        </Group>
+
+        <Group title="Əlavə məlumat">
+          <TextArea value={description} onChangeText={setDescription} placeholder="Satıcının qeydi" />
+        </Group>
+
+        <AdminButton title="Yadda saxla" onPress={handleUpdate} loading={busy} />
+      </AdminScroll>
+
+      <PickerSheet
+        visible={!!picker}
+        title={picker?.title || ''}
+        options={(picker?.items || []).map((i: any) => ({ label: i.name, value: String(i.id ?? i.name) }))}
+        selected={picker ? String(picker.items.find((i: any) => i.name === picker.value)?.id ?? '') : undefined}
+        onSelect={(option) => {
+          const item = picker?.items.find((i: any) => String(i.id ?? i.name) === option.value);
+          if (item) picker?.set(item);
+        }}
+        onClose={() => setActiveModal(null)}
+      />
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { paddingTop: Platform.OS === 'android' ? 40 : 60, paddingBottom: 20, paddingHorizontal: 20, borderBottomWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerTitle: { fontSize: 18, fontWeight: 'bold' },
-  closeButton: { padding: 4 },
-  content: { padding: 20, paddingBottom: 100 },
-  section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16 },
-  formGroup: { marginBottom: 16 },
-  label: { marginBottom: 8, fontSize: 14 },
-  input: { padding: 16, borderRadius: 16, fontSize: 16, borderWidth: 1 },
-  textArea: { minHeight: 100 },
-  selector: { padding: 16, borderRadius: 16, borderWidth: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  selectorText: { fontSize: 16 },
-  placeholderText: { fontSize: 16 },
-  row: { flexDirection: 'row' },
-  togglesContainer: { borderRadius: 16, overflow: 'hidden', borderWidth: 1 },
-  toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
-  toggleLabel: { fontSize: 16 },
-  submitButton: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 18, borderRadius: 30, marginTop: 10, marginBottom: 40 },
-  submitButtonText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
-  imageList: { flexDirection: 'row' },
-  addImageButton: { width: 100, height: 100, borderRadius: 16, borderWidth: 1, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  addImageText: { fontSize: 12, marginTop: 8, fontWeight: '500' },
-  imagePreviewContainer: { width: 100, height: 100, marginRight: 12, position: 'relative', borderRadius: 16, overflow: 'hidden', borderWidth: 1 },
-  imagePreview: { width: '100%', height: '100%' },
-  removeImageButton: { position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.6)', width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  mainImageBadge: { position: 'absolute', bottom: 4, left: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  newImageBadge: { position: 'absolute', top: 4, left: 4, backgroundColor: '#4CD964', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  mainImageText: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
+  caption: { fontSize: 13, fontFamily: F.semibold, letterSpacing: 0.4, marginBottom: 8, marginLeft: 16 },
+  images: { gap: 10, paddingBottom: 24 },
+  addImage: { width: 100, height: 100, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, justifyContent: 'center', alignItems: 'center', gap: 6 },
+  addImageText: { fontSize: 13, fontFamily: F.semibold },
+  image: { width: 100, height: 100, borderRadius: 14, overflow: 'hidden' },
+  removeImage: { position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center' },
+  imageTag: { position: 'absolute', bottom: 6, left: 6, paddingHorizontal: 6, height: 18, borderRadius: 5, justifyContent: 'center' },
+  imageTagText: { color: '#FFF', fontSize: 10, fontFamily: F.bold },
 });

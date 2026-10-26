@@ -12,7 +12,7 @@ import { compressImage } from '../../utils/imageOptimizer';
 import { AppSetting } from '../../types';
 import { haptics } from '../../utils/haptics';
 import {
-    AdminHeader, AdminScroll, Group, GroupRow, FieldRow, HeaderAction, LoadingView, useAdminColors, AdminColors, F,
+    AdminHeader, AdminScroll, Group, GroupRow, FieldRow, HeaderAction, LoadingView, useAdminColors, AdminColors, F, uploadPath,
 } from '../../components/admin/AdminUI';
 
 const BANNER_KEYS = [
@@ -96,7 +96,7 @@ export default function BannersScreen() {
             if (result.canceled) return;
             setUploadingKey(key);
             const compressed = await compressImage(result.assets[0].uri);
-            const fileName = `banners/${key}_${Date.now()}.jpg`;
+            const fileName = uploadPath(`banners/${key}`);
             const { error } = await supabase.storage.from('images').upload(fileName, decode(compressed.base64!), { contentType: 'image/jpeg', upsert: true });
             if (error) throw error;
             const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(fileName);
