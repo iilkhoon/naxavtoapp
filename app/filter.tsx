@@ -1,124 +1,122 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  ScrollView, 
-  TextInput, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  TextInput,
   DeviceEventEmitter,
   Platform,
   KeyboardAvoidingView,
-  Dimensions,
   ActivityIndicator,
-  Switch
+  Switch,
 } from 'react-native';
 import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
-import { RotateCcw, X, Check } from 'lucide-react-native';
-import { MotiView } from 'moti';
+import { X, Check, Sparkles, Percent, ArrowLeftRight, MapPin } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const { width } = Dimensions.get('window');
-
-// Rənglərin Hex kodları (Vizual seçim üçün)
+// Swatch colours for the colour picker (keys match the `colors` table)
 const COLOR_MAP: Record<string, string> = {
   'Ağ': '#FFFFFF', 'Ağ Mirvari': '#F0EAD6', 'Qara': '#000000', 'Qara Metalik': '#1A1A1A',
   'Gümüşü': '#C0C0C0', 'Boz': '#808080', 'Yaş Asfalt': '#5E5E5E', 'Qırmızı': '#FF3B30',
   'Albalı': '#DE3163', 'Göy': '#007AFF', 'Mavi': '#5AC8FA', 'Yaşıl': '#34C759',
   'Zeytun': '#808000', 'Sarı': '#FFCC00', 'Qızılı': '#FFD700', 'Qəhvəyi': '#8B4513',
   'Narıncı': '#FF9500', 'Bənövşəyi': '#AF52DE', 'Bej': '#F5F5DC', 'Tünd qırmızı': '#8B0000',
-  'Asfalt': '#4A4A4A', 'Şabalıdı': '#954535', 'Xamilyon': 'linear-gradient(45deg, #00F, #F00)', 'Çəhrayı': '#FFC0CB',
+  'Asfalt': '#4A4A4A', 'Şabalıdı': '#954535', 'Xamilyon': '#7D5BA6', 'Çəhrayı': '#FFC0CB',
 };
+
+// Light swatches need an outline and a dark check mark to stay visible
+const isLightSwatch = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return 0.299 * r + 0.587 * g + 0.114 * b > 200;
+};
+
+const SectionTitle = ({ children, colors }: any) => (
+  <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{children}</Text>
+);
 
 const SelectPill = ({ label, selected, onPress, colors, isDark }: any) => (
-    <TouchableOpacity 
-        style={[
-            styles.pill, 
-            { 
-                backgroundColor: selected ? colors.primary : (isDark ? '#2C2C2E' : '#F3F4F6'),
-                borderColor: selected ? colors.primary : 'transparent',
-                borderWidth: 1
-            }
-        ]} 
-        onPress={onPress}
-        activeOpacity={0.7}
-    >
-        <Text style={[
-            styles.pillText, 
-            { color: selected ? '#FFFFFF' : colors.text }
-        ]}>
-            {label}
-        </Text>
-    </TouchableOpacity>
+  <TouchableOpacity
+    style={[
+      styles.pill,
+      selected
+        ? { backgroundColor: colors.primarySoft, borderColor: colors.primary }
+        : { backgroundColor: colors.card, borderColor: isDark ? colors.border : 'rgba(0,0,0,0.08)' },
+    ]}
+    onPress={onPress}
+    activeOpacity={0.7}
+    accessibilityRole="button"
+    accessibilityState={{ selected }}
+  >
+    {selected && <Check size={14} color={colors.primary} strokeWidth={3} />}
+    <Text style={[styles.pillText, { color: selected ? colors.primary : colors.text }]}>{label}</Text>
+  </TouchableOpacity>
 );
 
-const ColorPill = ({ label, selected, onPress, colors }: any) => {
-    const hex = COLOR_MAP[label] || '#CCCCCC';
-    return (
-        <TouchableOpacity 
-            style={[
-                styles.colorPill, 
-                selected && { borderColor: colors.primary, borderWidth: 2 }
-            ]} 
-            onPress={onPress}
-            activeOpacity={0.7}
-        >
-            <View style={[
-                styles.colorCircle, 
-                { backgroundColor: hex, borderWidth: hex.toUpperCase() === '#FFFFFF' ? 1 : 0, borderColor: '#DDD' }
-            ]}>
-                {selected && <Check size={12} color={hex.toUpperCase() === '#FFFFFF' ? '#000' : '#FFF'} />}
-            </View>
-            <Text style={[styles.colorLabel, { color: colors.text, fontWeight: selected ? 'bold' : '400' }]}>{label}</Text>
-        </TouchableOpacity>
-    );
+const ColorSwatch = ({ label, selected, onPress, colors }: any) => {
+  const hex = COLOR_MAP[label] || '#CCCCCC';
+  const light = isLightSwatch(hex);
+  return (
+    <TouchableOpacity style={styles.swatch} onPress={onPress} activeOpacity={0.7} accessibilityLabel={label} accessibilityState={{ selected }}>
+      <View style={[styles.swatchRing, { borderColor: selected ? colors.primary : 'transparent' }]}>
+        <View style={[styles.swatchDot, { backgroundColor: hex, borderWidth: light ? StyleSheet.hairlineWidth : 0, borderColor: 'rgba(0,0,0,0.25)' }]}>
+          {selected && <Check size={14} color={light ? '#000' : '#FFF'} strokeWidth={3} />}
+        </View>
+      </View>
+      <Text style={[styles.swatchLabel, { color: selected ? colors.text : colors.textSecondary }]} numberOfLines={1}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
 };
 
-const RangeInput = ({ label, minVal, maxVal, setMin, setMax, placeholderMin = "Min", placeholderMax = "Maks", maxLength = 10, colors, suffix = '' }: any) => (
-    <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{label}</Text>
-        <View style={styles.rangeContainer}>
-            <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <TextInput 
-                    style={[styles.input, { color: colors.text }]} 
-                    placeholder={placeholderMin} 
-                    placeholderTextColor={colors.placeholder}
-                    keyboardType="numeric"
-                    value={minVal}
-                    onChangeText={setMin}
-                    maxLength={maxLength}
-                />
-                {suffix ? <Text style={[styles.suffix, { color: colors.textSecondary }]}>{suffix}</Text> : null}
-            </View>
-            <View style={[styles.dash, { backgroundColor: colors.border }]} />
-            <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <TextInput 
-                    style={[styles.input, { color: colors.text }]} 
-                    placeholder={placeholderMax} 
-                    placeholderTextColor={colors.placeholder}
-                    keyboardType="numeric"
-                    value={maxVal}
-                    onChangeText={setMax}
-                    maxLength={maxLength}
-                />
-                {suffix ? <Text style={[styles.suffix, { color: colors.textSecondary }]}>{suffix}</Text> : null}
-            </View>
-        </View>
+// One grouped card holding "min — max" for a numeric range
+const RangeRow = ({ label, minVal, maxVal, setMin, setMax, maxLength = 10, colors, isDark, suffix = '' }: any) => (
+  <View style={styles.rangeRow}>
+    <Text style={[styles.rangeLabel, { color: colors.text }]}>{label}</Text>
+    <View style={styles.rangeInputs}>
+      {[
+        { value: minVal, onChange: setMin, placeholder: 'Min' },
+        { value: maxVal, onChange: setMax, placeholder: 'Maks' },
+      ].map((field, i) => (
+        <React.Fragment key={field.placeholder}>
+          {i === 1 && <Text style={[styles.rangeDash, { color: colors.textSecondary }]}>–</Text>}
+          <View style={[styles.rangeField, { backgroundColor: isDark ? 'rgba(118,118,128,0.24)' : 'rgba(118,118,128,0.12)' }]}>
+            <TextInput
+              style={[styles.input, { color: colors.text }]}
+              placeholder={field.placeholder}
+              placeholderTextColor={colors.placeholder}
+              keyboardType="decimal-pad"
+              value={field.value}
+              onChangeText={field.onChange}
+              maxLength={maxLength}
+            />
+            {suffix ? <Text style={[styles.suffix, { color: colors.textSecondary }]}>{suffix}</Text> : null}
+          </View>
+        </React.Fragment>
+      ))}
     </View>
+  </View>
 );
 
-const SwitchRow = ({ label, value, onValueChange, colors }: any) => (
-    <View style={[styles.switchRow, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.switchLabel, { color: colors.text }]}>{label}</Text>
-        <Switch 
-            value={value} 
-            onValueChange={onValueChange}
-            trackColor={{ false: '#333', true: colors.primary }}
-            thumbColor={'#FFF'}
-        />
+const ToggleRow = ({ label, icon: Icon, tint, value, onValueChange, colors, isDark, last }: any) => (
+  <View style={[styles.toggleRow, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
+    <View style={[styles.toggleIcon, { backgroundColor: tint }]}>
+      <Icon size={15} color="#FFF" strokeWidth={2.4} />
     </View>
+    <Text style={[styles.toggleLabel, { color: colors.text }]}>{label}</Text>
+    <Switch
+      value={value}
+      onValueChange={onValueChange}
+      trackColor={{ false: isDark ? '#39393D' : '#E9E9EB', true: colors.success }}
+      thumbColor="#FFF"
+      ios_backgroundColor={isDark ? '#39393D' : '#E9E9EB'}
+    />
+  </View>
 );
 
 export default function FilterScreen() {
@@ -126,32 +124,42 @@ export default function FilterScreen() {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { eventName, initialFilters } = useLocalSearchParams();
-  
+
   const [loading, setLoading] = useState(true);
-  
+
+  // Filters passed in from the opening screen seed the initial state
+  const [initial] = useState<Record<string, any>>(() => {
+    try {
+      return initialFilters ? JSON.parse(initialFilters as string) : {};
+    } catch {
+      return {};
+    }
+  });
+  const str = (v: any) => (v ? String(v) : '');
+
   // Range States
-  const [minPrice, setMinPrice] = useState('');
-  const [maxPrice, setMaxPrice] = useState('');
-  const [minYear, setMinYear] = useState('');
-  const [maxYear, setMaxYear] = useState('');
-  const [minMileage, setMinMileage] = useState('');
-  const [maxMileage, setMaxMileage] = useState('');
-  const [minEngine, setMinEngine] = useState('');
-  const [maxEngine, setMaxEngine] = useState('');
-  const [city, setCity] = useState('');
-  
+  const [minPrice, setMinPrice] = useState(str(initial.minPrice));
+  const [maxPrice, setMaxPrice] = useState(str(initial.maxPrice));
+  const [minYear, setMinYear] = useState(str(initial.minYear));
+  const [maxYear, setMaxYear] = useState(str(initial.maxYear));
+  const [minMileage, setMinMileage] = useState(str(initial.minMileage));
+  const [maxMileage, setMaxMileage] = useState(str(initial.maxMileage));
+  const [minEngine, setMinEngine] = useState(str(initial.minEngine));
+  const [maxEngine, setMaxEngine] = useState(str(initial.maxEngine));
+  const [city, setCity] = useState(str(initial.city));
+
   // Selection States
-  const [bodyType, setBodyType] = useState('');
-  const [fuelType, setFuelType] = useState('');
-  const [gearbox, setGearbox] = useState('');
-  const [transmission, setTransmission] = useState('');
-  const [color, setColor] = useState('');
-  const [market, setMarket] = useState('');
-  
+  const [bodyType, setBodyType] = useState(str(initial.bodyType));
+  const [fuelType, setFuelType] = useState(str(initial.fuelType));
+  const [gearbox, setGearbox] = useState(str(initial.gearbox));
+  const [transmission, setTransmission] = useState(str(initial.transmission));
+  const [color, setColor] = useState(str(initial.color));
+  const [market, setMarket] = useState(str(initial.market));
+
   // Toggle States
-  const [isNew, setIsNew] = useState(false);
-  const [isCredit, setIsCredit] = useState(false);
-  const [isBarter, setIsBarter] = useState(false);
+  const [isNew, setIsNew] = useState(!!initial.isNew);
+  const [isCredit, setIsCredit] = useState(!!initial.isCredit);
+  const [isBarter, setIsBarter] = useState(!!initial.isBarter);
 
   // Options Data
   const [options, setOptions] = useState<any>({
@@ -163,58 +171,36 @@ export default function FilterScreen() {
     markets: []
   });
 
-  useEffect(() => {
-    fetchOptions();
-    if (initialFilters) {
-      try {
-        const parsed = JSON.parse(initialFilters as string);
-        if (parsed.minPrice) setMinPrice(String(parsed.minPrice));
-        if (parsed.maxPrice) setMaxPrice(String(parsed.maxPrice));
-        if (parsed.minYear) setMinYear(String(parsed.minYear));
-        if (parsed.maxYear) setMaxYear(String(parsed.maxYear));
-        if (parsed.minMileage) setMinMileage(String(parsed.minMileage));
-        if (parsed.maxMileage) setMaxMileage(String(parsed.maxMileage));
-        if (parsed.minEngine) setMinEngine(String(parsed.minEngine));
-        if (parsed.maxEngine) setMaxEngine(String(parsed.maxEngine));
-        if (parsed.city) setCity(String(parsed.city));
-        if (parsed.bodyType) setBodyType(String(parsed.bodyType));
-        if (parsed.fuelType) setFuelType(String(parsed.fuelType));
-        if (parsed.gearbox) setGearbox(String(parsed.gearbox));
-        if (parsed.transmission) setTransmission(String(parsed.transmission));
-        if (parsed.color) setColor(String(parsed.color));
-        if (parsed.market) setMarket(String(parsed.market));
-        if (parsed.isNew !== undefined) setIsNew(!!parsed.isNew);
-        if (parsed.isCredit !== undefined) setIsCredit(!!parsed.isCredit);
-        if (parsed.isBarter !== undefined) setIsBarter(!!parsed.isBarter);
-      } catch (e) {}
-    }
-  }, []);
 
   const fetchOptions = async () => {
     try {
-        const [bRes, fRes, gRes, tRes, cRes, mRes] = await Promise.all([
-            supabase.from('body_types').select('*').order('name'),
-            supabase.from('fuel_types').select('*').order('name'),
-            supabase.from('gearboxes').select('*').order('name'),
-            supabase.from('transmissions').select('*').order('name'),
-            supabase.from('colors').select('*').order('name'),
-            supabase.from('markets').select('*').order('name'),
-        ]);
-        
-        setOptions({
-            bodyTypes: bRes.data || [],
-            fuelTypes: fRes.data || [],
-            gearboxes: gRes.data || [],
-            transmissions: tRes.data || [],
-            colors: cRes.data || [],
-            markets: mRes.data || []
-        });
+      const [bRes, fRes, gRes, tRes, cRes, mRes] = await Promise.all([
+        supabase.from('body_types').select('*').order('name'),
+        supabase.from('fuel_types').select('*').order('name'),
+        supabase.from('gearboxes').select('*').order('name'),
+        supabase.from('transmissions').select('*').order('name'),
+        supabase.from('colors').select('*').order('name'),
+        supabase.from('markets').select('*').order('name'),
+      ]);
+
+      setOptions({
+        bodyTypes: bRes.data || [],
+        fuelTypes: fRes.data || [],
+        gearboxes: gRes.data || [],
+        transmissions: tRes.data || [],
+        colors: cRes.data || [],
+        markets: mRes.data || []
+      });
     } catch (e) {
-        console.error(e);
+      console.error(e);
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchOptions();
+  }, []);
 
   const handleApply = () => {
     const filters = {
@@ -224,9 +210,9 @@ export default function FilterScreen() {
       isCredit: isCredit ? true : undefined,
       isBarter: isBarter ? true : undefined
     };
-    
+
     if (eventName) {
-        DeviceEventEmitter.emit(eventName as string, filters);
+      DeviceEventEmitter.emit(eventName as string, filters);
     }
     router.back();
   };
@@ -238,135 +224,159 @@ export default function FilterScreen() {
     setIsNew(false); setIsCredit(false); setIsBarter(false);
   };
 
+  // Count of filter groups in use, shown on the apply button
+  const activeCount = [
+    minPrice || maxPrice, minYear || maxYear, minMileage || maxMileage, minEngine || maxEngine,
+    city, bodyType, fuelType, gearbox, transmission, color, market, isNew, isCredit, isBarter,
+  ].filter(Boolean).length;
+
+  const groupStyle = [
+    styles.group,
+    { backgroundColor: colors.card, borderColor: isDark ? colors.border : 'rgba(0,0,0,0.06)' },
+  ];
+
+  // iOS presents this as a sheet (no status bar overlap); Android as a full card
+  const headerTop = Platform.OS === 'ios' ? 14 : insets.top + 10;
+
+  const pillSection = (title: string, items: any[], value: string, setValue: (v: string) => void) =>
+    items.length > 0 && (
+      <View style={styles.section}>
+        <SectionTitle colors={colors}>{title}</SectionTitle>
+        <View style={styles.pillContainer}>
+          {items.map((item: any) => (
+            <SelectPill
+              key={item.id}
+              label={item.name}
+              selected={value === item.name}
+              onPress={() => setValue(value === item.name ? '' : item.name)}
+              colors={colors}
+              isDark={isDark}
+            />
+          ))}
+        </View>
+      </View>
+    );
+
   return (
-    <KeyboardAvoidingView 
-        style={[styles.container, { backgroundColor: colors.background }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <Stack.Screen options={{ headerShown: false }} />
-      
+
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border, paddingTop: Platform.OS === 'ios' ? 60 : 40 }]}>
-          <TouchableOpacity onPress={() => router.back()} style={[styles.iconBtn, { backgroundColor: isDark ? '#333' : '#F3F4F6' }]}>
-              <X size={20} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.title, { color: colors.text }]}>Ətraflı Axtarış</Text>
-          <TouchableOpacity onPress={handleReset} style={[styles.iconBtn, { backgroundColor: isDark ? '#333' : '#F3F4F6' }]}>
-              <RotateCcw size={18} color={colors.textSecondary} />
-          </TouchableOpacity>
+      <View style={[styles.header, { paddingTop: headerTop, borderBottomColor: colors.border }]}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={[styles.closeBtn, { backgroundColor: isDark ? 'rgba(118,118,128,0.24)' : 'rgba(118,118,128,0.12)' }]}
+          accessibilityLabel="Bağla"
+        >
+          <X size={18} color={colors.text} strokeWidth={2.4} />
+        </TouchableOpacity>
+        <Text style={[styles.title, { color: colors.text }]}>Filtrlər</Text>
+        <TouchableOpacity onPress={handleReset} disabled={activeCount === 0} hitSlop={10}>
+          <Text style={[styles.resetText, { color: activeCount > 0 ? colors.primary : colors.placeholder }]}>Sıfırla</Text>
+        </TouchableOpacity>
       </View>
 
       {loading ? (
-          <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={colors.primary} />
-          </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
       ) : (
-        <ScrollView 
-            contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 100 }]} 
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 110 }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-            <MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }}>
-                
-                {/* Financial Toggles */}
-                <View style={[styles.togglesContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <SwitchRow label="Yalnız Yeni Avtomobillər" value={isNew} onValueChange={setIsNew} colors={colors} />
-                    <SwitchRow label="Kreditlə Mümkündür" value={isCredit} onValueChange={setIsCredit} colors={colors} />
-                    <View style={styles.switchRowLast}>
-                        <Text style={[styles.switchLabel, { color: colors.text }]}>Barter Mümkündür</Text>
-                        <Switch 
-                            value={isBarter} 
-                            onValueChange={setIsBarter}
-                            trackColor={{ false: '#333', true: colors.primary }}
-                            thumbColor={'#FFF'}
-                        />
-                    </View>
-                </View>
+          {/* Offer type */}
+          <View style={styles.section}>
+            <SectionTitle colors={colors}>Təklif</SectionTitle>
+            <View style={groupStyle}>
+              <ToggleRow label="Yalnız yeni avtomobillər" icon={Sparkles} tint="#007AFF" value={isNew} onValueChange={setIsNew} colors={colors} isDark={isDark} />
+              <ToggleRow label="Kreditlə mümkündür" icon={Percent} tint="#AF52DE" value={isCredit} onValueChange={setIsCredit} colors={colors} isDark={isDark} />
+              <ToggleRow label="Barter mümkündür" icon={ArrowLeftRight} tint="#34C759" value={isBarter} onValueChange={setIsBarter} colors={colors} isDark={isDark} last />
+            </View>
+          </View>
 
-                {/* Ranges */}
-                <RangeInput label="Qiymət (AZN)" minVal={minPrice} maxVal={maxPrice} setMin={setMinPrice} setMax={setMaxPrice} colors={colors} />
-                <RangeInput label="Buraxılış ili" minVal={minYear} maxVal={maxYear} setMin={setMinYear} setMax={setMaxYear} maxLength={4} colors={colors} />
-                <RangeInput label="Yürüş (km)" minVal={minMileage} maxVal={maxMileage} setMin={setMinMileage} setMax={setMaxMileage} colors={colors} />
-                <RangeInput label="Mühərrik (L)" minVal={minEngine} maxVal={maxEngine} setMin={setMinEngine} setMax={setMaxEngine} maxLength={4} colors={colors} suffix="L" />
+          {/* Ranges */}
+          <View style={styles.section}>
+            <SectionTitle colors={colors}>Parametrlər</SectionTitle>
+            <View style={groupStyle}>
+              <RangeRow label="Qiymət, AZN" minVal={minPrice} maxVal={maxPrice} setMin={setMinPrice} setMax={setMaxPrice} colors={colors} isDark={isDark} />
+              <View style={[styles.separator, { backgroundColor: colors.border }]} />
+              <RangeRow label="Buraxılış ili" minVal={minYear} maxVal={maxYear} setMin={setMinYear} setMax={setMaxYear} maxLength={4} colors={colors} isDark={isDark} />
+              <View style={[styles.separator, { backgroundColor: colors.border }]} />
+              <RangeRow label="Yürüş, km" minVal={minMileage} maxVal={maxMileage} setMin={setMinMileage} setMax={setMaxMileage} colors={colors} isDark={isDark} />
+              <View style={[styles.separator, { backgroundColor: colors.border }]} />
+              <RangeRow label="Mühərrik" minVal={minEngine} maxVal={maxEngine} setMin={setMinEngine} setMax={setMaxEngine} maxLength={4} colors={colors} isDark={isDark} suffix="L" />
+            </View>
+          </View>
 
-                {/* City */}
-                <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Şəhər</Text>
-                    <View style={[styles.singleInputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <TextInput 
-                            style={[styles.input, { width: '100%', color: colors.text }]} 
-                            placeholder="Şəhər və ya rayon daxil edin" 
-                            placeholderTextColor={colors.placeholder}
-                            value={city}
-                            onChangeText={setCity}
-                        />
-                    </View>
-                </View>
+          {/* City */}
+          <View style={styles.section}>
+            <SectionTitle colors={colors}>Şəhər</SectionTitle>
+            <View style={[groupStyle, styles.cityField]}>
+              <MapPin size={18} color={colors.textSecondary} />
+              <TextInput
+                style={[styles.input, { color: colors.text }]}
+                placeholder="Şəhər və ya rayon"
+                placeholderTextColor={colors.placeholder}
+                value={city}
+                onChangeText={setCity}
+              />
+              {!!city && (
+                <TouchableOpacity onPress={() => setCity('')} hitSlop={10} accessibilityLabel="Şəhəri təmizlə">
+                  <X size={16} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
 
-                {/* Categories */}
-                <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Ban növü</Text>
-                    <View style={styles.pillContainer}>
-                        {options.bodyTypes.map((item: any) => (
-                            <SelectPill key={item.id} label={item.name} selected={bodyType === item.name} onPress={() => setBodyType(bodyType === item.name ? '' : item.name)} colors={colors} isDark={isDark} />
-                        ))}
-                    </View>
-                </View>
+          {pillSection('Ban növü', options.bodyTypes, bodyType, setBodyType)}
+          {pillSection('Yanacaq', options.fuelTypes, fuelType, setFuelType)}
+          {pillSection('Sürətlər qutusu', options.gearboxes, gearbox, setGearbox)}
+          {pillSection('Ötürücü', options.transmissions, transmission, setTransmission)}
+          {pillSection('Bazar', options.markets, market, setMarket)}
 
-                <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Yanacaq</Text>
-                    <View style={styles.pillContainer}>
-                        {options.fuelTypes.map((item: any) => (
-                            <SelectPill key={item.id} label={item.name} selected={fuelType === item.name} onPress={() => setFuelType(fuelType === item.name ? '' : item.name)} colors={colors} isDark={isDark} />
-                        ))}
-                    </View>
-                </View>
-
-                <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Sürətlər Qutusu</Text>
-                    <View style={styles.pillContainer}>
-                        {options.gearboxes.map((item: any) => (
-                            <SelectPill key={item.id} label={item.name} selected={gearbox === item.name} onPress={() => setGearbox(gearbox === item.name ? '' : item.name)} colors={colors} isDark={isDark} />
-                        ))}
-                    </View>
-                </View>
-
-                <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Ötürücü</Text>
-                    <View style={styles.pillContainer}>
-                        {options.transmissions.map((item: any) => (
-                            <SelectPill key={item.id} label={item.name} selected={transmission === item.name} onPress={() => setTransmission(transmission === item.name ? '' : item.name)} colors={colors} isDark={isDark} />
-                        ))}
-                    </View>
-                </View>
-
-                <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Bazar</Text>
-                    <View style={styles.pillContainer}>
-                        {options.markets.map((item: any) => (
-                            <SelectPill key={item.id} label={item.name} selected={market === item.name} onPress={() => setMarket(market === item.name ? '' : item.name)} colors={colors} isDark={isDark} />
-                        ))}
-                    </View>
-                </View>
-
-                {/* Colors */}
-                <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Rəng</Text>
-                    <View style={styles.pillContainer}>
-                        {options.colors.map((item: any) => (
-                            <ColorPill key={item.id} label={item.name} selected={color === item.name} onPress={() => setColor(color === item.name ? '' : item.name)} colors={colors} />
-                        ))}
-                    </View>
-                </View>
-
-            </MotiView>
+          {/* Colors */}
+          {options.colors.length > 0 && (
+            <View style={styles.section}>
+              <SectionTitle colors={colors}>Rəng</SectionTitle>
+              <View style={[groupStyle, styles.swatchGrid]}>
+                {options.colors.map((item: any) => (
+                  <ColorSwatch
+                    key={item.id}
+                    label={item.name}
+                    selected={color === item.name}
+                    onPress={() => setColor(color === item.name ? '' : item.name)}
+                    colors={colors}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
         </ScrollView>
       )}
 
       {/* Sticky Footer */}
-      <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: insets.bottom > 0 ? insets.bottom : 20 }]}>
-        <TouchableOpacity style={[styles.applyButton, { backgroundColor: colors.primary }]} onPress={handleApply}>
-            <Text style={styles.applyText}>Nəticələri Göstər</Text>
+      <View
+        style={[
+          styles.footer,
+          {
+            backgroundColor: colors.background,
+            borderTopColor: colors.border,
+            paddingBottom: insets.bottom > 0 ? insets.bottom : 16,
+          },
+        ]}
+      >
+        <TouchableOpacity style={[styles.applyButton, { backgroundColor: colors.primary }]} onPress={handleApply} activeOpacity={0.85}>
+          <Text style={styles.applyText}>Nəticələri göstər</Text>
+          {activeCount > 0 && (
+            <View style={styles.countBadge}>
+              <Text style={[styles.countText, { color: colors.primary }]}>{activeCount}</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -380,149 +390,194 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   title: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 17,
+    fontFamily: 'RethinkSans_700Bold',
   },
-  iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  content: { padding: 20 },
-  togglesContainer: {
-    borderRadius: 16,
-    borderWidth: 1,
-    marginBottom: 24,
-    overflow: 'hidden',
-  },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderBottomWidth: 1,
-  },
-  switchRowLast: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-  },
-  switchLabel: {
+  resetText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'RethinkSans_600SemiBold',
   },
+  content: { paddingHorizontal: 16, paddingTop: 20 },
   section: {
     marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 12,
+    fontFamily: 'RethinkSans_600SemiBold',
+    marginBottom: 8,
+    marginLeft: 16,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginLeft: 4,
+    letterSpacing: 0.4,
   },
-  rangeContainer: {
+  group: {
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 16,
+  },
+  toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    gap: 12,
+    minHeight: 52,
   },
-  inputWrapper: {
-    flex: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    height: 50,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  singleInputWrapper: {
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    height: 50,
+  toggleIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 7,
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  dash: {
-    width: 10,
-    height: 2,
-    borderRadius: 1,
+  toggleLabel: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: 'RethinkSans_500Medium',
+  },
+  rangeRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  rangeLabel: {
+    fontSize: 15,
+    fontFamily: 'RethinkSans_600SemiBold',
+    marginBottom: 8,
+  },
+  rangeInputs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  rangeField: {
+    flex: 1,
+    height: 40,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  rangeDash: {
+    marginHorizontal: 10,
+    fontSize: 16,
+    fontFamily: 'RethinkSans_500Medium',
   },
   input: {
-    fontSize: 16,
-    fontWeight: '600',
-    padding: 0,
     flex: 1,
     height: '100%',
+    padding: 0,
+    fontSize: 16,
+    fontFamily: 'RethinkSans_500Medium',
   },
   suffix: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'RethinkSans_600SemiBold',
     marginLeft: 4,
+  },
+  cityField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    height: 50,
+    paddingHorizontal: 16,
   },
   pillContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap', 
+    flexWrap: 'wrap',
     gap: 8,
   },
   pill: {
-    paddingHorizontal: 16,
-    paddingVertical: 10, 
-    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 14,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
   },
   pillText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'RethinkSans_600SemiBold',
   },
-  colorPill: {
+  swatchGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingRight: 12,
-    paddingLeft: 4,
-    paddingVertical: 4,
-    borderRadius: 20,
-    backgroundColor: 'transparent',
+    flexWrap: 'wrap',
+    paddingVertical: 12,
+    paddingHorizontal: 6,
   },
-  colorCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginRight: 8,
+  swatch: {
+    width: '25%',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  swatchRing: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  swatchDot: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  colorLabel: {
-    fontSize: 14,
+  swatchLabel: {
+    fontSize: 11,
+    fontFamily: 'RethinkSans_500Medium',
+    maxWidth: '90%',
   },
   footer: {
-    padding: 20,
-    borderTopWidth: 1,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
   },
   applyButton: {
-    paddingVertical: 16,
-    borderRadius: 16,
+    height: 52,
+    borderRadius: 14,
+    flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: "#000",
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    justifyContent: 'center',
+    gap: 8,
   },
   applyText: {
     color: '#FFF',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontFamily: 'RethinkSans_700Bold',
+  },
+  countBadge: {
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 6,
+    borderRadius: 11,
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  countText: {
+    fontSize: 12,
+    fontFamily: 'RethinkSans_800ExtraBold',
   },
 });

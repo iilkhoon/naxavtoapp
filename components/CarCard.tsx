@@ -1,14 +1,9 @@
-import React, { memo, useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, Image as RNImage, Dimensions } from 'react-native';
+import React, { memo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, Image as RNImage } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { Heart, Crown, Zap } from 'lucide-react-native';
-import { MotiView, AnimatePresence } from 'moti';
-import { AnimatedPressable } from './ui/AnimatedPressable';
+import { Heart, Crown, Zap, MapPin } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
-import { BlurView } from 'expo-blur';
 import { formatListingDate } from '../utils/date';
-
-const { width } = Dimensions.get('window');
 
 interface CarCardProps {
   id: string;
@@ -18,7 +13,7 @@ interface CarCardProps {
   image: string;
   images?: string[];
   location: string;
-  date: string; // Changed from time to date (ISO string)
+  date: string; // ISO string
   mileage: number;
   engine: string;
   year?: number;
@@ -32,6 +27,10 @@ interface CarCardProps {
   onPress?: (id: string) => void;
   index?: number;
 }
+
+// 1 250 000 style grouping (thin spaces read better than dots for big numbers)
+const formatNumber = (value: number) =>
+  Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 
 export const CarCard = memo(({
   id,
@@ -53,33 +52,26 @@ export const CarCard = memo(({
   isFavorite,
   onToggleFavorite,
   onPress,
-  index = 0,
 }: CarCardProps) => {
   const { colors, isDark } = useTheme();
-  const formattedPrice = price.toLocaleString().replace(/,/g, '.');
   const displayDate = formatListingDate(date);
 
-  const allImages = React.useMemo(() => {
-    const list = images && images.length > 0 ? images : [image];
-    // Ensure unique images if possible, or just slice
-    return list.slice(0, 5);
-  }, [image, images]);
-
-  const [currentImgIndex, setCurrentImgIndex] = useState(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    // PERFORMANCE OPTIMIZATION: Removed auto-scroll for VIP to improve list performance
-    // if (allImages.length <= 1 || !isVip) return;
-    // intervalRef.current = setInterval(() => {
-    //   setCurrentImgIndex((prev) => (prev + 1) % allImages.length);
-    // }, 4000);
-    // return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, []); // Empty dependency array, effectively disabled
-
+  // Lists always show the first photo; the gallery lives on the detail screen
+  const coverImage = images && images.length > 0 ? images[0] : image;
   const ImageComponent = Platform.OS === 'web' ? RNImage : ExpoImage;
-  // Always use the first image for list performance
-  const currentImageSource = allImages[0];
+
+  // Only show the specs we actually have (avoids "undefined • …")
+  const specs = [
+    year ? String(year) : null,
+    engine ? (/l$/i.test(String(engine).trim()) ? String(engine) : `${engine} L`) : null,
+    mileage || mileage === 0 ? `${formatNumber(mileage)} km` : null,
+  ].filter(Boolean).join(' · ');
+
+  const tags = [
+    isNew && { label: 'Yeni', color: '#34C759' },
+    isCredit && { label: 'Kredit', color: '#AF52DE' },
+    isBarter && { label: 'Barter', color: '#007AFF' },
+  ].filter(Boolean) as { label: string; color: string }[];
 
   return (
     <View style={styles.container}>
@@ -88,78 +80,99 @@ export const CarCard = memo(({
           styles.card,
           {
             backgroundColor: colors.card,
-          }
+            borderColor: isDark ? colors.border : 'rgba(0,0,0,0.06)',
+          },
         ]}
         activeOpacity={0.88}
         onPress={() => onPress && onPress(id)}
+        accessibilityRole="button"
+        accessibilityLabel={`${title}, ${formatNumber(price)} ${currency}`}
       >
-        {/* Image Section */}
+        {/* Image */}
         <View style={[styles.imageContainer, { backgroundColor: isDark ? '#2C2C2E' : '#E5E5EA' }]}>
           <ImageComponent
             style={styles.image}
-            source={Platform.OS === 'web' ? { uri: currentImageSource } : currentImageSource}
-            {...(Platform.OS !== 'web' ? { contentFit: 'cover', cachePolicy: 'memory-disk' } : { resizeMode: 'cover' })}
+            source={Platform.OS === 'web' ? { uri: coverImage } : coverImage}
+            {...(Platform.OS !== 'web'
+              ? { contentFit: 'cover', cachePolicy: 'memory-disk', transition: 150 }
+              : { resizeMode: 'cover' })}
           />
 
-          <View style={styles.topRow}>
-            <View style={styles.badges}>
-              {isCredit && <View style={[styles.badge, { backgroundColor: '#007AFF' }]}><Text style={styles.badgeText}>Kredit</Text></View>}
-              {isBarter && <View style={[styles.badge, { backgroundColor: '#FF9500' }]}><Text style={styles.badgeText}>Barter</Text></View>}
-              {isNew && <View style={[styles.badge, { backgroundColor: '#34C759' }]}><Text style={styles.badgeText}>Yeni</Text></View>}
-            </View>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={(e) => { e.stopPropagation(); onToggleFavorite && onToggleFavorite(id); }}
+            style={styles.heartButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel={isFavorite ? 'Seçilmişlərdən sil' : 'Seçilmişlərə əlavə et'}
+          >
+            <Heart
+              size={16}
+              color={isFavorite ? '#FF3B30' : '#1C1C1E'}
+              fill={isFavorite ? '#FF3B30' : 'transparent'}
+              strokeWidth={2.4}
+            />
+          </TouchableOpacity>
 
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={(e) => { e.stopPropagation(); onToggleFavorite && onToggleFavorite(id); }}
-              style={styles.heartButtonWrapper}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              {/* Replaced BlurView with simple translucent View for performance */}
-              <View style={[styles.heartBlur, { backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.7)' }]}>
-                <Heart size={18} color={isFavorite ? "#FF3B30" : (isDark ? "#FFF" : "#000")} fill={isFavorite ? "#FF3B30" : "transparent"} />
-              </View>
-            </TouchableOpacity>
-          </View>
-
-          {isVip && (
-            <View style={[styles.vipBadge, { borderColor: '#FFD700', backgroundColor: isDark ? '#000' : '#FFF' }]}>
-              <Crown size={10} color="#FFD700" fill="#FFD700" style={{ marginRight: 3 }} />
-              <Text style={[styles.vipText, { color: isDark ? '#FFD700' : '#000' }]}>VIP</Text>
-            </View>
-          )}
-          {isUrgent && (
-            <View style={[styles.vipBadge, { borderColor: '#FF3B30', backgroundColor: 'rgba(255,59,48,0.85)', bottom: isVip ? 36 : 8 }]}>
-              <Zap size={10} color="#FFF" fill="#FFF" style={{ marginRight: 3 }} />
-              <Text style={[styles.vipText, { color: '#FFF' }]}>TƏCİLİ</Text>
+          {(isVip || isUrgent) && (
+            <View style={styles.imageBadges}>
+              {isVip && (
+                <View style={[styles.imageBadge, { backgroundColor: 'rgba(0,0,0,0.72)' }]}>
+                  <Crown size={10} color="#FFD60A" fill="#FFD60A" />
+                  <Text style={[styles.imageBadgeText, { color: '#FFD60A' }]}>VIP</Text>
+                </View>
+              )}
+              {isUrgent && (
+                <View style={[styles.imageBadge, { backgroundColor: 'rgba(255,59,48,0.92)' }]}>
+                  <Zap size={10} color="#FFF" fill="#FFF" />
+                  <Text style={[styles.imageBadgeText, { color: '#FFF' }]}>Təcili</Text>
+                </View>
+              )}
             </View>
           )}
         </View>
 
-        {/* Content Section */}
+        {/* Content */}
         <View style={styles.content}>
-          <View style={styles.priceRow}>
-            <Text style={[styles.priceText, { color: colors.primary }]}>
-              {formattedPrice} <Text style={{ fontSize: 12, fontFamily: 'RethinkSans_700Bold' }}>{currency === 'AZN' ? '₼' : currency}</Text>
+          <Text style={[styles.priceText, { color: colors.text }]} numberOfLines={1}>
+            {formatNumber(price)}
+            <Text style={[styles.currencyText, { color: colors.textSecondary }]}>
+              {' '}{currency === 'AZN' ? '₼' : currency}
             </Text>
-            {isVip && <Crown size={16} color="#FFD700" fill="#FFD700" />}
-          </View>
+          </Text>
 
           <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
             {title}
           </Text>
 
-          <View style={styles.specsRow}>
-            <Text style={[styles.specText, { color: colors.textSecondary }]}>{year} • {engine} • {mileage} km</Text>
-          </View>
+          {!!specs && (
+            <Text style={[styles.specText, { color: colors.textSecondary }]} numberOfLines={1}>
+              {specs}
+            </Text>
+          )}
 
-          <Text style={[styles.locationText, { color: colors.textSecondary }]} numberOfLines={1}>
-            {location}, {displayDate}
-          </Text>
+          {tags.length > 0 && (
+            <View style={styles.tags}>
+              {tags.map((tag) => (
+                <View key={tag.label} style={[styles.tag, { backgroundColor: `${tag.color}${isDark ? '33' : '1A'}` }]}>
+                  <Text style={[styles.tagText, { color: tag.color }]}>{tag.label}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <View style={styles.metaRow}>
+            <MapPin size={11} color={colors.textSecondary} />
+            <Text style={[styles.metaText, { color: colors.textSecondary }]} numberOfLines={1}>
+              {[location, displayDate].filter(Boolean).join(' · ')}
+            </Text>
+          </View>
         </View>
       </TouchableOpacity>
     </View>
   );
 });
+
+CarCard.displayName = 'CarCard';
 
 const styles = StyleSheet.create({
   container: {
@@ -167,115 +180,101 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   card: {
-    borderRadius: 20,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
     width: '100%',
+    boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.04), 0px 4px 12px rgba(0, 0, 0, 0.04)',
   },
   imageContainer: {
-    height: 120,
     width: '100%',
-    position: 'relative',
+    aspectRatio: 4 / 3,
     overflow: 'hidden',
   },
   image: {
     width: '100%',
     height: '100%',
   },
-  topRow: {
+  heartButton: {
     position: 'absolute',
     top: 8,
-    left: 8,
     right: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    zIndex: 10,
-  },
-  badges: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 3,
-    flex: 1,
-    marginRight: 4,
-  },
-  badge: {
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  badgeText: {
-    color: '#FFF',
-    fontSize: 8,
-    fontFamily: 'RethinkSans_700Bold',
-  },
-  heartButtonWrapper: {
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  heartBlur: {
-    width: 32,
-    height: 32,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.9)',
   },
-  vipBadge: {
+  imageBadges: {
     position: 'absolute',
-    bottom: 8,
     left: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    zIndex: 10,
-  },
-  vipText: {
-    fontSize: 9,
-    fontFamily: 'RethinkSans_800ExtraBold',
-  },
-  paginationContainer: {
-    position: 'absolute',
     bottom: 8,
-    left: 0,
-    right: 0,
     flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
     gap: 4,
-    zIndex: 10,
   },
-  dot: {
-    borderRadius: 3,
+  imageBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    height: 20,
+    borderRadius: 10,
+  },
+  imageBadgeText: {
+    fontSize: 10,
+    fontFamily: 'RethinkSans_800ExtraBold',
+    letterSpacing: 0.2,
   },
   content: {
-    padding: 12,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 12,
   },
   priceText: {
     fontSize: 17,
     fontFamily: 'RethinkSans_800ExtraBold',
+    letterSpacing: -0.3,
+    marginBottom: 2,
   },
-  title: {
+  currencyText: {
     fontSize: 13,
     fontFamily: 'RethinkSans_700Bold',
-    marginBottom: 4,
   },
-  specsRow: {
-    marginBottom: 4,
+  title: {
+    fontSize: 14,
+    fontFamily: 'RethinkSans_600SemiBold',
+    marginBottom: 2,
   },
   specText: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: 'RethinkSans_500Medium',
   },
-  locationText: {
+  tags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 8,
+  },
+  tag: {
+    paddingHorizontal: 6,
+    height: 18,
+    borderRadius: 5,
+    justifyContent: 'center',
+  },
+  tagText: {
     fontSize: 10,
+    fontFamily: 'RethinkSans_700Bold',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 8,
+  },
+  metaText: {
+    flex: 1,
+    fontSize: 11,
     fontFamily: 'RethinkSans_500Medium',
   },
 });

@@ -148,6 +148,7 @@ export default function HomeScreen() {
   const flatListRef = React.useRef<FlatList>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalListings, setTotalListings] = useState<number | null>(null);
   const [platesPage, setPlatesPage] = useState(1);
   const [totalPlatesPages, setTotalPlatesPages] = useState(1);
   const PAGE_SIZE = 50;
@@ -261,7 +262,10 @@ export default function HomeScreen() {
       if (currentRequestId === listingsRequestIdRef.current) {
         if (data) {
           setListings(data as Listing[]);
-          if (count !== null && count !== undefined) setTotalPages(Math.ceil(count / PAGE_SIZE));
+          if (count !== null && count !== undefined) {
+            setTotalPages(Math.ceil(count / PAGE_SIZE));
+            setTotalListings(count);
+          }
 
           // Save default page 1 to cache for instant cold start display
           const isDefaultFeed = currentPage === 1 && !brand && !model && filterType === 'cash' && Object.keys(advFilters).length === 0;
@@ -489,30 +493,29 @@ export default function HomeScreen() {
 
   const logoUrl = isDark ? settings.site_logo_dark : settings.site_logo_light;
 
-  const LargeFilterButton = ({ type, label, icon: Icon, activeColor }: { type: FilterType, label: string, icon: any, activeColor: string }) => {
+  // Category tiles: icon on a soft tint of the category colour; the selected
+  // tile takes the tint as its background and border.
+  const CategoryTile = ({ type, label, icon: Icon, tint }: { type: FilterType, label: string, icon: any, tint: string }) => {
     const isActive = activeFilterType === type;
 
     return (
       <TouchableOpacity
         style={[
-          styles.largeFilterBtn,
-          {
-            backgroundColor: isActive ? activeColor : colors.card,
-            borderColor: isActive ? activeColor : colors.border,
-            borderWidth: 1
-          }
+          styles.categoryTile,
+          isActive
+            ? { backgroundColor: `${tint}${isDark ? '2E' : '1A'}`, borderColor: tint }
+            : { backgroundColor: colors.card, borderColor: isDark ? colors.border : 'rgba(0,0,0,0.06)' },
         ]}
         onPress={() => setActiveFilterType(type)}
-        activeOpacity={0.8}
+        activeOpacity={0.75}
+        accessibilityRole="button"
+        accessibilityState={{ selected: isActive }}
       >
-        <View style={[
-          styles.largeFilterIconCircle,
-          { backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)') }
-        ]}>
-          <Icon size={18} color={isActive ? '#FFF' : activeColor} />
+        <View style={[styles.categoryIcon, { backgroundColor: isActive ? tint : `${tint}1F` }]}>
+          <Icon size={17} color={isActive ? '#FFF' : tint} strokeWidth={2.4} />
         </View>
         <Text
-          style={[styles.largeFilterText, { color: isActive ? '#FFF' : colors.textSecondary }]}
+          style={[styles.categoryLabel, { color: isActive ? tint : colors.text }]}
           numberOfLines={1}
           adjustsFontSizeToFit
         >
@@ -522,29 +525,51 @@ export default function HomeScreen() {
     );
   };
 
+  const cardSurface = [
+    styles.card,
+    { backgroundColor: colors.card, borderColor: isDark ? colors.border : 'rgba(0,0,0,0.06)' },
+  ];
+
   const renderHeader = () => (
     <>
-      <View style={styles.heroSection}>
-        <Text
-          style={[styles.heroText, { color: colors.text }]}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.7}
-        >
-          Xəyalındakı{' '}
-          <Typewriter
-            words={['avtomobili', 'nömrəni']}
-            color={colors.primary}
-            style={styles.heroText}
-          />
-        </Text>
-        <Text style={[styles.heroText, { color: colors.text }]}>
-          tapmaq daha asan!
+      {/* Large animated title */}
+      <View style={styles.titleSection}>
+        {/* The animated word gets its own line so the text never re-wraps while typing */}
+        <Text style={[styles.largeTitle, { color: colors.text }]}>Xəyalındakı</Text>
+        <Typewriter words={['avtomobili', 'nömrəni']} color={colors.primary} style={styles.largeTitle} />
+        <Text style={[styles.largeTitle, { color: colors.text }]}>tapmaq daha asan!</Text>
+        <Text style={[styles.largeSubtitle, { color: colors.textSecondary }]}>
+          {activeTopTab === 'transport'
+            ? totalListings !== null
+              ? `${totalListings} aktiv elan · Naxçıvan`
+              : 'Naxçıvanda alqı-satqı elanları'
+            : 'Qeydiyyat nişanı elanları'}
         </Text>
       </View>
 
+      {/* Segmented control */}
+      <View style={[styles.segmented, { backgroundColor: isDark ? 'rgba(118,118,128,0.24)' : 'rgba(118,118,128,0.12)' }]}>
+        {(['transport', 'plates'] as const).map((tab) => {
+          const selected = activeTopTab === tab;
+          return (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.segment, selected && [styles.segmentSelected, { backgroundColor: isDark ? '#636366' : '#FFFFFF' }]]}
+              onPress={() => setActiveTopTab(tab)}
+              activeOpacity={0.8}
+              accessibilityRole="tab"
+              accessibilityState={{ selected }}
+            >
+              <Text style={[styles.segmentText, { color: colors.text }, selected && styles.segmentTextSelected]}>
+                {tab === 'transport' ? 'Nəqliyyat' : 'Nömrələr'}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
       {activeTopTab === 'transport' ? (
-        <View style={[styles.unifiedSearchContainer, { backgroundColor: colors.card }]}>
+        <View style={[cardSurface, styles.unifiedSearchContainer]}>
           <TouchableOpacity style={styles.searchInputItem} onPress={handleBrandSelect}>
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Marka</Text>
             <View style={styles.inputValueRow}>
@@ -571,16 +596,24 @@ export default function HomeScreen() {
             </TouchableOpacity>
           )}
 
-          <TouchableOpacity style={[styles.smallActionBtn, { backgroundColor: isDark ? '#2C2C2E' : '#F2F2F7' }]} onPress={handleFilterPress}>
-            <SlidersHorizontal size={20} color={colors.text} />
+          <TouchableOpacity
+            style={[styles.smallActionBtn, { backgroundColor: isDark ? '#2C2C2E' : '#F2F2F7' }]}
+            onPress={() => router.push('/calculator')}
+            accessibilityLabel="Kredit kalkulyatoru"
+          >
+            <Calculator size={18} color={colors.text} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.smallActionBtn, { backgroundColor: colors.primary }]} onPress={() => router.push('/calculator')}>
-            <Calculator size={20} color="#FFF" />
+          <TouchableOpacity
+            style={[styles.smallActionBtn, { backgroundColor: colors.text }]}
+            onPress={handleFilterPress}
+            accessibilityLabel="Ətraflı filtr"
+          >
+            <SlidersHorizontal size={18} color={colors.background} />
           </TouchableOpacity>
         </View>
       ) : (
-        <View style={[styles.unifiedSearchContainer, { backgroundColor: colors.card }]}>
+        <View style={[cardSurface, styles.unifiedSearchContainer]}>
           <View style={[styles.searchInputItem, { flex: 0.8 }]}>
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Region</Text>
             <TextInput
@@ -635,15 +668,22 @@ export default function HomeScreen() {
 
       {activeTopTab === 'transport' && (
         <View>
+          <View style={styles.quickFiltersContainer}>
+            <CategoryTile type="cash" label="Nağd" icon={Wallet} tint="#34C759" />
+            <CategoryTile type="credit" label="Kredit" icon={Percent} tint="#AF52DE" />
+            <CategoryTile type="barter" label="Barter" icon={ArrowLeftRight} tint="#007AFF" />
+            <CategoryTile type="urgent" label="Təcili" icon={Zap} tint="#FF9500" />
+          </View>
+
           {activeCompetition && (
             <TouchableOpacity
-              style={[styles.competitionBanner, { backgroundColor: isDark ? '#333' : '#F2F2F7', borderColor: colors.primary, borderWidth: 1 }]}
+              style={[cardSurface, styles.competitionBanner]}
               onPress={() => router.push('/competition')}
               activeOpacity={0.8}
             >
               <View style={styles.competitionContent}>
-                <View style={[styles.competitionIconBg, { backgroundColor: colors.primary + '20' }]}>
-                  <Gift size={24} color={colors.primary} />
+                <View style={[styles.competitionIconBg, { backgroundColor: colors.primarySoft }]}>
+                  <Gift size={22} color={colors.primary} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={[styles.competitionTitle, { color: colors.text }]}>{activeCompetition.title || 'Böyük Yarışma Başladı!'}</Text>
@@ -657,19 +697,11 @@ export default function HomeScreen() {
                   </Text>
                 </View>
                 <View style={[styles.competitionAction, { backgroundColor: colors.primary }]}>
-                  <Text style={{ color: '#FFF', fontFamily: 'RethinkSans_700Bold', fontSize: 12 }}>Qatıl</Text>
+                  <Text style={styles.competitionActionText}>Qatıl</Text>
                 </View>
               </View>
             </TouchableOpacity>
           )}
-
-          <View style={styles.quickFiltersContainer}>
-            <LargeFilterButton type="cash" label="Nağd" icon={Wallet} activeColor="#FF3B30" />
-            <LargeFilterButton type="credit" label="Kredit" icon={Percent} activeColor="#AF52DE" />
-            <LargeFilterButton type="barter" label="Barter" icon={ArrowLeftRight} activeColor="#34C759" />
-            <LargeFilterButton type="urgent" label="Təcili" icon={Zap} activeColor="#FF3B30" />
-          </View>
-
 
           <BannerSlider
             images={[
@@ -681,6 +713,12 @@ export default function HomeScreen() {
           />
         </View>
       )}
+
+      <View style={styles.sectionHeader}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          {activeTopTab === 'transport' ? 'Son elanlar' : 'Bütün nömrələr'}
+        </Text>
+      </View>
     </>
   );
 
@@ -853,7 +891,7 @@ export default function HomeScreen() {
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
       {/* Header */}
-      <View style={[styles.headerContainer, { paddingTop: insets.top + 10, borderBottomColor: colors.border }]}>
+      <View style={[styles.headerContainer, { paddingTop: insets.top + 8, backgroundColor: colors.background }]}>
         <View style={styles.logoContainer}>
           {logoUrl ? (
             <ImageComponent 
@@ -870,27 +908,15 @@ export default function HomeScreen() {
           )}
         </View>
 
-        <View style={[styles.togglePill, { backgroundColor: colors.card }]}>
+        <View style={styles.headerActions}>
           <TouchableOpacity
-            style={[styles.toggleItem, activeTopTab === 'transport' && { backgroundColor: isDark ? '#333' : '#E5E5EA' }]}
-            onPress={() => setActiveTopTab('transport')}
+            onPress={toggleTheme}
+            style={[styles.iconBtn, { backgroundColor: isDark ? 'rgba(118,118,128,0.24)' : 'rgba(118,118,128,0.12)' }]}
+            accessibilityLabel="Temanı dəyiş"
           >
-            <Text style={[styles.toggleText, { color: activeTopTab === 'transport' ? colors.text : colors.textSecondary }]}>Nəqliyyat</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.toggleItem, activeTopTab === 'plates' && { backgroundColor: isDark ? '#333' : '#E5E5EA' }]}
-            onPress={() => setActiveTopTab('plates')}
-          >
-            <Text style={[styles.toggleText, { color: activeTopTab === 'plates' ? colors.text : colors.textSecondary }]}>Nömrələr</Text>
+            {isDark ? <Sun size={18} color={colors.text} /> : <Moon size={18} color={colors.text} />}
           </TouchableOpacity>
         </View>
-
-        <TouchableOpacity
-          onPress={toggleTheme}
-          style={[styles.themeBtn, { backgroundColor: colors.card }]}
-        >
-          {isDark ? <Sun size={22} color={colors.text} /> : <Moon size={22} color={colors.text} />}
-        </TouchableOpacity>
       </View>
 
       {/* Main Content */}
@@ -957,65 +983,90 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingBottom: 8,
     zIndex: 10,
-    borderBottomWidth: 1,
   },
   logoContainer: {
     justifyContent: 'center',
   },
-  logoImage: { width: 80, height: 40 },
+  logoImage: { width: 80, height: 36 },
   logoText: { fontSize: 14, fontFamily: 'RethinkSans_800ExtraBold', letterSpacing: 1 },
   logoSubText: { fontSize: 10, fontFamily: 'RethinkSans_800ExtraBold', letterSpacing: 3, marginTop: -2 },
 
-  togglePill: {
+  headerActions: {
     flexDirection: 'row',
-    borderRadius: 20,
-    padding: 2,
-    height: 36,
     alignItems: 'center',
+    gap: 8,
   },
-  toggleItem: {
-    paddingHorizontal: 12,
-    height: '100%',
-    justifyContent: 'center',
-    borderRadius: 18,
-  },
-  toggleText: {
-    fontSize: 12,
-    fontFamily: 'RethinkSans_600SemiBold',
-  },
-
-  themeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  iconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
-  scrollContent: { paddingBottom: 20, paddingTop: 10 },
+  scrollContent: { paddingBottom: 20, paddingTop: 4 },
 
-  heroSection: {
+  // Large title (iOS-style)
+  titleSection: {
     paddingHorizontal: 20,
-    marginBottom: 24,
-    marginTop: 12,
+    marginTop: 4,
+    marginBottom: 16,
   },
-  heroText: {
-    fontSize: 28, // Increased from 24
-    fontFamily: 'RethinkSans_800ExtraBold',
+  largeTitle: {
+    fontSize: 30,
     lineHeight: 36,
+    fontFamily: 'RethinkSans_800ExtraBold',
+    letterSpacing: -0.6,
+  },
+  largeSubtitle: {
+    fontSize: 15,
+    marginTop: 8,
+    fontFamily: 'RethinkSans_500Medium',
+  },
+
+  // Segmented control
+  segmented: {
+    flexDirection: 'row',
+    marginHorizontal: 20,
+    marginBottom: 14,
+    padding: 2,
+    borderRadius: 10,
+    height: 36,
+  },
+  segment: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  segmentSelected: {
+    boxShadow: '0px 3px 8px rgba(0, 0, 0, 0.12), 0px 1px 1px rgba(0, 0, 0, 0.04)',
+  },
+  segmentText: {
+    fontSize: 13,
+    fontFamily: 'RethinkSans_500Medium',
+  },
+  segmentTextSelected: {
+    fontFamily: 'RethinkSans_700Bold',
+  },
+
+  // Shared card surface: hairline border + soft shadow (Stripe-like)
+  card: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 16,
+    boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.04), 0px 4px 12px rgba(0, 0, 0, 0.04)',
   },
 
   // Unified Search Bar
   unifiedSearchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 22,
     marginHorizontal: 20,
-    marginBottom: 24,
+    marginBottom: 14,
     padding: 6,
-    height: 64,
+    height: 62,
   },
   searchInputItem: {
     flex: 1,
@@ -1023,8 +1074,8 @@ const styles = StyleSheet.create({
     paddingLeft: 12,
   },
   inputLabel: {
-    fontSize: 10,
-    fontFamily: 'RethinkSans_600SemiBold',
+    fontSize: 11,
+    fontFamily: 'RethinkSans_500Medium',
     marginBottom: 2,
   },
   inputValueRow: {
@@ -1032,11 +1083,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   inputValue: {
-    fontSize: 14,
-    fontFamily: 'RethinkSans_700Bold',
+    fontSize: 15,
+    fontFamily: 'RethinkSans_600SemiBold',
   },
   verticalDivider: {
-    width: 1,
+    width: StyleSheet.hairlineWidth,
     height: '50%',
     marginHorizontal: 8,
   },
@@ -1047,7 +1098,7 @@ const styles = StyleSheet.create({
   smallActionBtn: {
     width: 44,
     height: 44,
-    borderRadius: 18,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 6,
@@ -1057,7 +1108,6 @@ const styles = StyleSheet.create({
   competitionBanner: {
     marginHorizontal: 20,
     marginBottom: 16,
-    borderRadius: 20,
     padding: 12,
   },
   competitionContent: {
@@ -1065,61 +1115,69 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   competitionIconBg: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   competitionTitle: {
-    fontSize: 16,
-    fontFamily: 'RethinkSans_800ExtraBold',
-    marginBottom: 4,
+    fontSize: 15,
+    fontFamily: 'RethinkSans_700Bold',
+    marginBottom: 2,
   },
   competitionSubtitle: {
     fontSize: 12,
     fontFamily: 'RethinkSans_500Medium',
   },
   competitionAction: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
+  competitionActionText: {
+    color: '#FFF',
+    fontFamily: 'RethinkSans_700Bold',
+    fontSize: 13,
   },
 
-  // Large Quick Filters
+  // Category tiles
   quickFiltersContainer: {
     flexDirection: 'row',
     paddingHorizontal: 20,
     gap: 8,
-    marginBottom: 24,
+    marginBottom: 16,
   },
-  bannerContainer: {
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  largeFilterBtn: {
+  categoryTile: {
     flex: 1,
-    height: 50,
-    borderRadius: 16,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8,
     gap: 6,
+    paddingVertical: 10,
+    borderRadius: 16,
+    borderWidth: 1,
   },
-  largeFilterIconCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  categoryIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  largeFilterText: {
-    fontSize: 12,
+  categoryLabel: {
+    fontSize: 13,
     fontFamily: 'RethinkSans_700Bold',
+  },
+
+  sectionHeader: {
+    paddingHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontFamily: 'RethinkSans_700Bold',
+    letterSpacing: -0.3,
   },
 
   grid: {
