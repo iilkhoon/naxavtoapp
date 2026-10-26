@@ -1,135 +1,77 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Image,
-  useWindowDimensions,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { MotiView } from 'moti';
-import { ShieldCheck, ArrowLeft, Sun, Moon, CheckCircle2, ChevronRight } from 'lucide-react-native';
+import { ChevronLeft, Sun, Moon, CheckCircle2 } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { AdminLoginForm } from '../components/AdminLoginForm';
+import { AdminButton, useAdminColors, F } from '../components/admin/AdminUI';
+import { useScreenTopPadding } from '../hooks/useScreenTopPadding';
+import { haptics } from '../utils/haptics';
 
 const APP_ICON = require('../icons/android-icon.png');
 
+// Admin sign-in portal (/novo): app icon, title and the shared login form
 export default function NovoAdminLogin() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { colors, isDark, toggleTheme } = useTheme();
+  const top = useScreenTopPadding();
+  const { isDark, toggleTheme } = useTheme();
+  const c = useAdminColors();
   const { session, isAdmin } = useAuth();
-  const { width } = useWindowDimensions();
-  const isDesktop = width > 768;
 
   const alreadyAdmin = !!session && isAdmin;
-
-  const goBack = () => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(tabs)');
-  };
-
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
   const goToPanel = () => router.replace('/admin');
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar style="light" />
-
-      {/* Dark hero, same look as the admin menu header */}
-      <LinearGradient
-        colors={['#3B0D0A', '#160707', colors.background]}
-        locations={[0, 0.6, 1]}
-        style={[styles.hero, { height: (isDesktop ? 380 : 350) + insets.top }]}
-      />
-
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.flex}
-      >
-        <View style={[styles.topBar, { paddingTop: insets.top + 12 }]}>
-          <TouchableOpacity onPress={goBack} style={styles.glassButton} activeOpacity={0.7} accessibilityLabel="Geri">
-            <ArrowLeft size={18} color="#FFF" />
-            <Text style={styles.glassButtonText}>Geri</Text>
+    <View style={[styles.container, { backgroundColor: c.background }]}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+        <View style={[styles.topBar, { paddingTop: top }]}>
+          <TouchableOpacity onPress={() => { haptics.tap(); goBack(); }} style={styles.back} hitSlop={10} accessibilityLabel="Geri">
+            <ChevronLeft size={24} color={c.primary} strokeWidth={2.4} />
+            <Text style={[styles.backText, { color: c.primary }]}>Geri</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity onPress={toggleTheme} style={styles.glassIconButton} activeOpacity={0.7} accessibilityLabel="Temanı dəyiş">
-            {isDark ? <Sun size={18} color="#FFF" /> : <Moon size={18} color="#FFF" />}
+          <TouchableOpacity
+            onPress={() => { haptics.tap(); toggleTheme(); }}
+            style={[styles.iconBtn, { backgroundColor: c.fill }]}
+            accessibilityLabel={isDark ? 'İşıqlı rejim' : 'Qaranlıq rejim'}
+          >
+            {isDark ? <Sun size={17} color={c.text} /> : <Moon size={17} color={c.text} />}
           </TouchableOpacity>
         </View>
 
         <ScrollView
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingBottom: insets.bottom + 32 },
-            isDesktop && styles.scrollContentDesktop,
-          ]}
+          contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 32 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <MotiView
-            from={{ opacity: 0, translateY: -10 }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={{ type: 'timing', duration: 450 }}
-            style={styles.brandHeader}
-          >
-            <View style={styles.logoRing}>
-              <Image source={APP_ICON} style={styles.logo} />
+          <View style={styles.inner}>
+            <View style={[styles.iconWrap, { backgroundColor: c.card, borderColor: c.hairline }]}>
+              <Image source={APP_ICON} style={styles.icon} accessibilityLabel="Naxçıvan Avto" />
             </View>
+            <Text style={[styles.title, { color: c.text }]}>Admin girişi</Text>
+            <Text style={[styles.subtitle, { color: c.textSecondary }]}>
+              Naxçıvan Avto idarəetmə panelinə daxil olmaq üçün admin hesabınızla giriş edin.
+            </Text>
 
-            <View style={styles.rolePill}>
-              <ShieldCheck size={12} color="#FFD700" />
-              <Text style={styles.rolePillText}>ADMINISTRATOR</Text>
-            </View>
-
-            <Text style={styles.title}>İdarəetmə Paneli</Text>
-            <Text style={styles.subtitle}>Naxçıvan Avto platformasının idarəetmə bölməsinə daxil olun</Text>
-          </MotiView>
-
-          <MotiView
-            from={{ opacity: 0, translateY: 24 }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={{ type: 'timing', duration: 500, delay: 120 }}
-            style={[
-              styles.card,
-              { backgroundColor: colors.card, borderColor: colors.border },
-              isDesktop && styles.cardDesktop,
-            ]}
-          >
-            {alreadyAdmin ? (
-              <View>
-                <View style={[styles.signedInBanner, { borderColor: 'rgba(52, 199, 89, 0.3)' }]}>
-                  <CheckCircle2 size={20} color="#34C759" />
-                  <Text style={[styles.signedInText, { color: colors.text }]}>
-                    Siz artıq administrator kimi daxil olmusunuz.
-                  </Text>
+            <View style={[styles.card, { backgroundColor: c.card, borderColor: c.hairline }]}>
+              {alreadyAdmin ? (
+                <View style={{ gap: 16 }}>
+                  <View style={[styles.signedIn, { backgroundColor: `${c.success}1A` }]}>
+                    <CheckCircle2 size={20} color={c.success} />
+                    <Text style={[styles.signedInText, { color: c.text }]}>Admin kimi daxil olmusunuz.</Text>
+                  </View>
+                  <AdminButton title="Panelə keç" onPress={goToPanel} />
                 </View>
-                <TouchableOpacity
-                  style={[styles.panelButton, { backgroundColor: colors.primary }]}
-                  onPress={goToPanel}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.panelButtonText}>Panelə keç</Text>
-                  <ChevronRight size={18} color="#FFF" />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>Admin girişi</Text>
-                <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>
-                  Hesab məlumatlarınızı daxil edin
-                </Text>
+              ) : (
                 <AdminLoginForm onSuccess={goToPanel} />
-              </>
-            )}
-          </MotiView>
+              )}
+            </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -139,162 +81,17 @@ export default function NovoAdminLogin() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   flex: { flex: 1 },
-  hero: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-  },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 8,
-  },
-  glassButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-  },
-  glassButtonText: {
-    color: '#FFF',
-    fontFamily: 'RethinkSans_600SemiBold',
-    fontSize: 13,
-  },
-  glassIconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 20,
-  },
-  scrollContentDesktop: {
-    alignItems: 'center',
-    paddingTop: 24,
-  },
-  brandHeader: {
-    alignItems: 'center',
-    paddingTop: 12,
-    paddingBottom: 28,
-  },
-  logoRing: {
-    width: 84,
-    height: 84,
-    borderRadius: 26,
-    padding: 3,
-    marginBottom: 16,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  logo: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 22,
-  },
-  rolePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginBottom: 12,
-    backgroundColor: 'rgba(255,215,0,0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,215,0,0.3)',
-  },
-  rolePillText: {
-    color: '#FFD700',
-    fontSize: 10,
-    fontFamily: 'RethinkSans_800ExtraBold',
-    letterSpacing: 1,
-  },
-  title: {
-    color: '#FFF',
-    fontSize: 28,
-    fontFamily: 'RethinkSans_800ExtraBold',
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  subtitle: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 14,
-    fontFamily: 'RethinkSans_400Regular',
-    textAlign: 'center',
-    lineHeight: 20,
-    maxWidth: 300,
-  },
-  card: {
-    width: '100%',
-    borderRadius: 28,
-    padding: 24,
-    borderWidth: 1,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.18,
-        shadowRadius: 24,
-      },
-      android: { elevation: 8 },
-      web: { boxShadow: '0 16px 40px rgba(0, 0, 0, 0.18)' },
-    }),
-  },
-  cardDesktop: {
-    maxWidth: 440,
-    padding: 32,
-  },
-  cardTitle: {
-    fontSize: 20,
-    fontFamily: 'RethinkSans_800ExtraBold',
-    marginBottom: 4,
-  },
-  cardSubtitle: {
-    fontSize: 13,
-    fontFamily: 'RethinkSans_400Regular',
-    marginBottom: 20,
-  },
-  signedInBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginBottom: 16,
-    backgroundColor: 'rgba(52, 199, 89, 0.1)',
-  },
-  signedInText: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: 'RethinkSans_600SemiBold',
-  },
-  panelButton: {
-    height: 54,
-    borderRadius: 16,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
-  },
-  panelButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontFamily: 'RethinkSans_700Bold',
-  },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 8 },
+  back: { flexDirection: 'row', alignItems: 'center', marginLeft: -8 },
+  backText: { fontSize: 17, fontFamily: F.medium },
+  iconBtn: { width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center' },
+  scroll: { flexGrow: 1, paddingHorizontal: 20 },
+  inner: { width: '100%', maxWidth: 420, alignSelf: 'center', alignItems: 'center', paddingTop: 24 },
+  iconWrap: { width: 84, height: 84, borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, padding: 6, marginBottom: 18, boxShadow: '0px 8px 20px rgba(0, 0, 0, 0.08)' },
+  icon: { width: '100%', height: '100%', borderRadius: 17 },
+  title: { fontSize: 30, fontFamily: F.heavy, letterSpacing: -0.6, textAlign: 'center' },
+  subtitle: { fontSize: 15, lineHeight: 21, fontFamily: F.medium, textAlign: 'center', marginTop: 6, marginBottom: 28, maxWidth: 340 },
+  card: { width: '100%', borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, padding: 20, boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.04), 0px 8px 24px rgba(0, 0, 0, 0.06)' },
+  signedIn: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 12 },
+  signedInText: { flex: 1, fontSize: 15, fontFamily: F.semibold },
 });

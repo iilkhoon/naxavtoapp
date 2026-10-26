@@ -1,198 +1,219 @@
 import React, { useState, useCallback, memo, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator, TextInput, Platform, KeyboardAvoidingView } from 'react-native';
-import { supabase } from '../../lib/supabase';
-import { Trash2, ArrowLeft, RefreshCw, Edit, CarFront, Hash, CheckCircle, Clock, Eye, Search, X, Filter } from 'lucide-react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Trash2, Edit3, CheckCircle, Eye, LayoutList } from 'lucide-react-native';
+import { differenceInDays } from 'date-fns';
+import { supabase } from '../../lib/supabase';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { useToast } from '../../contexts/ToastContext';
-import { differenceInDays } from 'date-fns';
-import { useTheme } from '../../contexts/ThemeContext';
 import { PlateVisual } from '../../components/PlateVisual';
+import { HapticRefreshControl } from '../../components/ui/HapticRefreshControl';
 import { Listing, Plate } from '../../types';
-import { MotiView } from 'moti';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useScreenTopPadding } from '../../hooks/useScreenTopPadding';
+import { haptics } from '../../utils/haptics';
+import {
+  AdminHeader, Segmented, SearchBar, EmptyView, LoadingView, Pill, useAdminColors, AdminColors, money, F,
+} from '../../components/admin/AdminUI';
 
 type Tab = 'cars' | 'plates';
 type Status = 'approved' | 'pending';
 
-const DateBadge = ({ dateString }: { dateString: string }) => {
-  if (!dateString) return null;
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return null;
-  const daysOld = differenceInDays(new Date(), date);
-  const isExpired = daysOld >= 7;
-  return (
-    <View style={[styles.dateBadge, isExpired && styles.dateBadgeExpired]}>
-      <Clock size={10} color={isExpired ? '#FF3B30' : '#AAA'} style={{ marginRight: 4 }} />
-      <Text style={[styles.dateText, isExpired && styles.dateTextExpired]}>{daysOld === 0 ? 'Bu gün' : `${daysOld} gün`}</Text>
-    </View>
-  );
+const age = (iso: string) => {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const days = differenceInDays(new Date(), d);
+  return days === 0 ? 'bu gün' : `${days} gün əvvəl`;
 };
 
-const ActionButton = ({ icon: Icon, color, onPress, bg }: any) => (
-  <TouchableOpacity onPress={onPress} style={[styles.actionBtn, { backgroundColor: bg }]}><Icon size={18} color={color} /></TouchableOpacity>
+const RowAction = ({ c, icon: Icon, label, onPress, tone }: { c: AdminColors; icon: any; label: string; onPress: () => void; tone?: string }) => (
+  <TouchableOpacity
+    onPress={() => { haptics.tap(); onPress(); }}
+    style={[styles.action, { backgroundColor: tone ? `${tone}1F` : c.fill }]}
+    hitSlop={4}
+    accessibilityLabel={label}
+  >
+    <Icon size={16} color={tone || c.text} />
+  </TouchableOpacity>
 );
 
-const CarItem = memo(({ item, colors, activeStatus, onView, onApprove, onEdit, onDelete }: any) => (
-  <MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 450 }} style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}>
-    <View style={styles.itemLeft}>
-      <Image source={{ uri: item.image_url || 'https://via.placeholder.com/150' }} style={styles.image} />
-      <View style={styles.info}>
-        <View style={styles.headerRow}><Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{item.make} {item.model}</Text>{item.is_vip && <View style={styles.vipDot} />}</View>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{item.year} • {item.price} AZN</Text>
-        <View style={styles.metaRow}><View style={[styles.idPill, { backgroundColor: colors.background }]}><Text style={[styles.idText, { color: colors.textSecondary }]}>{item.short_id || item.id.substring(0, 6)}</Text></View><DateBadge dateString={item.created_at} /></View>
+const ItemRow = memo(({ item, isCar, pending, c, onView, onApprove, onEdit, onDelete }: {
+  item: any; isCar: boolean; pending: boolean; c: AdminColors;
+  onView: (item: any) => void; onApprove: (id: string) => void; onEdit: (id: string) => void; onDelete: (id: string) => void;
+}) => {
+  const cover = isCar ? ((Array.isArray(item.images) && item.images[0]) || item.image_url) : null;
+  const oldPending = pending && differenceInDays(new Date(), new Date(item.created_at)) >= 7;
+  return (
+    <View style={[styles.item, { backgroundColor: c.card, borderColor: c.hairline }]}>
+      <View style={[styles.thumb, { backgroundColor: c.fill }]}>
+        {isCar ? (
+          cover ? <Image source={{ uri: cover }} style={StyleSheet.absoluteFill} accessibilityLabel={`${item.make} ${item.model}`} /> : null
+        ) : (
+          <View style={{ transform: [{ scale: 0.3 }] }}>
+            <PlateVisual region={item.region} series={item.series} number={item.number} />
+          </View>
+        )}
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={styles.titleRow}>
+          <Text style={[styles.title, { color: c.text }]} numberOfLines={1}>
+            {isCar ? `${item.make} ${item.model}` : `${item.region}-${item.series}-${item.number}`}
+          </Text>
+          {item.is_vip && <Pill label="VIP" tone="warning" />}
+        </View>
+        <Text style={[styles.price, { color: c.text }]}>{money(item.price, item.currency)}{isCar && item.year ? <Text style={{ color: c.textSecondary, fontFamily: F.medium }}>  ·  {item.year}</Text> : null}</Text>
+        <Text style={[styles.meta, { color: oldPending ? c.primary : c.textSecondary }]} numberOfLines={1}>
+          #{item.short_id || item.id.substring(0, 6)} · {age(item.created_at)}
+        </Text>
+      </View>
+      <View style={styles.actions}>
+        {pending
+          ? <RowAction c={c} icon={CheckCircle} label="Təsdiqlə" tone={c.success} onPress={() => onApprove(item.id)} />
+          : <RowAction c={c} icon={Eye} label="Bax" onPress={() => onView(item)} />}
+        <RowAction c={c} icon={Edit3} label="Redaktə et" onPress={() => onEdit(item.id)} />
+        <RowAction c={c} icon={Trash2} label="Sil" tone={c.primary} onPress={() => onDelete(item.id)} />
       </View>
     </View>
-    <View style={styles.actions}>
-      {activeStatus === 'pending' ? (<ActionButton icon={CheckCircle} color="#FFF" bg="#4CD964" onPress={() => onApprove(item.id)} />) : (<ActionButton icon={Eye} color="#FFF" bg="#007AFF" onPress={() => onView(item.id)} />)}
-      <ActionButton icon={Edit} color={colors.text} bg={colors.background} onPress={() => onEdit(item.id)} />
-      <ActionButton icon={Trash2} color="#FF3B30" bg="rgba(255, 59, 48, 0.1)" onPress={() => onDelete(item.id)} />
-    </View>
-  </MotiView>
-));
-
-const PlateItem = memo(({ item, colors, activeStatus, onView, onApprove, onEdit, onDelete }: any) => (
-  <MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 450 }} style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}>
-    <View style={styles.itemLeft}>
-      <View style={styles.plateIcon}><PlateVisual region={item.region} series={item.series} number={item.number} scale={0.35} /></View>
-      <View style={styles.info}>
-        <View style={styles.headerRow}><Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{item.region} {item.series} {item.number}</Text>{item.is_vip && <View style={styles.vipDot} />}</View>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{item.price} AZN</Text>
-        <View style={styles.metaRow}><View style={[styles.idPill, { backgroundColor: colors.background }]}><Text style={[styles.idText, { color: colors.textSecondary }]}>{item.short_id || item.id.substring(0, 6)}</Text></View><DateBadge dateString={item.created_at} /></View>
-      </View>
-    </View>
-    <View style={styles.actions}>
-      {activeStatus === 'pending' ? (<ActionButton icon={CheckCircle} color="#FFF" bg="#4CD964" onPress={() => onApprove(item.id)} />) : (<ActionButton icon={Eye} color="#FFF" bg="#007AFF" onPress={() => onView(item.id)} />)}
-      <ActionButton icon={Edit} color={colors.text} bg={colors.background} onPress={() => onEdit(item.id)} />
-      <ActionButton icon={Trash2} color="#FF3B30" bg="rgba(255, 59, 48, 0.1)" onPress={() => onDelete(item.id)} />
-    </View>
-  </MotiView>
-));
+  );
+});
+ItemRow.displayName = 'ItemRow';
 
 export default function AdminListingsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const c = useAdminColors();
   const { showToast } = useToast();
-  const { colors, isDark } = useTheme();
-  const headerTop = useScreenTopPadding();
   const [activeTab, setActiveTab] = useState<Tab>('cars');
   const [activeStatus, setActiveStatus] = useState<Status>('approved');
   const [items, setItems] = useState<(Listing | Plate)[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
-  useFocusEffect(useCallback(() => { fetchItems(); }, [activeTab, activeStatus]));
+  const table = activeTab === 'cars' ? 'listings' : 'plates';
 
-  const fetchItems = async () => {
-    setLoading(true);
+  const fetchItems = useCallback(async () => {
     try {
-      const table = activeTab === 'cars' ? 'listings' : 'plates';
-      const selectQuery = activeTab === 'cars' ? 'id, short_id, title, price, image_url, make, model, year, created_at, contact_phone, seller_name, is_vip' : '*';
-      const { data, error } = await supabase.from(table).select(selectQuery).eq('status', activeStatus).order('created_at', { ascending: false });
+      const select = activeTab === 'cars'
+        ? 'id, short_id, title, price, currency, image_url, images, make, model, year, created_at, is_vip'
+        : 'id, short_id, region, series, number, price, created_at, is_vip';
+      const { data, error } = await supabase.from(activeTab === 'cars' ? 'listings' : 'plates').select(select).eq('status', activeStatus).order('created_at', { ascending: false });
       if (error) throw error;
-      setItems(data as unknown as (Listing | Plate)[] || []);
-    } catch (error: any) { console.error(error); showToast('Xəta: ' + error.message, 'error'); } finally { setLoading(false); }
-  };
+      setItems((data as any) || []);
+    } catch (error: any) {
+      showToast('Xəta: ' + error.message, 'error');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [activeTab, activeStatus, showToast]);
+
+  useFocusEffect(useCallback(() => { fetchItems(); }, [fetchItems]));
+
+  const changeTab = (tab: Tab) => { setLoading(true); setSearchQuery(''); setActiveTab(tab); };
+  const changeStatus = (status: Status) => { setLoading(true); setActiveStatus(status); };
 
   const filteredItems = useMemo(() => {
-    return items.filter(item => {
-      const query = searchQuery.toLowerCase();
-      const matchesSearch = (item.short_id && item.short_id.toLowerCase().includes(query)) || item.id.toLowerCase().includes(query) || (activeTab === 'cars' ? `${(item as Listing).make} ${(item as Listing).model}`.toLowerCase().includes(query) : `${(item as Plate).region} ${(item as Plate).series} ${(item as Plate).number}`.toLowerCase().includes(query));
-      return matchesSearch;
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((item: any) => {
+      const text = activeTab === 'cars' ? `${item.make} ${item.model} ${item.year}` : `${item.region}-${item.series}-${item.number} ${item.region} ${item.series} ${item.number}`;
+      return text.toLowerCase().includes(q) || (item.short_id || '').toLowerCase().includes(q);
     });
   }, [items, searchQuery, activeTab]);
 
-  const confirmDelete = useCallback((id: string) => { setItemToDelete(id); setDeleteModalVisible(true); }, []);
   const performDelete = async () => {
     if (!itemToDelete) return;
-    setDeleteModalVisible(false);
-    const table = activeTab === 'cars' ? 'listings' : 'plates';
-    const { error } = await supabase.from(table).delete().eq('id', itemToDelete);
-    if (error) { showToast('Xəta: ' + error.message, 'error'); } else { showToast('Elan uğurla silindi', 'success'); fetchItems(); }
+    const id = itemToDelete;
     setItemToDelete(null);
+    const { error } = await supabase.from(table).delete().eq('id', id);
+    if (error) {
+      haptics.error();
+      showToast('Xəta: ' + error.message, 'error');
+      return;
+    }
+    haptics.success();
+    setItems((prev) => prev.filter((i) => i.id !== id));
+    showToast('Elan silindi', 'success');
   };
 
   const performApprove = useCallback(async (id: string) => {
-    const table = activeTab === 'cars' ? 'listings' : 'plates';
     const { error } = await supabase.from(table).update({ status: 'approved' }).eq('id', id);
-    if (error) { showToast('Xəta: ' + error.message, 'error'); } else { showToast('Elan təsdiqləndi', 'success'); fetchItems(); }
-  }, [activeTab, fetchItems, showToast]);
+    if (error) {
+      haptics.error();
+      showToast('Xəta: ' + error.message, 'error');
+      return;
+    }
+    haptics.success();
+    setItems((prev) => prev.filter((i) => i.id !== id));
+    showToast('Elan təsdiqləndi', 'success');
+  }, [table, showToast]);
 
-  const handleEdit = useCallback((id: string) => { if (activeTab === 'cars') { router.push(`/admin/edit-listing/${id}`); } else { router.push(`/admin/edit-plate/${id}`); } }, [activeTab, router]);
-  const handleView = useCallback((id: string) => {
-    if (activeTab === 'cars') { router.push(`/listing/${id}`); } else { router.push(`/plate/${id}`); }
+  const handleEdit = useCallback((id: string) => {
+    router.push((activeTab === 'cars' ? `/admin/edit-listing/${id}` : `/admin/edit-plate/${id}`) as any);
   }, [activeTab, router]);
 
-  const renderItem = useCallback(({ item }: { item: any }) => {
-    if (activeTab === 'cars') { return (<CarItem item={item} colors={colors} activeStatus={activeStatus} onView={handleView} onApprove={performApprove} onEdit={handleEdit} onDelete={confirmDelete} />); } else { return (<PlateItem item={item} colors={colors} activeStatus={activeStatus} onView={handleView} onApprove={performApprove} onEdit={handleEdit} onDelete={confirmDelete} />); }
-  }, [activeTab, colors, activeStatus, handleView, performApprove, handleEdit, confirmDelete]);
+  const handleView = useCallback((item: any) => {
+    router.push((activeTab === 'cars' ? `/listing/${item.short_id || item.id}` : `/plate/${item.short_id || item.id}`) as any);
+  }, [activeTab, router]);
 
   return (
-    <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={[styles.header, { paddingTop: headerTop, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}><ArrowLeft size={24} color={colors.text} /></TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Elan İdarəetməsi</Text>
-        <TouchableOpacity onPress={fetchItems}><RefreshCw size={24} color={colors.primary} /></TouchableOpacity>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <AdminHeader title="Elanlar" subtitle={loading ? undefined : `${filteredItems.length} elan`} backLabel="Admin" />
+      <View style={styles.controls}>
+        <Segmented<Tab> options={[{ value: 'cars', label: 'Avtomobillər' }, { value: 'plates', label: 'Nömrələr' }]} value={activeTab} onChange={changeTab} />
+        <Segmented<Status> options={[{ value: 'approved', label: 'Aktiv' }, { value: 'pending', label: 'Təsdiq gözləyir' }]} value={activeStatus} onChange={changeStatus} />
+        <SearchBar value={searchQuery} onChangeText={setSearchQuery} placeholder={activeTab === 'cars' ? 'Marka, model və ya ID' : 'Nömrə və ya ID'} />
       </View>
-      <View style={styles.tabContainer}>
-        <View style={[styles.segmentControl, { backgroundColor: colors.card }]}>
-          <TouchableOpacity style={[styles.segmentBtn, activeTab === 'cars' && { backgroundColor: colors.primary }]} onPress={() => setActiveTab('cars')}><Text style={[styles.segmentText, activeTab === 'cars' ? { color: '#FFF' } : { color: colors.textSecondary }]}>Avtomobillər</Text></TouchableOpacity>
-          <TouchableOpacity style={[styles.segmentBtn, activeTab === 'plates' && { backgroundColor: colors.primary }]} onPress={() => setActiveTab('plates')}><Text style={[styles.segmentText, activeTab === 'plates' ? { color: '#FFF' } : { color: colors.textSecondary }]}>Nömrələr</Text></TouchableOpacity>
-        </View>
-      </View>
-      <View style={styles.statusFilter}>
-        <TouchableOpacity style={[styles.statusChip, activeStatus === 'approved' ? { backgroundColor: colors.primary } : { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]} onPress={() => setActiveStatus('approved')}><Text style={[styles.statusText, { color: activeStatus === 'approved' ? '#FFF' : colors.text }]}>Aktiv</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.statusChip, activeStatus === 'pending' ? { backgroundColor: '#FF9500' } : { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]} onPress={() => setActiveStatus('pending')}><Text style={[styles.statusText, { color: activeStatus === 'pending' ? '#FFF' : colors.text }]}>Gözləyən</Text></TouchableOpacity>
-      </View>
-      <View style={[styles.searchContainer, { backgroundColor: colors.background }]}>
-        <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Search size={18} color={colors.textSecondary} style={{ marginLeft: 12 }} />
-          <TextInput style={[styles.searchInput, { color: colors.text }]} placeholder="Axtar..." placeholderTextColor={colors.placeholder} value={searchQuery} onChangeText={setSearchQuery} />
-          {searchQuery.length > 0 && (<TouchableOpacity onPress={() => setSearchQuery('')} style={{ marginRight: 12 }}><X size={16} color={colors.textSecondary} /></TouchableOpacity>)}
-        </View>
-      </View>
-      {loading ? (<ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />) : (<FlatList data={filteredItems} keyExtractor={(item) => item.id} contentContainerStyle={styles.list} renderItem={renderItem} ListEmptyComponent={<View style={styles.emptyContainer}><Filter size={40} color={colors.border} /><Text style={[styles.emptyText, { color: colors.textSecondary }]}>Elan tapılmadı</Text></View>} />)}
-      <ConfirmModal visible={deleteModalVisible} title="Sil" message="Bu elanı silmək istədiyinizə əminsiniz?" onConfirm={performDelete} onCancel={() => setDeleteModalVisible(false)} confirmText="Sil" cancelText="Ləğv et" isDestructive />
+      {loading ? <LoadingView /> : (
+        <FlatList
+          data={filteredItems}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 32, gap: 10 }}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={<HapticRefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchItems(); }} tintColor={c.primary} />}
+          renderItem={({ item }) => (
+            <ItemRow
+              item={item}
+              isCar={activeTab === 'cars'}
+              pending={activeStatus === 'pending'}
+              c={c}
+              onView={handleView}
+              onApprove={performApprove}
+              onEdit={handleEdit}
+              onDelete={setItemToDelete}
+            />
+          )}
+          ListEmptyComponent={
+            <EmptyView
+              icon={LayoutList}
+              title={searchQuery ? 'Axtarışa uyğun elan yoxdur' : activeStatus === 'pending' ? 'Təsdiq gözləyən elan yoxdur' : 'Elan yoxdur'}
+            />
+          }
+        />
+      )}
+      <ConfirmModal
+        visible={!!itemToDelete}
+        title="Elanı silmək?"
+        message="Elan birdəfəlik silinəcək."
+        onConfirm={performDelete}
+        onCancel={() => setItemToDelete(null)}
+        confirmText="Sil"
+        cancelText="Ləğv et"
+        isDestructive
+      />
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1 },
-  backButton: { padding: 4 },
-  headerTitle: { fontSize: 18, fontFamily: 'RethinkSans_700Bold' },
-  tabContainer: { padding: 16, paddingBottom: 8 },
-  segmentControl: { flexDirection: 'row', padding: 4, borderRadius: 12, height: 44 },
-  segmentBtn: { flex: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 10 },
-  segmentText: { fontFamily: 'RethinkSans_600SemiBold', fontSize: 14 },
-  statusFilter: { flexDirection: 'row', paddingHorizontal: 16, gap: 10, paddingBottom: 12 },
-  statusChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-  statusText: { fontFamily: 'RethinkSans_600SemiBold', fontSize: 12 },
-  searchContainer: { paddingHorizontal: 16, paddingBottom: 10 },
-  searchBar: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, height: 44, borderWidth: 1 },
-  searchInput: { flex: 1, height: '100%', paddingHorizontal: 12, fontSize: 16, fontFamily: 'RethinkSans_500Medium' },
-  list: { padding: 16 },
-  item: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 16, marginBottom: 12, borderWidth: 1, justifyContent: 'space-between' },
-  itemLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  image: { width: 60, height: 60, borderRadius: 12, marginRight: 12, backgroundColor: '#EEE' },
-  plateIcon: { width: 80, height: 40, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  info: { flex: 1, marginRight: 8 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  title: { fontSize: 15, fontFamily: 'RethinkSans_700Bold' },
-  vipDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFD700' },
-  subtitle: { fontSize: 13, marginTop: 2, fontFamily: 'RethinkSans_500Medium' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 8 },
-  idPill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  idText: { fontSize: 10, fontFamily: 'RethinkSans_600SemiBold' },
-  dateBadge: { flexDirection: 'row', alignItems: 'center' },
-  dateBadgeExpired: { backgroundColor: 'rgba(255, 59, 48, 0.1)', paddingHorizontal: 4, borderRadius: 4 },
-  dateText: { color: '#AAA', fontSize: 10, fontFamily: 'RethinkSans_500Medium' },
-  dateTextExpired: { color: '#FF3B30', fontFamily: 'RethinkSans_700Bold' },
-  actions: { flexDirection: 'row', gap: 8 },
-  actionBtn: { width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  emptyContainer: { alignItems: 'center', marginTop: 60, opacity: 0.5 },
-  emptyText: { fontSize: 16, fontFamily: 'RethinkSans_700Bold', marginTop: 10 },
+  controls: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, gap: 10 },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
+  thumb: { width: 72, height: 54, borderRadius: 10, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  title: { fontSize: 15, fontFamily: F.semibold, flexShrink: 1 },
+  price: { fontSize: 15, fontFamily: F.heavy, marginTop: 2 },
+  meta: { fontSize: 12, fontFamily: F.medium, marginTop: 2 },
+  actions: { flexDirection: 'row', gap: 6 },
+  action: { width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center' },
 });

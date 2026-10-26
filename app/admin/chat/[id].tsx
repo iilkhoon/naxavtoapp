@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { supabase } from '../../../lib/supabase';
-import { useTheme } from '../../../contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ArrowLeft, Send, CheckCircle } from 'lucide-react-native';
-import { useSettings } from '../../../contexts/SettingsContext';
-import { Image } from 'expo-image';
+import { ChevronLeft, ArrowUp } from 'lucide-react-native';
+import { supabase } from '../../../lib/supabase';
+import { useToast } from '../../../contexts/ToastContext';
+import { useScreenTopPadding } from '../../../hooks/useScreenTopPadding';
+import { haptics } from '../../../utils/haptics';
+import { LoadingView, useAdminColors, F } from '../../../components/admin/AdminUI';
 
 interface Message {
     id: string;
@@ -17,241 +18,175 @@ interface Message {
     created_at: string;
 }
 
+const time = (iso: string) => new Date(iso).toLocaleTimeString('az-AZ', { hour: '2-digit', minute: '2-digit' });
+
 export default function AdminChatNativeDetails() {
     const { id } = useLocalSearchParams();
+    const chatId = Array.isArray(id) ? id[0] : id;
     const router = useRouter();
-    const { colors, isDark } = useTheme();
+    const c = useAdminColors();
     const insets = useSafeAreaInsets();
-    const { settings } = useSettings();
-    const logoUrl = isDark ? settings?.site_logo_dark : settings?.site_logo_light;
+    const top = useScreenTopPadding();
+    const { showToast } = useToast();
 
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(true);
     const [chatStatus, setChatStatus] = useState<'open' | 'closed'>('open');
     const [appVersion, setAppVersion] = useState<string | null>(null);
-
-    const flatListRef = useRef<FlatList>(null);
+    const listRef = useRef<FlatList>(null);
 
     useEffect(() => {
-        if (!id) return;
+        if (!chatId) return;
+        let cancelled = false;
 
+        // Tell the push function this admin is reading the chat, so it skips the notification
         const updateWatching = async (isWatching: boolean) => {
             const pushToken = await AsyncStorage.getItem('expo_push_token');
             if (pushToken) {
-                await supabase
-                    .from('push_tokens')
-                    .update({ is_watching_chat: isWatching, active_chat_id: isWatching ? id : null })
-                    .eq('token', pushToken);
+                await supabase.from('push_tokens').update({ is_watching_chat: isWatching, active_chat_id: isWatching ? chatId : null }).eq('token', pushToken);
             }
         };
 
-        loadChatDetails();
+        (async () => {
+            const [{ data: chat }, { data: msgs, error }] = await Promise.all([
+                supabase.from('chats').select('status, app_version').eq('id', chatId).single(),
+                supabase.from('messages').select('*').eq('chat_id', chatId).order('created_at', { ascending: true }),
+            ]);
+            if (cancelled) return;
+            if (chat) {
+                setChatStatus(chat.status);
+                setAppVersion(chat.app_version);
+            }
+            if (error) console.error('Error loading chat:', error);
+            setMessages(msgs || []);
+            setLoading(false);
+        })();
         updateWatching(true);
 
         const sub = supabase
-            .channel(`admin_chat_${id}`)
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${id}` }, (payload) => {
-                const newMsg = payload.new as Message;
-                setMessages(prev => {
-                    if (prev.find(m => m.id === newMsg.id || (m.content === newMsg.content && m.sender_type === newMsg.sender_type))) return prev;
-                    return [...prev, newMsg];
+            .channel(`admin_chat_${chatId}`)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, (payload) => {
+                const msg = payload.new as Message;
+                // Swap in the server copy of our own optimistic message; append everything else
+                setMessages((prev) => {
+                    if (prev.some((m) => m.id === msg.id)) return prev;
+                    const temp = prev.findIndex((m) => m.id.startsWith('temp-') && m.sender_type === msg.sender_type && m.content === msg.content);
+                    if (temp >= 0) return prev.map((m, i) => (i === temp ? msg : m));
+                    if (msg.sender_type === 'user') haptics.tap();
+                    return [...prev, msg];
                 });
-                setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
             })
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chats', filter: `id=eq.${id}` }, (payload) => {
-                console.log('Admin Received Chat Update:', payload);
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chats', filter: `id=eq.${chatId}` }, (payload) => {
                 setChatStatus(payload.new.status);
             })
-            .subscribe((status, err) => {
-                console.log('Admin Chat Subscription Status:', status);
-                if (err) console.error('Admin Subscription Error:', err);
-            });
+            .subscribe();
 
         return () => {
+            cancelled = true;
             supabase.removeChannel(sub);
             updateWatching(false);
         };
-    }, [id]);
-
-    const loadChatDetails = async () => {
-        try {
-            // Get status and version
-            const { data: chatData } = await supabase.from('chats').select('status, app_version').eq('id', id).single();
-            if (chatData) {
-                setChatStatus(chatData.status);
-                setAppVersion(chatData.app_version);
-            }
-
-            // Get messages
-            const { data: msgs, error } = await supabase
-                .from('messages')
-                .select('*')
-                .eq('chat_id', id)
-                .order('created_at', { ascending: true });
-
-            if (error) throw error;
-            setMessages(msgs || []);
-
-            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 300);
-        } catch (error) {
-            console.error('Error loading chat:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+    }, [chatId]);
 
     const handleSend = async () => {
         const text = inputText.trim();
-        if (!text || !id) return;
-
+        if (!text || !chatId) return;
+        haptics.tap();
         const tempId = 'temp-' + Date.now();
-        const tempMsg: Message = {
-            id: tempId,
-            chat_id: id as string,
-            sender_type: 'admin',
-            content: text,
-            created_at: new Date().toISOString(),
-        };
-
-        setMessages(prev => [...prev, tempMsg]);
+        setMessages((prev) => [...prev, { id: tempId, chat_id: chatId, sender_type: 'admin', content: text, created_at: new Date().toISOString() }]);
         setInputText('');
-        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
 
-        try {
-            const { error } = await supabase.from('messages').insert([
-                {
-                    chat_id: id,
-                    sender_type: 'admin',
-                    content: text,
-                },
-            ]);
-
-            if (error) {
-                setMessages(prev => prev.filter(m => m.id !== tempId));
-                console.error('Error sending:', error);
-            }
-        } catch (error) {
-            console.error('Exception sending:', error);
-            setMessages(prev => prev.filter(m => m.id !== tempId));
+        const { error } = await supabase.from('messages').insert([{ chat_id: chatId, sender_type: 'admin', content: text }]);
+        if (error) {
+            haptics.error();
+            setMessages((prev) => prev.filter((m) => m.id !== tempId));
+            setInputText(text);
+            showToast('Mesaj göndərilmədi', 'error');
         }
     };
 
-    const handleCloseChat = async () => {
-        if (!id || chatStatus === 'closed') return;
-
-        try {
-            await supabase.from('chats').update({ status: 'closed' }).eq('id', id);
-            setChatStatus('closed');
-        } catch (error) {
-            console.error('Error closing chat:', error);
+    const toggleStatus = async () => {
+        if (!chatId) return;
+        const next = chatStatus === 'open' ? 'closed' : 'open';
+        const { error } = await supabase.from('chats').update({ status: next }).eq('id', chatId);
+        if (error) {
+            haptics.error();
+            showToast('Status dəyişmədi', 'error');
+            return;
         }
+        haptics.success();
+        setChatStatus(next);
     };
 
-    const renderMessage = ({ item }: { item: Message }) => {
-        const isAdmin = item.sender_type === 'admin';
-        return (
-            <View
-                style={[
-                    styles.messageBubble,
-                    isAdmin ? styles.adminBubble : styles.userBubble,
-                    {
-                        backgroundColor: isAdmin ? colors.primary : colors.card,
-                        borderColor: isAdmin ? 'transparent' : colors.border,
-                        borderWidth: isAdmin ? 0 : 1,
-                    },
-                ]}
-            >
-                <Text style={[styles.messageText, { color: isAdmin ? '#FFFFFF' : colors.text }]}>
-                    {item.content}
-                </Text>
-                <Text style={[styles.timeText, { color: isAdmin ? 'rgba(255,255,255,0.7)' : colors.textSecondary }]}>
-                    {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </Text>
-            </View>
-        );
-    };
+    const canSend = inputText.trim().length > 0;
 
     return (
-        <View style={[styles.container, { backgroundColor: colors.background }]}>
-            <View style={[styles.header, { paddingTop: insets.top + 10, borderBottomColor: colors.border }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <ArrowLeft size={24} color={colors.text} />
+        <View style={[styles.container, { backgroundColor: c.background }]}>
+            <View style={[styles.header, { paddingTop: top, borderBottomColor: c.hairline, backgroundColor: c.card }]}>
+                <TouchableOpacity onPress={() => { haptics.tap(); router.back(); }} style={styles.back} hitSlop={10} accessibilityLabel="Çatlar">
+                    <ChevronLeft size={24} color={c.primary} strokeWidth={2.4} />
+                    <Text style={[styles.backText, { color: c.primary }]}>Çatlar</Text>
                 </TouchableOpacity>
-
-                <View style={[styles.logoCircle, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: colors.border }]}>
-                    {logoUrl ? (
-                        <Image
-                            source={{ uri: logoUrl }}
-                            style={styles.headerLogo}
-                            contentFit="contain"
-                        />
-                    ) : (
-                        <CheckCircle size={20} color={colors.primary} />
-                    )}
+                <View style={styles.headerCenter}>
+                    <Text style={[styles.headerTitle, { color: c.text }]} numberOfLines={1}>Müştəri {String(chatId).substring(0, 5)}</Text>
+                    <Text style={[styles.headerSub, { color: chatStatus === 'open' ? c.success : c.textSecondary }]}>
+                        {chatStatus === 'open' ? 'Açıq' : 'Bağlı'}{appVersion ? ` · v${appVersion}` : ''}
+                    </Text>
                 </View>
-                <View style={styles.headerInfo}>
-                    <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>Chat #{String(id).substring(0, 5)}</Text>
-                    <View style={styles.headerSub}>
-                        <Text style={[styles.headerStatus, { color: chatStatus === 'open' ? '#34C759' : '#FF3B30' }]}>
-                            {chatStatus === 'open' ? 'Aktiv' : 'Bağlı'}
-                        </Text>
-                        {appVersion && (
-                            <View style={[styles.versionBadge, { backgroundColor: isDark ? '#333' : '#E5E5EA' }]}>
-                                <Text style={[styles.versionText, { color: colors.textSecondary }]}>v{appVersion}</Text>
-                            </View>
-                        )}
-                    </View>
-                </View>
-                {chatStatus === 'open' && (
-                    <TouchableOpacity onPress={handleCloseChat} style={styles.closeBtn}>
-                        <CheckCircle size={20} color="#FF3B30" />
-                    </TouchableOpacity>
-                )}
+                <TouchableOpacity onPress={toggleStatus} hitSlop={10} style={styles.headerAction} accessibilityRole="button">
+                    <Text style={[styles.headerActionText, { color: c.primary }]}>{chatStatus === 'open' ? 'Bağla' : 'Aç'}</Text>
+                </TouchableOpacity>
             </View>
 
-            {loading ? (
-                <View style={styles.center}>
-                    <ActivityIndicator size="large" color={colors.primary} />
-                </View>
-            ) : (
-                <FlatList
-                    ref={flatListRef}
-                    data={messages}
-                    keyExtractor={item => item.id}
-                    renderItem={renderMessage}
-                    contentContainerStyle={styles.messageList}
-                    showsVerticalScrollIndicator={false}
-                    onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-                />
-            )}
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                {loading ? <LoadingView /> : (
+                    <FlatList
+                        ref={listRef}
+                        data={messages}
+                        keyExtractor={(m) => m.id}
+                        contentContainerStyle={styles.list}
+                        showsVerticalScrollIndicator={false}
+                        keyboardDismissMode="interactive"
+                        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+                        ListEmptyComponent={<Text style={[styles.empty, { color: c.textSecondary }]}>Hələ mesaj yoxdur</Text>}
+                        renderItem={({ item }) => {
+                            const mine = item.sender_type === 'admin';
+                            return (
+                                <View style={[styles.bubbleWrap, { alignItems: mine ? 'flex-end' : 'flex-start' }]}>
+                                    <View style={[styles.bubble, mine ? { backgroundColor: c.primary, borderBottomRightRadius: 6 } : { backgroundColor: c.fill, borderBottomLeftRadius: 6 }]}>
+                                        <Text style={[styles.bubbleText, { color: mine ? '#FFF' : c.text }]}>{item.content}</Text>
+                                    </View>
+                                    <Text style={[styles.time, { color: c.textSecondary }]}>{time(item.created_at)}</Text>
+                                </View>
+                            );
+                        }}
+                    />
+                )}
 
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-            >
                 {chatStatus === 'open' ? (
-                    <View style={[styles.inputContainer, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: insets.bottom || 16 }]}>
+                    <View style={[styles.composer, { backgroundColor: c.card, borderTopColor: c.hairline, paddingBottom: Math.max(insets.bottom, 10) }]}>
                         <TextInput
-                            style={[styles.input, { color: colors.text, backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7' }]}
-                            placeholder="Müştəriyə cavab yazın..."
-                            placeholderTextColor={colors.textSecondary}
+                            style={[styles.input, { color: c.text, borderColor: c.hairline }, Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)]}
+                            placeholder="Cavab yazın"
+                            placeholderTextColor={c.textSecondary}
                             value={inputText}
                             onChangeText={setInputText}
                             multiline
                             maxLength={500}
                         />
                         <TouchableOpacity
-                            style={[styles.sendButton, { backgroundColor: inputText.trim() ? colors.primary : colors.border }]}
+                            style={[styles.send, { backgroundColor: canSend ? c.primary : c.fill }]}
                             onPress={handleSend}
-                            disabled={!inputText.trim()}
+                            disabled={!canSend}
+                            accessibilityLabel="Göndər"
                         >
-                            <Send size={20} color={inputText.trim() ? '#FFF' : colors.textSecondary} />
+                            <ArrowUp size={18} color={canSend ? '#FFF' : c.textSecondary} strokeWidth={2.6} />
                         </TouchableOpacity>
                     </View>
                 ) : (
-                    <View style={[styles.closedBanner, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7', paddingBottom: insets.bottom || 16 }]}>
-                        <Text style={[styles.closedText, { color: colors.textSecondary }]}>Bu çat bağlanıb.</Text>
+                    <View style={[styles.closed, { borderTopColor: c.hairline, paddingBottom: Math.max(insets.bottom, 16) }]}>
+                        <Text style={[styles.closedText, { color: c.textSecondary }]}>Çat bağlıdır. Yazmaq üçün yuxarıdan “Aç” seçin.</Text>
                     </View>
                 )}
             </KeyboardAvoidingView>
@@ -260,131 +195,24 @@ export default function AdminChatNativeDetails() {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingBottom: 16,
-        borderBottomWidth: 1,
-    },
-    backButton: {
-        padding: 8,
-        marginRight: 8,
-    },
-    logoCircle: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        borderWidth: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 10,
-        overflow: 'hidden',
-    },
-    headerLogo: {
-        width: '70%',
-        height: '70%',
-    },
-    headerInfo: {
-        flex: 1,
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontFamily: 'RethinkSans_700Bold',
-    },
-    headerStatus: {
-        fontSize: 12,
-        fontFamily: 'RethinkSans_500Medium',
-    },
-    headerSub: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 2,
-    },
-    versionBadge: {
-        paddingHorizontal: 6,
-        paddingVertical: 1,
-        borderRadius: 4,
-        marginLeft: 8,
-    },
-    versionText: {
-        fontSize: 10,
-        fontFamily: 'RethinkSans_600SemiBold',
-    },
-    closeBtn: {
-        padding: 8,
-    },
-    center: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    messageList: {
-        padding: 16,
-        paddingBottom: 32,
-    },
-    messageBubble: {
-        maxWidth: '80%',
-        padding: 12,
-        borderRadius: 16,
-        marginBottom: 12,
-    },
-    adminBubble: {
-        alignSelf: 'flex-end',
-        borderBottomRightRadius: 4,
-    },
-    userBubble: {
-        alignSelf: 'flex-start',
-        borderBottomLeftRadius: 4,
-    },
-    messageText: {
-        fontSize: 15,
-        fontFamily: 'RethinkSans_400Regular',
-        lineHeight: 20,
-    },
-    timeText: {
-        fontSize: 10,
-        fontFamily: 'RethinkSans_500Medium',
-        alignSelf: 'flex-end',
-        marginTop: 4,
-    },
-    inputContainer: {
-        flexDirection: 'row',
-        alignItems: 'flex-end',
-        paddingHorizontal: 16,
-        paddingTop: 12,
-        borderTopWidth: 1,
-    },
-    input: {
-        flex: 1,
-        minHeight: 40,
-        maxHeight: 120,
-        borderRadius: 20,
-        paddingHorizontal: 16,
-        paddingTop: 10,
-        paddingBottom: 10,
-        fontSize: 15,
-        fontFamily: 'RethinkSans_400Regular',
-    },
-    sendButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginLeft: 12,
-        marginBottom: 2,
-    },
-    closedBanner: {
-        padding: 24,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    closedText: {
-        fontSize: 14,
-        fontFamily: 'RethinkSans_500Medium',
-    },
+    container: { flex: 1 },
+    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+    back: { flexDirection: 'row', alignItems: 'center', width: 90 },
+    backText: { fontSize: 17, fontFamily: F.medium },
+    headerCenter: { flex: 1, alignItems: 'center' },
+    headerTitle: { fontSize: 16, fontFamily: F.semibold },
+    headerSub: { fontSize: 12, fontFamily: F.medium, marginTop: 1 },
+    headerAction: { width: 90, alignItems: 'flex-end', paddingRight: 4 },
+    headerActionText: { fontSize: 17, fontFamily: F.medium },
+    list: { paddingHorizontal: 14, paddingTop: 16, paddingBottom: 16, gap: 8 },
+    empty: { textAlign: 'center', marginTop: 40, fontSize: 14, fontFamily: F.medium },
+    bubbleWrap: { gap: 3 },
+    bubble: { maxWidth: '80%', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 18 },
+    bubbleText: { fontSize: 16, lineHeight: 21, fontFamily: F.regular },
+    time: { fontSize: 11, fontFamily: F.medium, marginHorizontal: 6 },
+    composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingHorizontal: 12, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth },
+    input: { flex: 1, minHeight: 36, maxHeight: 120, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingTop: 8, paddingBottom: 8, fontSize: 16, fontFamily: F.regular },
+    send: { width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center', marginBottom: 1 },
+    closed: { paddingTop: 14, paddingHorizontal: 24, alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth },
+    closedText: { fontSize: 13, fontFamily: F.medium, textAlign: 'center' },
 });

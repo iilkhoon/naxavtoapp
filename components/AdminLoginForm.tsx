@@ -73,7 +73,8 @@ export function AdminLoginForm({ onSuccess }: Props) {
     }
   };
 
-  const inputBackground = isDark ? '#18181A' : '#F6F6F9';
+  // iOS-style filled fields; the accent outline only shows on focus
+  const inputBackground = isDark ? 'rgba(118,118,128,0.24)' : 'rgba(118,118,128,0.12)';
 
   return (
     <View>
@@ -96,7 +97,7 @@ export function AdminLoginForm({ onSuccess }: Props) {
         <View
           style={[
             styles.inputWrapper,
-            { backgroundColor: inputBackground, borderColor: focusedField === 'email' ? colors.primary : colors.border },
+            { backgroundColor: inputBackground, borderColor: focusedField === 'email' ? colors.primary : 'transparent' },
           ]}
         >
           <Mail size={18} color={focusedField === 'email' ? colors.primary : colors.textSecondary} style={styles.inputIcon} />
@@ -128,7 +129,7 @@ export function AdminLoginForm({ onSuccess }: Props) {
         <View
           style={[
             styles.inputWrapper,
-            { backgroundColor: inputBackground, borderColor: focusedField === 'password' ? colors.primary : colors.border },
+            { backgroundColor: inputBackground, borderColor: focusedField === 'password' ? colors.primary : 'transparent' },
           ]}
         >
           <Lock size={18} color={focusedField === 'password' ? colors.primary : colors.textSecondary} style={styles.inputIcon} />
@@ -251,21 +252,11 @@ const styles = StyleSheet.create({
   } as any,
   eyeButton: { padding: 6 },
   submitButton: {
-    height: 56,
-    borderRadius: 16,
+    height: 52,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#FF3B30',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
-      },
-      android: { elevation: 4 },
-      web: { boxShadow: '0 6px 16px rgba(255, 59, 48, 0.25)' },
-    }),
   },
   submitButtonLoading: { opacity: 0.8 },
   buttonRow: {

@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { supabase } from '../../lib/supabase';
-import { useTheme } from '../../contexts/ThemeContext';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-// If it's web, it will use chats.web.tsx, so this is strictly Native
-import { MessageSquare, ChevronRight, ArrowLeft, RefreshCw } from 'lucide-react-native';
+import { MessageSquare } from 'lucide-react-native';
+import { supabase } from '../../lib/supabase';
+import {
+    AdminHeader, AdminScroll, Group, GroupRow, Segmented, EmptyView, LoadingView, useAdminColors, F,
+} from '../../components/admin/AdminUI';
 
 interface Chat {
     id: string;
@@ -15,192 +15,79 @@ interface Chat {
     updated_at: string;
 }
 
-export default function AdminChatsNative() {
-    const { colors, isDark } = useTheme();
-    const router = useRouter();
+// Today → "14:05", earlier → "12.10, 14:05"
+const stamp = (iso: string) => {
+    const d = new Date(iso);
+    const time = d.toLocaleTimeString('az-AZ', { hour: '2-digit', minute: '2-digit' });
+    if (d.toDateString() === new Date().toDateString()) return time;
+    return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}, ${time}`;
+};
 
+// Chat list in the app (the web panel uses chats.web.tsx)
+export default function AdminChatsNative() {
+    const router = useRouter();
+    const c = useAdminColors();
     const [chats, setChats] = useState<Chat[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [filterStatus, setFilterStatus] = useState<'open' | 'closed'>('open');
 
-    useEffect(() => {
-        loadChats();
-
-        const sub = supabase
-            .channel('admin_chats_native')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => {
-                loadChats();
-            })
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(sub);
-        };
+    const loadChats = useCallback(async () => {
+        const { data, error } = await supabase.from('chats').select('*').eq('status', filterStatus).order('updated_at', { ascending: false });
+        if (error) console.error('Error loading chats:', error);
+        else setChats(data || []);
+        setLoading(false);
+        setRefreshing(false);
     }, [filterStatus]);
 
-    const loadChats = async () => {
-        try {
-            const { data, error } = await supabase
-                .from('chats')
-                .select('*')
-                .eq('status', filterStatus)
-                .order('updated_at', { ascending: false });
-
-            if (error) throw error;
-            setChats(data || []);
-        } catch (error) {
-            console.error('Error loading chats:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const renderItem = ({ item }: { item: Chat }) => (
-        <TouchableOpacity
-            style={[styles.chatItem, { backgroundColor: colors.card, borderBottomColor: colors.border }]}
-            onPress={() => router.push(`/admin/chat/${item.id}`)}
-        >
-            <View style={styles.chatInfo}>
-                <View style={styles.chatHeader}>
-                    <Text style={[styles.deviceId, { color: colors.text }]} numberOfLines={1}>
-                        Müştəri: {item.device_id.substring(0, 8)}...
-                    </Text>
-                    <View style={[styles.statusDot, { backgroundColor: item.status === 'open' ? '#34C759' : '#FF3B30' }]} />
-                </View>
-                <Text style={[styles.lastActive, { color: colors.textSecondary }]}>
-                    Son aktivlik: {new Date(item.updated_at).toLocaleString()}
-                </Text>
-            </View>
-            <ChevronRight size={20} color={colors.textSecondary} />
-        </TouchableOpacity>
-    );
+    useEffect(() => {
+        const first = setTimeout(loadChats, 0);
+        const sub = supabase
+            .channel('admin_chats_native')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => loadChats())
+            .subscribe();
+        return () => {
+            clearTimeout(first);
+            supabase.removeChannel(sub);
+        };
+    }, [loadChats]);
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <ArrowLeft size={24} color={colors.text} />
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>Canlı Çatlar</Text>
-                <TouchableOpacity onPress={loadChats}>
-                    <RefreshCw size={24} color={colors.primary} />
-                </TouchableOpacity>
-            </View>
-
-            <View style={styles.filterRow}>
-                <TouchableOpacity
-                    style={[styles.filterBtn, filterStatus === 'open' ? { backgroundColor: colors.primary } : { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}
-                    onPress={() => setFilterStatus('open')}
-                >
-                    <Text style={[styles.filterText, { color: filterStatus === 'open' ? '#FFF' : colors.text }]}>Açıq</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.filterBtn, filterStatus === 'closed' ? { backgroundColor: colors.primary } : { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}
-                    onPress={() => setFilterStatus('closed')}
-                >
-                    <Text style={[styles.filterText, { color: filterStatus === 'closed' ? '#FFF' : colors.text }]}>Bağlı</Text>
-                </TouchableOpacity>
-            </View>
-
-            {loading ? (
-                <View style={styles.center}>
-                    <ActivityIndicator size="large" color={colors.primary} />
-                </View>
-            ) : (
-                <FlatList
-                    data={chats}
-                    keyExtractor={item => item.id}
-                    renderItem={renderItem}
-                    contentContainerStyle={styles.list}
-                    ListEmptyComponent={
-                        <View style={styles.center}>
-                            <MessageSquare size={48} color={colors.border} style={{ marginBottom: 16 }} />
-                            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                                Hazırda bu statusda çat yoxdur.
-                            </Text>
-                        </View>
-                    }
+        <View style={{ flex: 1, backgroundColor: c.background }}>
+            <AdminHeader title="Canlı dəstək" subtitle="Müştəri yazışmaları" backLabel="Admin" />
+            <View style={styles.controls}>
+                <Segmented
+                    options={[{ value: 'open', label: 'Açıq' }, { value: 'closed', label: 'Bağlı' }]}
+                    value={filterStatus}
+                    onChange={(v) => { setLoading(true); setFilterStatus(v); }}
                 />
+            </View>
+            {loading ? <LoadingView /> : (
+                <AdminScroll refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadChats(); }} contentStyle={{ paddingTop: 4 }}>
+                    {chats.length === 0 ? (
+                        <EmptyView icon={MessageSquare} title={filterStatus === 'open' ? 'Açıq çat yoxdur' : 'Bağlı çat yoxdur'} />
+                    ) : (
+                        <Group>
+                            {chats.map((chat) => (
+                                <GroupRow
+                                    key={chat.id}
+                                    icon={() => <Text style={[styles.initials, { color: c.text }]}>{chat.device_id.slice(0, 2).toUpperCase()}</Text>}
+                                    title={`Müştəri ${chat.device_id.substring(0, 8)}`}
+                                    subtitle={`Son aktivlik ${stamp(chat.updated_at)}`}
+                                    right={chat.status === 'open' ? <View style={[styles.dot, { backgroundColor: c.success }]} /> : undefined}
+                                    onPress={() => router.push(`/admin/chat/${chat.id}`)}
+                                />
+                            ))}
+                        </Group>
+                    )}
+                </AdminScroll>
             )}
-        </SafeAreaView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: 20,
-        paddingTop: Platform.OS === 'android' ? 10 : 20,
-        borderBottomWidth: 1,
-    },
-    backButton: {
-        padding: 4,
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontFamily: 'RethinkSans_700Bold',
-    },
-    filterRow: {
-        flexDirection: 'row',
-        padding: 16,
-        gap: 10,
-    },
-    filterBtn: {
-        flex: 1,
-        paddingVertical: 10,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    filterText: {
-        fontSize: 14,
-        fontFamily: 'RethinkSans_600SemiBold',
-    },
-    list: {
-        paddingBottom: 40,
-    },
-    chatItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 16,
-        paddingHorizontal: 20,
-        borderBottomWidth: 1,
-    },
-    chatInfo: {
-        flex: 1,
-    },
-    chatHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 6,
-    },
-    deviceId: {
-        fontSize: 16,
-        fontFamily: 'RethinkSans_700Bold',
-        marginRight: 8,
-    },
-    statusDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-    },
-    lastActive: {
-        fontSize: 13,
-        fontFamily: 'RethinkSans_400Regular',
-    },
-    center: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: 60,
-    },
-    emptyText: {
-        fontSize: 15,
-        fontFamily: 'RethinkSans_500Medium',
-    },
+    controls: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
+    initials: { fontSize: 12, fontFamily: F.bold },
+    dot: { width: 8, height: 8, borderRadius: 4 },
 });
