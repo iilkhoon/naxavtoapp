@@ -77,7 +77,7 @@ export const CustomTabBar = ({ state, emitter, navigateToTab }: TabBarProps) => 
                     transition={{ type: 'spring', damping: 10 }}
                     style={[styles.addButton, { backgroundColor: '#FF3B30' }]}
                   >
-                    <Plus size={28} color="#FFF" strokeWidth={3} />
+                    <Plus size={26} color="#FFF" strokeWidth={2.4} />
                   </MotiView>
 
                   {/* New Listing Badge */}
@@ -121,7 +121,7 @@ export const CustomTabBar = ({ state, emitter, navigateToTab }: TabBarProps) => 
                   size={24}
                   color={isFocused ? (isDark ? '#FFF' : '#000') : (isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)')}
                   fill={isFocused && route.name === 'favorites' ? (isDark ? '#FFF' : '#000') : 'transparent'}
-                  strokeWidth={isFocused ? 2.5 : 2}
+                  strokeWidth={isFocused ? 2 : 1.6}
                 />
 
                 {/* Minimal Indicator Dot */}

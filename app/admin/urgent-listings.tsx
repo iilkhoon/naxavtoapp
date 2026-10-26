@@ -19,11 +19,13 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { Listing } from '../../types';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useScreenTopPadding } from '../../hooks/useScreenTopPadding';
 
 export default function UrgentListingsScreen() {
     const router = useRouter();
     const { showToast } = useToast();
     const { colors, isDark } = useTheme();
+    const headerTop = useScreenTopPadding();
 
     const [items, setItems] = useState<Listing[]>([]);
     const [loading, setLoading] = useState(true);
@@ -156,7 +158,7 @@ export default function UrgentListingsScreen() {
             style={[styles.container, { backgroundColor: colors.background }]}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-            <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+            <View style={[styles.header, { paddingTop: headerTop, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <ArrowLeft size={24} color={colors.text} />
                 </TouchableOpacity>
@@ -199,7 +201,7 @@ export default function UrgentListingsScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: Platform.OS === 'web' ? 20 : Platform.OS === 'ios' ? 60 : 40, borderBottomWidth: 1 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1 },
     backButton: { padding: 4 },
     headerTitle: { fontSize: 18, fontWeight: 'bold' },
     searchContainer: { padding: 16, paddingBottom: 8 },

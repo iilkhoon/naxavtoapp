@@ -16,10 +16,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { CreditApplicationModal } from '../components/CreditApplicationModal';
+import { useScreenTopPadding } from '../hooks/useScreenTopPadding';
 
 export default function CalculatorScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const headerTop = useScreenTopPadding();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   
@@ -99,7 +101,7 @@ export default function CalculatorScreen() {
           <Stack.Screen options={{ headerShown: false }} />
 
           {/* Header */}
-          <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border, paddingTop: Platform.OS === 'ios' ? 60 : 40 }]}>
+          <View style={[styles.header, { paddingTop: headerTop, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                 <ArrowLeft size={24} color={colors.text} />
             </TouchableOpacity>

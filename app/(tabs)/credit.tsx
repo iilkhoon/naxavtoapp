@@ -8,7 +8,7 @@ import {
   CreditCard, Calendar, Hash, Car, CheckCircle, Clock,
   AlertTriangle, ChevronDown, ChevronUp, LogOut, Plus,
   Phone, User, FileText, Send, Shield, Briefcase, DollarSign,
-  Fingerprint, CheckCircle2, Sparkles, ChevronRight, AlertCircle
+  Fingerprint, CheckCircle2, ChevronRight, AlertCircle, Calculator, PhoneCall, KeyRound
 } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -19,7 +19,6 @@ import { MotiView } from 'moti';
 import { formatDate } from '../../lib/utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 
 // Handle notifications when app is active
@@ -443,56 +442,42 @@ export default function CreditScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* Top Header */}
-      <View style={[styles.mainHeader, { borderBottomColor: colors.border }]}>
-        <View>
-          <Text style={[styles.mainHeaderTitle, { color: colors.text }]}>Kredit Mərkəzi</Text>
-          <Text style={[styles.mainHeaderSubtitle, { color: colors.textSecondary }]}>Naxçıvan Avto Kredit Xidmətləri</Text>
+      {/* Large title */}
+      <View style={styles.mainHeader}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.mainHeaderTitle, { color: colors.text }]}>Kredit</Text>
+          <Text style={[styles.mainHeaderSubtitle, { color: colors.textSecondary }]}>Avtomobilinizi hissə-hissə ödəyin</Text>
         </View>
-        <TouchableOpacity 
-          style={[styles.calcHeaderBtn, { backgroundColor: `${colors.primary}15` }]}
+        <TouchableOpacity
+          style={[styles.calcHeaderBtn, { backgroundColor: isDark ? 'rgba(118,118,128,0.24)' : 'rgba(118,118,128,0.12)' }]}
           onPress={() => router.push('/calculator' as any)}
+          accessibilityLabel="Kredit kalkulyatoru"
         >
-          <Text style={{ color: colors.primary, fontSize: 13, fontFamily: 'RethinkSans_700Bold' }}>Hesabla 📊</Text>
+          <Calculator size={16} color={colors.text} />
+          <Text style={[styles.calcHeaderText, { color: colors.text }]}>Hesabla</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Segmented Tab Switcher */}
+      {/* Segmented control */}
       <View style={styles.tabSwitcherWrap}>
-        <View style={[styles.tabSwitcher, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <TouchableOpacity
-            style={[
-              styles.tabBtn,
-              activeTab === 'apply' && [styles.tabBtnActive, { backgroundColor: colors.primary }]
-            ]}
-            onPress={() => setActiveTab('apply')}
-          >
-            <Send size={15} color={activeTab === 'apply' ? '#FFF' : colors.textSecondary} style={{ marginRight: 6 }} />
-            <Text style={[
-              styles.tabBtnText,
-              { color: activeTab === 'apply' ? '#FFF' : colors.textSecondary },
-              activeTab === 'apply' && { fontFamily: 'RethinkSans_700Bold' }
-            ]}>
-              Kreditə Müraciət
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.tabBtn,
-              activeTab === 'account' && [styles.tabBtnActive, { backgroundColor: colors.primary }]
-            ]}
-            onPress={() => setActiveTab('account')}
-          >
-            <CreditCard size={15} color={activeTab === 'account' ? '#FFF' : colors.textSecondary} style={{ marginRight: 6 }} />
-            <Text style={[
-              styles.tabBtnText,
-              { color: activeTab === 'account' ? '#FFF' : colors.textSecondary },
-              activeTab === 'account' && { fontFamily: 'RethinkSans_700Bold' }
-            ]}>
-              Kredit Hesabım
-            </Text>
-          </TouchableOpacity>
+        <View style={[styles.tabSwitcher, { backgroundColor: isDark ? 'rgba(118,118,128,0.24)' : 'rgba(118,118,128,0.12)' }]}>
+          {([['apply', 'Müraciət et'], ['account', 'Kredit hesabım']] as const).map(([key, label]) => {
+            const selected = activeTab === key;
+            return (
+              <TouchableOpacity
+                key={key}
+                style={[styles.tabBtn, selected && [styles.tabBtnActive, { backgroundColor: isDark ? '#636366' : '#FFFFFF' }]]}
+                onPress={() => setActiveTab(key)}
+                activeOpacity={0.8}
+                accessibilityRole="tab"
+                accessibilityState={{ selected }}
+              >
+                <Text style={[styles.tabBtnText, { color: colors.text }, selected && { fontFamily: 'RethinkSans_700Bold' }]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
 
@@ -507,23 +492,28 @@ export default function CreditScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {/* Banner Promo */}
-            <LinearGradient
-              colors={[colors.primary, '#FF9500']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.promoCard}
-            >
-              <View style={styles.promoIcon}>
-                <Sparkles size={24} color="#FFF" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.promoTitle}>Sürətli və Sərfəli Avto Kredit</Text>
-                <Text style={styles.promoDesc}>
-                  Yalnız şəxsiyyət vəsiqəsi ilə 15 dəqiqə ərzində müraciət edin.
-                </Text>
-              </View>
-            </LinearGradient>
+            {/* How it works */}
+            <View style={[styles.stepsCard, { backgroundColor: colors.card, borderColor: isDark ? colors.border : 'rgba(0,0,0,0.06)' }]}>
+              <Text style={[styles.stepsTitle, { color: colors.text }]}>Necə işləyir</Text>
+              {[
+                { icon: Send, title: 'Müraciət edin', desc: 'Yalnız şəxsiyyət vəsiqəsi kifayətdir' },
+                { icon: PhoneCall, title: '15 dəqiqəyə zəng', desc: 'Mütəxəssisimiz şərtləri sizinlə dəqiqləşdirir' },
+                { icon: KeyRound, title: 'Açarı təhvil alın', desc: 'Müqavilə imzalanır, avtomobil sizindir' },
+              ].map((step, i, all) => (
+                <View key={step.title} style={styles.stepRow}>
+                  <View style={styles.stepRail}>
+                    <View style={[styles.stepDot, { backgroundColor: colors.primarySoft }]}>
+                      <step.icon size={16} color={colors.primary} strokeWidth={2.2} />
+                    </View>
+                    {i < all.length - 1 && <View style={[styles.stepLine, { backgroundColor: colors.border }]} />}
+                  </View>
+                  <View style={styles.stepText}>
+                    <Text style={[styles.stepTitle, { color: colors.text }]}>{step.title}</Text>
+                    <Text style={[styles.stepDesc, { color: colors.textSecondary }]}>{step.desc}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
 
             {appSubmitted ? (
               <MotiView 
@@ -546,7 +536,7 @@ export default function CreditScreen() {
                 </TouchableOpacity>
               </MotiView>
             ) : (
-              <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: isDark ? colors.border : 'rgba(0,0,0,0.06)' }]}>
                 <Text style={[styles.formTitle, { color: colors.text }]}>Müraciət Formu</Text>
                 <Text style={[styles.formSub, { color: colors.textSecondary }]}>Məlumatlarınızı daxil edin</Text>
 
@@ -561,7 +551,7 @@ export default function CreditScreen() {
                 {/* Ad Soyad */}
                 <View style={styles.inputGroup}>
                   <Text style={[styles.label, { color: colors.textSecondary }]}>Ad və Soyad *</Text>
-                  <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <View style={[styles.inputWrapper, { backgroundColor: isDark ? 'rgba(118,118,128,0.24)' : 'rgba(118,118,128,0.08)' }]}>
                     <User size={18} color={colors.textSecondary} style={styles.inputIcon} />
                     <TextInput
                       style={[styles.input, { color: colors.text }]}
@@ -576,7 +566,7 @@ export default function CreditScreen() {
                 {/* Ata adı */}
                 <View style={styles.inputGroup}>
                   <Text style={[styles.label, { color: colors.textSecondary }]}>Ata adı</Text>
-                  <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <View style={[styles.inputWrapper, { backgroundColor: isDark ? 'rgba(118,118,128,0.24)' : 'rgba(118,118,128,0.08)' }]}>
                     <User size={18} color={colors.textSecondary} style={styles.inputIcon} />
                     <TextInput
                       style={[styles.input, { color: colors.text }]}
@@ -592,7 +582,7 @@ export default function CreditScreen() {
                 <View style={styles.row}>
                   <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
                     <Text style={[styles.label, { color: colors.textSecondary }]}>FİN Kod *</Text>
-                    <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <View style={[styles.inputWrapper, { backgroundColor: isDark ? 'rgba(118,118,128,0.24)' : 'rgba(118,118,128,0.08)' }]}>
                       <Fingerprint size={18} color={colors.textSecondary} style={styles.inputIcon} />
                       <TextInput
                         style={[styles.input, { color: colors.text }]}
@@ -608,7 +598,7 @@ export default function CreditScreen() {
 
                   <View style={[styles.inputGroup, { flex: 1 }]}>
                     <Text style={[styles.label, { color: colors.textSecondary }]}>Doğum Tarixi</Text>
-                    <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <View style={[styles.inputWrapper, { backgroundColor: isDark ? 'rgba(118,118,128,0.24)' : 'rgba(118,118,128,0.08)' }]}>
                       <Calendar size={18} color={colors.textSecondary} style={styles.inputIcon} />
                       <TextInput
                         style={[styles.input, { color: colors.text }]}
@@ -626,7 +616,7 @@ export default function CreditScreen() {
                 {/* Mobil Nömrə */}
                 <View style={styles.inputGroup}>
                   <Text style={[styles.label, { color: colors.textSecondary }]}>Mobil Nömrə *</Text>
-                  <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <View style={[styles.inputWrapper, { backgroundColor: isDark ? 'rgba(118,118,128,0.24)' : 'rgba(118,118,128,0.08)' }]}>
                     <Phone size={18} color={colors.textSecondary} style={styles.inputIcon} />
                     <TextInput
                       style={[styles.input, { color: colors.text }]}
@@ -642,7 +632,7 @@ export default function CreditScreen() {
                 {/* İş Yeri */}
                 <View style={styles.inputGroup}>
                   <Text style={[styles.label, { color: colors.textSecondary }]}>İş Yeri / Fəaliyyət Sahəsi</Text>
-                  <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <View style={[styles.inputWrapper, { backgroundColor: isDark ? 'rgba(118,118,128,0.24)' : 'rgba(118,118,128,0.08)' }]}>
                     <Briefcase size={18} color={colors.textSecondary} style={styles.inputIcon} />
                     <TextInput
                       style={[styles.input, { color: colors.text }]}
@@ -657,7 +647,7 @@ export default function CreditScreen() {
                 {/* Aylıq Qazanc */}
                 <View style={styles.inputGroup}>
                   <Text style={[styles.label, { color: colors.textSecondary }]}>Aylıq Qazanc (₼)</Text>
-                  <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <View style={[styles.inputWrapper, { backgroundColor: isDark ? 'rgba(118,118,128,0.24)' : 'rgba(118,118,128,0.08)' }]}>
                     <DollarSign size={18} color={colors.textSecondary} style={styles.inputIcon} />
                     <TextInput
                       style={[styles.input, { color: colors.text }]}
@@ -677,39 +667,20 @@ export default function CreditScreen() {
                   style={{ marginTop: 10 }}
                   activeOpacity={0.85}
                 >
-                  <LinearGradient
-                    colors={[colors.primary, '#FF9500']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.submitBtn}
-                  >
+                  <View style={[styles.submitBtn, { backgroundColor: colors.primary }]}>
                     {appSubmitting ? (
                       <ActivityIndicator size="small" color="#FFF" />
                     ) : (
                       <>
                         <Send size={18} color="#FFF" style={{ marginRight: 8 }} />
-                        <Text style={styles.submitBtnText}>Müraciəti Göndər</Text>
+                        <Text style={styles.submitBtnText}>Müraciəti göndər</Text>
                       </>
                     )}
-                  </LinearGradient>
+                  </View>
                 </TouchableOpacity>
               </View>
             )}
 
-            {/* Features Info */}
-            <View style={styles.infoRowGrid}>
-              <View style={[styles.featureCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={styles.featureEmoji}>⚡</Text>
-                <Text style={[styles.featureTitle, { color: colors.text }]}>15 Dəqiqəyə Cavab</Text>
-                <Text style={[styles.featureDesc, { color: colors.textSecondary }]}>Müraciətiniz operativ yoxlanılır</Text>
-              </View>
-
-              <View style={[styles.featureCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={styles.featureEmoji}>📄</Text>
-                <Text style={[styles.featureTitle, { color: colors.text }]}>Tək Şəxsiyyət Vəsiqəsi</Text>
-                <Text style={[styles.featureDesc, { color: colors.textSecondary }]}>Əlavə arayış tələb olunmur</Text>
-              </View>
-            </View>
           </ScrollView>
         </KeyboardAvoidingView>
       )}
@@ -922,50 +893,53 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   mainHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
   mainHeaderTitle: {
-    fontSize: 20,
+    fontSize: 32,
     fontFamily: 'RethinkSans_800ExtraBold',
+    letterSpacing: -0.6,
   },
   mainHeaderSubtitle: {
-    fontSize: 12,
+    fontSize: 14,
     fontFamily: 'RethinkSans_500Medium',
     marginTop: 2,
   },
   calcHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 34,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
+    borderRadius: 17,
+    marginBottom: 4,
+  },
+  calcHeaderText: {
+    fontSize: 13,
+    fontFamily: 'RethinkSans_700Bold',
   },
   tabSwitcherWrap: {
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingTop: 8,
+    paddingBottom: 6,
   },
   tabSwitcher: {
     flexDirection: 'row',
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 4,
+    borderRadius: 10,
+    padding: 2,
+    height: 36,
   },
   tabBtn: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: 8,
   },
   tabBtnActive: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    boxShadow: '0px 3px 8px rgba(0, 0, 0, 0.12), 0px 1px 1px rgba(0, 0, 0, 0.04)',
   },
   tabBtnText: {
     fontSize: 13,
@@ -976,42 +950,55 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     gap: 16,
   },
-  promoCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  stepsCard: {
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: 16,
-    borderRadius: 20,
-    gap: 14,
-    shadowColor: '#FF9500',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 3,
   },
-  promoIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+  stepsTitle: {
+    fontSize: 17,
+    fontFamily: 'RethinkSans_700Bold',
+    marginBottom: 14,
+  },
+  stepRow: {
+    flexDirection: 'row',
+  },
+  stepRail: {
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  stepDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  promoTitle: {
-    color: '#FFF',
-    fontSize: 16,
-    fontFamily: 'RethinkSans_800ExtraBold',
+  stepLine: {
+    width: 2,
+    flex: 1,
+    minHeight: 14,
+    marginVertical: 4,
+    borderRadius: 1,
   },
-  promoDesc: {
-    color: '#FFF',
-    fontSize: 12,
+  stepText: {
+    flex: 1,
+    paddingBottom: 14,
+    paddingTop: 5,
+  },
+  stepTitle: {
+    fontSize: 15,
+    fontFamily: 'RethinkSans_700Bold',
+  },
+  stepDesc: {
+    fontSize: 13,
     fontFamily: 'RethinkSans_500Medium',
     marginTop: 2,
-    opacity: 0.9,
   },
   formCard: {
-    borderRadius: 22,
-    borderWidth: 1,
-    padding: 18,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 16,
     gap: 12,
   },
   errorBox: {
@@ -1052,9 +1039,8 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 14,
-    height: 48,
+    borderRadius: 12,
+    height: 50,
     paddingHorizontal: 14,
   },
   inputIcon: {
@@ -1074,12 +1060,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     height: 52,
-    borderRadius: 16,
-    shadowColor: '#FF9500',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
+    borderRadius: 14,
   },
   submitBtnText: {
     color: '#FFF',
@@ -1124,33 +1105,6 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 14,
     fontFamily: 'RethinkSans_700Bold',
-  },
-  infoRowGrid: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  featureCard: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: 'center',
-    textAlign: 'center',
-  },
-  featureEmoji: {
-    fontSize: 24,
-    marginBottom: 6,
-  },
-  featureTitle: {
-    fontSize: 13,
-    fontFamily: 'RethinkSans_700Bold',
-    textAlign: 'center',
-  },
-  featureDesc: {
-    fontSize: 11,
-    fontFamily: 'RethinkSans_400Regular',
-    textAlign: 'center',
-    marginTop: 2,
   },
   
   // Login & Dashboard styles

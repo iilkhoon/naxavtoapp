@@ -13,6 +13,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { compressImage } from '../utils/imageOptimizer';
 import { SuccessModal } from '../components/SuccessModal';
+import { useScreenTopPadding } from '../hooks/useScreenTopPadding';
 
 const { width } = Dimensions.get('window');
 type ListingType = 'car' | 'plate';
@@ -35,6 +36,7 @@ export default function AddListingScreen() {
   const { showToast } = useToast();
   const { user } = useAuth();
   const { colors, isDark } = useTheme();
+  const headerTop = useScreenTopPadding(true);
   const insets = useSafeAreaInsets();
 
   const [listingType, setListingType] = useState<ListingType>('car');
@@ -264,7 +266,7 @@ export default function AddListingScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Container {...containerProps}>
-        <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border, paddingTop: Platform.OS === 'ios' ? 60 : 40 }]}>
+        <View style={[styles.header, { paddingTop: headerTop, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => currentStep > 0 ? handlePrevStep() : handleExit()} style={styles.backButton}>
             {currentStep > 0 ? <ArrowLeft size={24} color={colors.text} /> : <X size={24} color={colors.text} />}
           </TouchableOpacity>

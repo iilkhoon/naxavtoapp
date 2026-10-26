@@ -9,9 +9,20 @@ const expoPushUrl = "https://exp.host/--/api/v2/push/send";
 serve(async (req) => {
     try {
         const payload = await req.json();
-        const { record } = payload; // This is the new message record
-
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+        // Re-read the message from the database instead of trusting the request
+        // body: this endpoint is public, so a forged payload must not be able to
+        // push arbitrary text to devices.
+        const { data: record, error: messageError } = await supabase
+            .from("messages")
+            .select("*")
+            .eq("id", payload?.record?.id)
+            .maybeSingle();
+
+        if (messageError || !record) {
+            return new Response("Message not found", { status: 404 });
+        }
 
         // 1. Get Chat details to find the recipient
         const { data: chat, error: chatError } = await supabase
@@ -33,19 +44,21 @@ serve(async (req) => {
             // Message is FROM user TO admin
             title = "Yeni müraciət var";
 
-            // Fetch all tokens belonging to admins
-            const { data: adminTokens } = await supabase
-                .from("push_tokens")
-                .select("token")
-                .not("user_id", "is", null); // For now, assume users with user_id are admins or we can filter by profiles.role in a join
+            // Only admins' devices. (Any signed-in user has a user_id on their
+            // token, so "user_id is not null" leaked customer chats to everyone.)
+            const { data: admins } = await supabase
+                .from("profiles")
+                .select("id")
+                .or("role.eq.admin,is_superadmin.eq.true");
+            const adminIds = (admins || []).map((a: { id: string }) => a.id);
 
-            // Better: Join with profiles to get ONLY admins
-            const { data: filteredAdminTokens } = await supabase
-                .from("push_tokens")
-                .select("token, profiles!inner(role)")
-                .eq("profiles.role", "admin");
-
-            tokens = filteredAdminTokens?.map(t => t.token) || adminTokens?.map(t => t.token) || [];
+            if (adminIds.length > 0) {
+                const { data: adminTokens } = await supabase
+                    .from("push_tokens")
+                    .select("token")
+                    .in("user_id", adminIds);
+                tokens = adminTokens?.map((t: { token: string }) => t.token) || [];
+            }
         } else {
             // Message is FROM admin TO user
             title = "Yeni mesajınız var";

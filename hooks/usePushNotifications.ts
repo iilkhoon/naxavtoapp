@@ -59,6 +59,9 @@ export function usePushNotifications(externalDeviceId?: string) {
           saveTokenToDatabase(token, internalDeviceId);
           AsyncStorage.setItem('expo_push_token', token).catch(e => console.error('Error saving push token to storage:', e));
         }
+      }).catch((e) => {
+        // e.g. Expo Go on Android has no remote push; must not surface as an unhandled rejection
+        console.warn('Push registration skipped:', e?.message ?? e);
       });
     }, 1500);
 

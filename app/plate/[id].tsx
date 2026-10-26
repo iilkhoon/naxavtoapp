@@ -35,11 +35,13 @@ import { PlateVisual } from '../../components/PlateVisual';
 import * as Clipboard from 'expo-clipboard';
 import { useToast } from '../../contexts/ToastContext';
 import LoadingAnimation from '../../components/LoadingAnimation';
+import { useScreenTopPadding } from '../../hooks/useScreenTopPadding';
 
 export default function PlateDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const headerTop = useScreenTopPadding();
   const { settings } = useSettings();
   const { showToast } = useToast();
 
@@ -157,7 +159,7 @@ export default function PlateDetailScreen() {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
         <Stack.Screen options={{ headerShown: false }} />
-        <View style={[styles.header, { backgroundColor: colors.background }]}>
+        <View style={[styles.header, { paddingTop: headerTop, backgroundColor: colors.background }]}>
           <TouchableOpacity
             style={[styles.iconButton, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => router.back()}
@@ -176,7 +178,7 @@ export default function PlateDetailScreen() {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
         <Stack.Screen options={{ headerShown: false }} />
-        <View style={[styles.header, { backgroundColor: colors.background }]}>
+        <View style={[styles.header, { paddingTop: headerTop, backgroundColor: colors.background }]}>
           <TouchableOpacity
             style={[styles.iconButton, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => router.back()}
@@ -211,7 +213,7 @@ export default function PlateDetailScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { paddingTop: headerTop, backgroundColor: colors.background }]}>
         <AnimatedPressable style={[styles.iconButton, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.back()}>
           <ArrowLeft size={24} color={colors.text} />
         </AnimatedPressable>
@@ -366,7 +368,7 @@ export default function PlateDetailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 20, zIndex: 10 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 20, zIndex: 10 },
   headerTitle: { fontSize: 18, fontWeight: 'bold' },
   iconButton: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 120 },

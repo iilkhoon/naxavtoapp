@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Image as RNImage } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Heart, Crown, Zap, MapPin } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { formatListingDate } from '../utils/date';
@@ -116,15 +117,20 @@ export const CarCard = memo(({
           {(isVip || isUrgent) && (
             <View style={styles.imageBadges}>
               {isVip && (
-                <View style={[styles.imageBadge, { backgroundColor: 'rgba(0,0,0,0.72)' }]}>
-                  <Crown size={10} color="#FFD60A" fill="#FFD60A" />
-                  <Text style={[styles.imageBadgeText, { color: '#FFD60A' }]}>VIP</Text>
-                </View>
+                <LinearGradient
+                  colors={['#FFE58A', '#F4B400']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.vipBadge}
+                >
+                  <Crown size={11} color="#3D2B00" fill="#3D2B00" />
+                  <Text style={styles.vipText}>VIP</Text>
+                </LinearGradient>
               )}
               {isUrgent && (
-                <View style={[styles.imageBadge, { backgroundColor: 'rgba(255,59,48,0.92)' }]}>
+                <View style={styles.urgentBadge}>
                   <Zap size={10} color="#FFF" fill="#FFF" />
-                  <Text style={[styles.imageBadgeText, { color: '#FFF' }]}>Təcili</Text>
+                  <Text style={styles.urgentText}>Təcili</Text>
                 </View>
               )}
             </View>
@@ -208,20 +214,40 @@ const styles = StyleSheet.create({
   },
   imageBadges: {
     position: 'absolute',
+    top: 8,
     left: 8,
-    bottom: 8,
+    right: 46, // keeps clear of the heart button
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 4,
   },
-  imageBadge: {
+  vipBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
     paddingHorizontal: 7,
     height: 20,
-    borderRadius: 10,
+    borderRadius: 6,
+    boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.25)',
   },
-  imageBadgeText: {
+  vipText: {
+    color: '#3D2B00',
+    fontSize: 10,
+    fontFamily: 'RethinkSans_800ExtraBold',
+    letterSpacing: 0.6,
+  },
+  urgentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    height: 20,
+    borderRadius: 6,
+    backgroundColor: '#FF3B30',
+    boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.25)',
+  },
+  urgentText: {
+    color: '#FFF',
     fontSize: 10,
     fontFamily: 'RethinkSans_800ExtraBold',
     letterSpacing: 0.2,

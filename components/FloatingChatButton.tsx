@@ -1,16 +1,20 @@
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { MessageCircle } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+// Height of the bar the button has to clear: the system tab bar on iOS,
+// the floating custom tab bar (plus its margin) on Android.
+const TAB_BAR_CLEARANCE = Platform.select({ ios: 49, default: 70 });
+
 export function FloatingChatButton() {
-    const { colors, isDark } = useTheme();
+    const { colors } = useTheme();
     const router = useRouter();
     const insets = useSafeAreaInsets();
 
-    // Do not show on web for this specific request, as user wanted it on mobile app only.
+    // Mobile only
     if (Platform.OS === 'web') return null;
 
     return (
@@ -19,14 +23,15 @@ export function FloatingChatButton() {
                 styles.button,
                 {
                     backgroundColor: colors.primary,
-                    bottom: (Platform.OS === 'ios' ? insets.bottom + 70 : 70) + 16, // Above bottom tabs
-                    shadowColor: isDark ? '#000' : colors.primary,
-                }
+                    bottom: insets.bottom + TAB_BAR_CLEARANCE + 14,
+                },
             ]}
             onPress={() => router.push('/chat')}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Canlı dəstək"
         >
-            <MessageCircle size={28} color="#FFFFFF" strokeWidth={2.5} />
+            <MessageCircle size={24} color="#FFFFFF" strokeWidth={2.2} />
         </TouchableOpacity>
     );
 }
@@ -34,17 +39,13 @@ export function FloatingChatButton() {
 const styles = StyleSheet.create({
     button: {
         position: 'absolute',
-        right: 20,
-        width: 60,
-        height: 60,
-        borderRadius: 30,
+        right: 16,
+        width: 52,
+        height: 52,
+        borderRadius: 26,
         justifyContent: 'center',
         alignItems: 'center',
         zIndex: 999,
-        // Shadows
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 5,
-        elevation: 6,
+        boxShadow: '0px 6px 16px rgba(255, 59, 48, 0.32), 0px 2px 4px rgba(0, 0, 0, 0.12)',
     },
 });

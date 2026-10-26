@@ -1,309 +1,194 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import Constants from 'expo-constants';
 import {
-  View, Text, StyleSheet, ScrollView, Linking, Dimensions,
-  ActivityIndicator, TouchableOpacity, Platform
+  View, Text, StyleSheet, ScrollView, Linking, TouchableOpacity, Image,
 } from 'react-native';
 import {
   Phone, Mail, MapPin, MessageCircle, Instagram, Video,
-  Globe, ChevronRight, Shield, FileText, ExternalLink, CreditCard
+  Globe, ChevronRight, Shield, MessagesSquare,
 } from 'lucide-react-native';
-import { MotiView } from 'moti';
-import { AnimatedPressable } from '../../components/ui/AnimatedPressable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { supabase } from '../../lib/supabase';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSettings } from '../../contexts/SettingsContext';
 import { AdminExpensesSection } from '../../components/AdminExpensesSection';
 
-const { width, height } = Dimensions.get('window');
+const APP_ICON = require('../../icons/android-icon.png');
+
+// "+994501234567" -> "+994 50 123 45 67"
+const formatPhone = (raw: string) => {
+  const digits = raw.replace(/[^\d+]/g, '');
+  const m = digits.match(/^(\+994)(\d{2})(\d{3})(\d{2})(\d{2})$/);
+  return m ? `${m[1]} ${m[2]} ${m[3]} ${m[4]} ${m[5]}` : raw;
+};
+
+// Row inside a grouped (iOS Settings-style) list
+const ListRow = ({ icon: Icon, tint, title, value, onPress, colors, last }: any) => (
+  <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.6} accessibilityRole="button">
+    <View style={[styles.rowIcon, { backgroundColor: tint }]}>
+      <Icon size={16} color="#FFF" strokeWidth={2.2} />
+    </View>
+    <View style={[styles.rowBody, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.rowTitle, { color: colors.text }]} numberOfLines={1}>{title}</Text>
+        {!!value && <Text style={[styles.rowValue, { color: colors.textSecondary }]} numberOfLines={1}>{value}</Text>}
+      </View>
+      <ChevronRight size={18} color={colors.placeholder} />
+    </View>
+  </TouchableOpacity>
+);
+
+// Round quick action, like the buttons on an iOS contact card
+const QuickAction = ({ icon: Icon, label, onPress, colors, isDark }: any) => (
+  <TouchableOpacity style={styles.quickAction} onPress={onPress} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={label}>
+    <View style={[styles.quickCircle, { backgroundColor: isDark ? 'rgba(255,69,58,0.18)' : 'rgba(255,59,48,0.1)' }]}>
+      <Icon size={22} color={colors.primary} strokeWidth={2} />
+    </View>
+    <Text style={[styles.quickLabel, { color: colors.primary }]}>{label}</Text>
+  </TouchableOpacity>
+);
 
 export default function ContactScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const { isAdmin, isSuperAdmin } = useAuth();
-  const [settings, setSettings] = useState<any>({});
-  const [phones, setPhones] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { settings, refreshSettings } = useSettings();
 
-  const fetchSettings = async () => {
-    const { data } = await supabase.from('app_settings').select('*').order('key');
-    if (data) {
-      const settingsMap: any = {};
-      const phoneList: string[] = [];
-      data.forEach(item => {
-        settingsMap[item.key] = item.value;
-        if (item.key.startsWith('phone_') && item.value && item.value.trim() !== '') {
-          phoneList.push(item.value);
-        }
-      });
-      if (phoneList.length === 0 && settingsMap.phone) {
-        phoneList.push(settingsMap.phone);
-      }
-      setSettings(settingsMap);
-      setPhones(phoneList);
-    }
-    setLoading(false);
-  };
-
+  // Settings are already loaded app-wide; refresh quietly when the tab gains focus
   useFocusEffect(
     React.useCallback(() => {
-      fetchSettings();
+      refreshSettings();
     }, [])
   );
 
-  const handleCall = (number: string) => Linking.openURL(`tel:${number}`);
-  const handleEmail = () => Linking.openURL(`mailto:${settings.email}`);
-  const handleWhatsapp = () => Linking.openURL(settings.whatsapp || 'https://whatsapp.com');
-  const handleInstagram = () => Linking.openURL(settings.instagram || 'https://instagram.com');
-  const handleTiktok = () => Linking.openURL(settings.tiktok || 'https://tiktok.com');
-  const handleWeb = () => Linking.openURL(settings.website || 'https://naxcivanavto.com');
-  const handleMap = () => Linking.openURL(`https://maps.google.com/?q=${settings.address || 'Naxçıvan'}`);
+  const phones = Object.keys(settings)
+    .filter((key) => key.startsWith('phone_') && settings[key]?.trim())
+    .sort()
+    .map((key) => settings[key]);
+  if (phones.length === 0 && settings.phone) phones.push(settings.phone);
 
-  // Updated to navigate to the dedicated Privacy Page
-  const handlePrivacyPolicy = () => router.push('/privacy');
+  const primaryPhone = phones[0];
+  const logoUrl = isDark ? settings.site_logo_dark : settings.site_logo_light;
 
-  const ContactCard = ({ icon: Icon, title, subtitle, onPress, color = colors.primary, delay = 0, isLarge = false }: any) => (
-    <MotiView
-      from={{ opacity: 0, translateY: 20 }}
-      animate={{ opacity: 1, translateY: 0 }}
-      transition={{ delay, type: 'timing', duration: 500 }}
-      style={{ width: '100%', marginBottom: 12 }}
-    >
-      <AnimatedPressable
-        style={[
-          styles.card,
-          { backgroundColor: colors.card, borderColor: colors.border },
-          isLarge && styles.largeCard
-        ]}
-        onPress={onPress}
-      >
-        <View style={styles.cardContent}>
-          <View style={[styles.iconContainer, { backgroundColor: `${color}15` }]}>
-            <Icon size={24} color={color} />
-          </View>
-          <View style={styles.textContainer}>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>{title}</Text>
-            <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>{subtitle || 'Məlumat yoxdur'}</Text>
-          </View>
-        </View>
-        <View style={[styles.arrowCircle, { backgroundColor: isDark ? '#333' : '#F3F4F6' }]}>
-          <ChevronRight size={18} color={colors.textSecondary} />
-        </View>
-      </AnimatedPressable>
-    </MotiView>
-  );
+  const open = (url?: string) => url && Linking.openURL(url).catch(() => {});
+  const call = (number: string) => open(`tel:${number.replace(/\s/g, '')}`);
+  const openMap = () => open(`https://maps.google.com/?q=${encodeURIComponent(settings.address || 'Naxçıvan')}`);
 
-  if (loading) {
-    return (
-      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
+  const group = [styles.group, { backgroundColor: colors.card, borderColor: isDark ? colors.border : 'rgba(0,0,0,0.06)' }];
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.headerBg}>
-        <LinearGradient
-          colors={[colors.primary, 'transparent']}
-          style={styles.gradient}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-        />
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + 24 }]}
+      showsVerticalScrollIndicator={false}
+    >
+      {isAdmin && isSuperAdmin && <AdminExpensesSection />}
+
+      {/* Identity */}
+      <View style={styles.identity}>
+        <View style={[styles.avatar, { borderColor: isDark ? colors.border : 'rgba(0,0,0,0.06)', backgroundColor: colors.card }]}>
+          <Image source={logoUrl ? { uri: logoUrl } : APP_ICON} style={styles.avatarImage} resizeMode="contain" />
+        </View>
+        <Text style={[styles.name, { color: colors.text }]}>Naxçıvan Avto</Text>
+        <Text style={[styles.tagline, { color: colors.textSecondary }]}>Avtomobil və nömrə elanları · Naxçıvan</Text>
       </View>
 
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingTop: insets.top + 20 }
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        {isAdmin && isSuperAdmin && <AdminExpensesSection />}
+      {/* Quick actions */}
+      <View style={styles.quickRow}>
+        <QuickAction icon={Phone} label="Zəng" onPress={() => primaryPhone && call(primaryPhone)} colors={colors} isDark={isDark} />
+        <QuickAction icon={MessageCircle} label="WhatsApp" onPress={() => open(settings.whatsapp || 'https://whatsapp.com')} colors={colors} isDark={isDark} />
+        <QuickAction icon={MessagesSquare} label="Çat" onPress={() => router.push('/chat')} colors={colors} isDark={isDark} />
+        <QuickAction icon={MapPin} label="Xəritə" onPress={openMap} colors={colors} isDark={isDark} />
+      </View>
 
-        <MotiView
-          from={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'timing', duration: 400 }}
-          style={styles.header}
-        >
-          <Text style={[styles.title, { color: colors.text }]}>Əlaqə Mərkəzi</Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Sualınız var? Bizimlə asanlıqla əlaqə saxlayın.
-          </Text>
-        </MotiView>
-
-
-
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Bizimlə Əlaqə</Text>
-          {phones.length > 0 ? (
-            phones.map((phone, index) => (
-              <ContactCard
-                key={index}
+      {/* Phones */}
+      {phones.length > 0 && (
+        <>
+          <Text style={[styles.groupTitle, { color: colors.textSecondary }]}>Telefon</Text>
+          <View style={group}>
+            {phones.map((phone, i) => (
+              <ListRow
+                key={phone}
                 icon={Phone}
-                title={index === 0 ? "Qaynar Xətt" : `Operator ${index + 1}`}
-                subtitle={phone}
-                onPress={() => handleCall(phone)}
-                delay={100 + (index * 50)}
-                color={colors.primary}
+                tint="#34C759"
+                title={formatPhone(phone)}
+                value={i === 0 ? 'Qaynar xətt' : `Operator ${i + 1}`}
+                onPress={() => call(phone)}
+                colors={colors}
+                last={i === phones.length - 1}
               />
-            ))
-          ) : (
-            <ContactCard
-              icon={Phone}
-              title="Qaynar Xətt"
-              subtitle="+994 50 123 45 67"
-              onPress={() => handleCall("+994501234567")}
-              delay={100}
-              color={colors.primary}
-            />
-          )}
-
-          <ContactCard
-            icon={MessageCircle}
-            title="WhatsApp"
-            subtitle="Yazışma üçün toxunun"
-            onPress={handleWhatsapp}
-            color="#25D366"
-            delay={200}
-          />
-
-          <ContactCard
-            icon={Mail}
-            title="Email"
-            subtitle={settings.email || 'info@naxcivanavto.com'}
-            onPress={handleEmail}
-            color="#007AFF"
-            delay={250}
-          />
-        </View>
-
-        <MotiView
-          from={{ opacity: 0, translateY: 20 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ delay: 300 }}
-          style={styles.socialSection}
-        >
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Sosial Media</Text>
-          <View style={styles.socialGrid}>
-            <AnimatedPressable style={[styles.socialButton, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={handleInstagram}>
-              <View style={[styles.socialIconCircle, { backgroundColor: 'rgba(225, 48, 108, 0.1)' }]}>
-                <Instagram size={24} color="#E1306C" />
-              </View>
-              <Text style={[styles.socialText, { color: colors.text }]}>Instagram</Text>
-            </AnimatedPressable>
-
-            <AnimatedPressable style={[styles.socialButton, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={handleTiktok}>
-              <View style={[styles.socialIconCircle, { backgroundColor: 'rgba(0, 0, 0, 0.1)' }]}>
-                <Video size={24} color={isDark ? "#FFF" : "#000"} />
-              </View>
-              <Text style={[styles.socialText, { color: colors.text }]}>TikTok</Text>
-            </AnimatedPressable>
-
-            <AnimatedPressable style={[styles.socialButton, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={handleWeb}>
-              <View style={[styles.socialIconCircle, { backgroundColor: 'rgba(0, 122, 255, 0.1)' }]}>
-                <Globe size={24} color="#007AFF" />
-              </View>
-              <Text style={[styles.socialText, { color: colors.text }]}>Vebsayt</Text>
-            </AnimatedPressable>
+            ))}
           </View>
-        </MotiView>
+        </>
+      )}
 
-        <MotiView
-          from={{ opacity: 0, translateY: 20 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ delay: 400 }}
-          style={styles.mapSection}
-        >
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Ünvan</Text>
-          <AnimatedPressable
-            style={[styles.card, styles.largeCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={handleMap}
-          >
-            <View style={styles.cardContent}>
-              <View style={[styles.iconContainer, { backgroundColor: `${colors.primary}15` }]}>
-                <MapPin size={24} color={colors.primary} />
-              </View>
-              <View style={styles.textContainer}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>Baş Ofis</Text>
-                <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>{settings.address || 'Naxçıvan ş.'}</Text>
-              </View>
-            </View>
-            <View style={[styles.arrowCircle, { backgroundColor: isDark ? '#333' : '#F3F4F6' }]}>
-              <ExternalLink size={18} color={colors.textSecondary} />
-            </View>
-          </AnimatedPressable>
-        </MotiView>
+      {/* Other channels */}
+      <Text style={[styles.groupTitle, { color: colors.textSecondary }]}>Əlaqə</Text>
+      <View style={group}>
+        <ListRow icon={Mail} tint="#007AFF" title="Email" value={settings.email || 'info@naxcivanavto.com'} onPress={() => open(`mailto:${settings.email || 'info@naxcivanavto.com'}`)} colors={colors} />
+        <ListRow icon={MapPin} tint="#FF9500" title="Ünvan" value={settings.address || 'Naxçıvan şəhəri'} onPress={openMap} colors={colors} />
+        <ListRow icon={Globe} tint="#5856D6" title="Vebsayt" value={(settings.website || 'https://naxavto.com').replace(/^https?:\/\//, '')} onPress={() => open(settings.website || 'https://naxavto.com')} colors={colors} last />
+      </View>
 
-        <MotiView
-          from={{ opacity: 0, translateY: 20 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ delay: 500 }}
-          style={styles.legalSection}
-        >
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Hüquqi</Text>
-          <AnimatedPressable
-            style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={handlePrivacyPolicy}
-          >
-            <View style={styles.cardContent}>
-              <View style={[styles.iconContainer, { backgroundColor: isDark ? '#333' : '#F3F4F6' }]}>
-                <Shield size={24} color={colors.text} />
-              </View>
-              <View style={styles.textContainer}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>Məxfilik Siyasəti</Text>
-                <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>Qaydalar və Şərtlər</Text>
-              </View>
-            </View>
-            <View style={[styles.arrowCircle, { backgroundColor: isDark ? '#333' : '#F3F4F6' }]}>
-              <FileText size={18} color={colors.textSecondary} />
-            </View>
-          </AnimatedPressable>
-        </MotiView>
+      {/* Social */}
+      <Text style={[styles.groupTitle, { color: colors.textSecondary }]}>Sosial şəbəkələr</Text>
+      <View style={group}>
+        <ListRow icon={Instagram} tint="#E1306C" title="Instagram" value="Yeni elanlar və kampaniyalar" onPress={() => open(settings.instagram || 'https://instagram.com')} colors={colors} />
+        <ListRow icon={Video} tint="#111111" title="TikTok" value="Video baxışlar" onPress={() => open(settings.tiktok || 'https://tiktok.com')} colors={colors} last />
+      </View>
 
-        <View style={styles.footer}>
-          <TouchableOpacity onPress={() => router.push('/menu')} activeOpacity={0.7} style={{ alignItems: 'center' }}>
-            <Text style={[styles.copyright, { color: colors.textSecondary }]}>© {new Date().getFullYear()} Naxçıvan Avto</Text>
-            <Text style={[styles.version, { color: colors.textSecondary }]}>Versiya {Constants.expoConfig?.version}</Text>
-            <Text style={[styles.version, { color: colors.textSecondary, marginTop: 4 }]}>Created by İlkin Rzayev / +994 55 466 66 63</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </View>
+      {/* Legal */}
+      <View style={[group, { marginTop: 28 }]}>
+        <ListRow icon={Shield} tint="#8E8E93" title="Məxfilik siyasəti" onPress={() => router.push('/privacy')} colors={colors} last />
+      </View>
+
+      {/* Footer: tapping it opens the hidden admin menu */}
+      <TouchableOpacity onPress={() => router.push('/menu')} activeOpacity={0.7} style={styles.footer}>
+        <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+          © {new Date().getFullYear()} Naxçıvan Avto · Versiya {Constants.expoConfig?.version}
+        </Text>
+        <Text style={[styles.footerText, { color: colors.placeholder }]}>Created by İlkin Rzayev</Text>
+      </TouchableOpacity>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  headerBg: { position: 'absolute', top: 0, left: 0, right: 0, height: 250, opacity: 0.1 },
-  gradient: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingBottom: 120 },
-  header: { marginBottom: 32, alignItems: 'center' },
-  title: { fontSize: 32, fontFamily: 'RethinkSans_800ExtraBold', marginBottom: 8, letterSpacing: 0.5 },
-  subtitle: { fontSize: 16, textAlign: 'center', opacity: 0.8, lineHeight: 22, fontFamily: 'RethinkSans_400Regular' },
-  section: { marginBottom: 32 },
-  card: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderRadius: 20, borderWidth: 1, boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.05)', elevation: 2 },
-  largeCard: { paddingVertical: 20 },
-  cardContent: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  iconContainer: { width: 52, height: 52, borderRadius: 26, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
-  textContainer: { flex: 1 },
-  cardTitle: { fontSize: 16, fontFamily: 'RethinkSans_700Bold', marginBottom: 4 },
-  cardSubtitle: { fontSize: 14, fontFamily: 'RethinkSans_500Medium' },
-  arrowCircle: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginLeft: 8 },
-  sectionTitle: { fontSize: 18, fontFamily: 'RethinkSans_800ExtraBold', marginBottom: 16, marginLeft: 4 },
-  socialSection: { marginBottom: 32 },
-  socialGrid: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-  socialButton: { flex: 1, paddingVertical: 20, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1, boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.05)', elevation: 2 },
-  socialIconCircle: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
-  socialText: { fontSize: 12, fontFamily: 'RethinkSans_600SemiBold' },
-  mapSection: { marginBottom: 32 },
-  legalSection: { marginBottom: 32 },
-  footer: { alignItems: 'center', marginTop: 10 },
-  copyright: { fontSize: 14, fontFamily: 'RethinkSans_600SemiBold', marginBottom: 4, textAlign: 'center' },
-  version: { fontSize: 12, textAlign: 'center', opacity: 0.6, fontFamily: 'RethinkSans_400Regular' },
+  content: { paddingHorizontal: 16, paddingBottom: 130 },
+  identity: { alignItems: 'center', marginBottom: 20 },
+  avatar: {
+    width: 88,
+    height: 88,
+    borderRadius: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 6,
+    marginBottom: 12,
+    boxShadow: '0px 6px 18px rgba(0, 0, 0, 0.08)',
+  },
+  avatarImage: { width: '100%', height: '100%', borderRadius: 18 },
+  name: { fontSize: 26, fontFamily: 'RethinkSans_800ExtraBold', letterSpacing: -0.4 },
+  tagline: { fontSize: 14, fontFamily: 'RethinkSans_500Medium', marginTop: 4 },
+  quickRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4, marginBottom: 8 },
+  quickAction: { alignItems: 'center', width: '24%' },
+  quickCircle: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', marginBottom: 6 },
+  quickLabel: { fontSize: 12, fontFamily: 'RethinkSans_600SemiBold' },
+  groupTitle: {
+    fontSize: 13,
+    fontFamily: 'RethinkSans_600SemiBold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginTop: 28,
+    marginBottom: 8,
+    marginLeft: 16,
+  },
+  group: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  row: { flexDirection: 'row', alignItems: 'center', paddingLeft: 14 },
+  rowIcon: { width: 30, height: 30, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  rowBody: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingVertical: 11, paddingRight: 12, minHeight: 56 },
+  rowTitle: { fontSize: 16, fontFamily: 'RethinkSans_600SemiBold' },
+  rowValue: { fontSize: 13, fontFamily: 'RethinkSans_500Medium', marginTop: 1 },
+  footer: { alignItems: 'center', marginTop: 32, gap: 4 },
+  footerText: { fontSize: 12, fontFamily: 'RethinkSans_500Medium' },
 });

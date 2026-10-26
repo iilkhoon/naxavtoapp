@@ -18,6 +18,7 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { MotiView } from 'moti';
 import { useToast } from '../../contexts/ToastContext';
+import { useScreenTopPadding } from '../../hooks/useScreenTopPadding';
 
 const TABLES = [
     { key: 'car_features', label: 'Komplektasiya', icon: ListChecks, hasCategories: true },
@@ -38,6 +39,7 @@ const FEATURE_CATEGORIES = [
 export default function FeaturesScreen() {
     const router = useRouter();
     const { colors, isDark } = useTheme();
+    const headerTop = useScreenTopPadding();
     const { showToast } = useToast();
 
     const [activeTable, setActiveTable] = useState(TABLES[0]);
@@ -181,7 +183,7 @@ export default function FeaturesScreen() {
             style={[styles.container, { backgroundColor: colors.background }]}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-            <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+            <View style={[styles.header, { paddingTop: headerTop, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <ArrowLeft size={24} color={colors.text} />
                 </TouchableOpacity>
@@ -299,7 +301,7 @@ export default function FeaturesScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: Platform.OS === 'web' ? 20 : Platform.OS === 'ios' ? 60 : 40, borderBottomWidth: 1 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1 },
     backButton: { padding: 4 },
     title: { fontSize: 18, fontWeight: 'bold' },
     tabsContainer: { paddingVertical: 12, borderBottomWidth: 1 },

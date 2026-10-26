@@ -18,10 +18,12 @@ import { Colors } from '../../constants/Colors';
 import { Mail, Lock, UserPlus, ArrowLeft, CheckCircle } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useScreenTopPadding } from '../../hooks/useScreenTopPadding';
 
 export default function AddUserScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const headerTop = useScreenTopPadding();
   const { isSuperAdmin, loading: authLoading } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -85,7 +87,6 @@ export default function AddUserScreen() {
           }]
         );
       }
-
     } catch (error: any) {
       Alert.alert('Xəta', error.message);
     } finally {
@@ -107,7 +108,7 @@ export default function AddUserScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <View style={[styles.header, { paddingTop: headerTop, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <ArrowLeft size={24} color={colors.text} />
           </TouchableOpacity>
@@ -201,7 +202,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    paddingTop: Platform.OS === 'web' ? 20 : Platform.OS === 'ios' ? 60 : 40,
+    
     borderBottomWidth: 1,
   },
   backButton: {

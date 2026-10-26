@@ -16,10 +16,12 @@ import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../contexts/ToastContext';
 import { MotiView } from 'moti';
+import { useScreenTopPadding } from '../hooks/useScreenTopPadding';
 
 export default function CommentScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const headerTop = useScreenTopPadding(true);
   const { showToast } = useToast();
   const { listingId } = useLocalSearchParams();
   
@@ -59,7 +61,7 @@ export default function CommentScreen() {
             }} />
 
             {/* Custom Header */}
-            <View style={[styles.header, { borderBottomColor: colors.border }]}>
+            <View style={[styles.header, { paddingTop: headerTop, borderBottomColor: colors.border }]}>
                 <Text style={[styles.headerTitle, { color: colors.text }]}>Rəy Bildir</Text>
                 <TouchableOpacity 
                     onPress={() => router.back()} 
@@ -163,7 +165,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    
     paddingBottom: 16,
     borderBottomWidth: 1,
   },

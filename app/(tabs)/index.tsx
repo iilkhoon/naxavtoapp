@@ -11,7 +11,10 @@ import {
   Dimensions,
   Image as RNImage,
   DeviceEventEmitter,
+  AppState,
   TextStyle,
+  StyleProp,
+  useWindowDimensions,
   TextInput,
   FlatList,
 } from 'react-native';
@@ -39,8 +42,12 @@ type FilterType = 'cash' | 'credit' | 'barter' | 'urgent';
 const HOME_LISTINGS_CACHE_KEY = 'home_listings_cache';
 const HOME_PLATES_CACHE_KEY = 'home_plates_cache';
 
+// Cold starts can hit a stalled first request (network not ready yet): retry with backoff
+const MAX_RETRIES = 3;
+const RETRY_DELAYS_MS = [800, 2000, 4000];
+
 // Improved Looping Typewriter Component
-const Typewriter = ({ words, color, style }: { words: string[], color: string, style?: TextStyle }) => {
+const Typewriter = ({ words, color, style }: { words: string[], color: string, style?: StyleProp<TextStyle> }) => {
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [displayedText, setDisplayedText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
@@ -100,6 +107,10 @@ const Typewriter = ({ words, color, style }: { words: string[], color: string, s
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+  // ~13 em is the width of the longest hero line, "Xəyalındakı avtomobili|"
+  const heroFont = Math.max(22, Math.min(30, (screenWidth - 40) / 13.2));
+  const heroTextSize = { fontSize: heroFont, lineHeight: Math.round(heroFont * 1.2) };
   const { showToast } = useToast();
   const { colors, toggleTheme, isDark } = useTheme();
   const { settings } = useSettings();
@@ -117,6 +128,8 @@ export default function HomeScreen() {
   const [competitionParticipantCount, setCompetitionParticipantCount] = useState<number>(0);
 
   const listingsRequestIdRef = React.useRef(0);
+  // Set when listings gave up after all retries; refetched when the app returns to the foreground
+  const listingsFailedRef = React.useRef(false);
   const platesRequestIdRef = React.useRef(0);
 
   const fetchActiveCompetition = async () => {
@@ -252,15 +265,12 @@ export default function HomeScreen() {
       // Limit results for performance
       query = query.range((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE - 1);
 
-      const timeoutPromise = new Promise<{ data: null; count: null; error: Error }>((resolve) =>
-        setTimeout(() => resolve({ data: null, count: null, error: new Error('Request timeout') }), 15000)
-      );
-
-      const { data, count, error: supabaseError } = (await Promise.race([query, timeoutPromise])) as any;
+      const { data, count, error: supabaseError } = await query;
       if (supabaseError) throw supabaseError;
 
       if (currentRequestId === listingsRequestIdRef.current) {
         if (data) {
+          listingsFailedRef.current = false;
           setListings(data as Listing[]);
           if (count !== null && count !== undefined) {
             setTotalPages(Math.ceil(count / PAGE_SIZE));
@@ -277,14 +287,15 @@ export default function HomeScreen() {
     } catch (err: any) {
       console.error('Error fetching listings:', err);
       if (currentRequestId === listingsRequestIdRef.current) {
-        // Auto-retry once on cold start / transient error
-        if (retryCount < 1) {
+        // Retry with backoff on cold start / transient errors
+        if (retryCount < MAX_RETRIES) {
           isRetrying = true;
           setTimeout(() => {
             fetchListings(isRefresh, retryCount + 1);
-          }, 1200);
+          }, RETRY_DELAYS_MS[retryCount]);
           return;
         }
+        listingsFailedRef.current = true;
         if (listings.length === 0) setError('Məlumatları yükləmək mümkün olmadı.');
       }
     } finally {
@@ -320,11 +331,7 @@ export default function HomeScreen() {
 
       query = query.range((currentPlatesPage - 1) * PAGE_SIZE, currentPlatesPage * PAGE_SIZE - 1);
 
-      const timeoutPromise = new Promise<{ data: null; count: null; error: Error }>((resolve) =>
-        setTimeout(() => resolve({ data: null, count: null, error: new Error('Request timeout') }), 15000)
-      );
-
-      const { data, count, error: platesErr } = (await Promise.race([query, timeoutPromise])) as any;
+      const { data, count, error: platesErr } = await query;
       if (platesErr) throw platesErr;
 
       if (currentRequestId === platesRequestIdRef.current) {
@@ -341,11 +348,11 @@ export default function HomeScreen() {
     } catch (err) {
       console.error('Error fetching plates:', err);
       if (currentRequestId === platesRequestIdRef.current) {
-        if (retryCount < 1) {
+        if (retryCount < MAX_RETRIES) {
           isRetrying = true;
           setTimeout(() => {
             fetchPlates(isRefresh, retryCount + 1);
-          }, 1200);
+          }, RETRY_DELAYS_MS[retryCount]);
           return;
         }
         if (plates.length === 0) setPlatesError('Nömrələri yükləmək mümkün olmadı.');
@@ -398,10 +405,17 @@ export default function HomeScreen() {
     loadFavorites();
     fetchActiveCompetition();
 
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && listingsFailedRef.current) fetchListings(true);
+    });
+
     const sub = DeviceEventEmitter.addListener('scroll_to_top_home', () => {
       flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     });
-    return () => sub.remove();
+    return () => {
+      sub.remove();
+      appStateSub.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -493,34 +507,25 @@ export default function HomeScreen() {
 
   const logoUrl = isDark ? settings.site_logo_dark : settings.site_logo_light;
 
-  // Category tiles: icon on a soft tint of the category colour; the selected
-  // tile takes the tint as its background and border.
-  const CategoryTile = ({ type, label, icon: Icon, tint }: { type: FilterType, label: string, icon: any, tint: string }) => {
+  // Category strip (Airbnb-style): line icon over a label, no boxes; the
+  // selected one is full-contrast with an underline, the rest are muted.
+  const CategoryTab = ({ type, label, icon: Icon }: { type: FilterType, label: string, icon: any }) => {
     const isActive = activeFilterType === type;
+    const tone = isActive ? colors.text : colors.textSecondary;
 
     return (
       <TouchableOpacity
-        style={[
-          styles.categoryTile,
-          isActive
-            ? { backgroundColor: `${tint}${isDark ? '2E' : '1A'}`, borderColor: tint }
-            : { backgroundColor: colors.card, borderColor: isDark ? colors.border : 'rgba(0,0,0,0.06)' },
-        ]}
+        style={styles.categoryTab}
         onPress={() => setActiveFilterType(type)}
-        activeOpacity={0.75}
-        accessibilityRole="button"
+        activeOpacity={0.6}
+        accessibilityRole="tab"
         accessibilityState={{ selected: isActive }}
       >
-        <View style={[styles.categoryIcon, { backgroundColor: isActive ? tint : `${tint}1F` }]}>
-          <Icon size={17} color={isActive ? '#FFF' : tint} strokeWidth={2.4} />
-        </View>
-        <Text
-          style={[styles.categoryLabel, { color: isActive ? tint : colors.text }]}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-        >
+        <Icon size={22} color={tone} strokeWidth={isActive ? 2 : 1.6} />
+        <Text style={[styles.categoryLabel, { color: tone }, isActive && styles.categoryLabelActive]} numberOfLines={1}>
           {label}
         </Text>
+        <View style={[styles.categoryUnderline, { backgroundColor: isActive ? colors.text : 'transparent' }]} />
       </TouchableOpacity>
     );
   };
@@ -534,10 +539,12 @@ export default function HomeScreen() {
     <>
       {/* Large animated title */}
       <View style={styles.titleSection}>
-        {/* The animated word gets its own line so the text never re-wraps while typing */}
-        <Text style={[styles.largeTitle, { color: colors.text }]}>Xəyalındakı</Text>
-        <Typewriter words={['avtomobili', 'nömrəni']} color={colors.primary} style={styles.largeTitle} />
-        <Text style={[styles.largeTitle, { color: colors.text }]}>tapmaq daha asan!</Text>
+        {/* Font size comes from the screen width so "Xəyalındakı avtomobili" always fits on one line (no re-wrap while typing) */}
+        <Text style={[styles.largeTitle, heroTextSize, { color: colors.text }]} numberOfLines={1}>
+          Xəyalındakı{' '}
+          <Typewriter words={['avtomobili', 'nömrəni']} color={colors.primary} style={[styles.largeTitle, heroTextSize]} />
+        </Text>
+        <Text style={[styles.largeTitle, heroTextSize, { color: colors.text }]} numberOfLines={1}>tapmaq daha asan!</Text>
         <Text style={[styles.largeSubtitle, { color: colors.textSecondary }]}>
           {activeTopTab === 'transport'
             ? totalListings !== null
@@ -545,27 +552,6 @@ export default function HomeScreen() {
               : 'Naxçıvanda alqı-satqı elanları'
             : 'Qeydiyyat nişanı elanları'}
         </Text>
-      </View>
-
-      {/* Segmented control */}
-      <View style={[styles.segmented, { backgroundColor: isDark ? 'rgba(118,118,128,0.24)' : 'rgba(118,118,128,0.12)' }]}>
-        {(['transport', 'plates'] as const).map((tab) => {
-          const selected = activeTopTab === tab;
-          return (
-            <TouchableOpacity
-              key={tab}
-              style={[styles.segment, selected && [styles.segmentSelected, { backgroundColor: isDark ? '#636366' : '#FFFFFF' }]]}
-              onPress={() => setActiveTopTab(tab)}
-              activeOpacity={0.8}
-              accessibilityRole="tab"
-              accessibilityState={{ selected }}
-            >
-              <Text style={[styles.segmentText, { color: colors.text }, selected && styles.segmentTextSelected]}>
-                {tab === 'transport' ? 'Nəqliyyat' : 'Nömrələr'}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
       </View>
 
       {activeTopTab === 'transport' ? (
@@ -668,11 +654,11 @@ export default function HomeScreen() {
 
       {activeTopTab === 'transport' && (
         <View>
-          <View style={styles.quickFiltersContainer}>
-            <CategoryTile type="cash" label="Nağd" icon={Wallet} tint="#34C759" />
-            <CategoryTile type="credit" label="Kredit" icon={Percent} tint="#AF52DE" />
-            <CategoryTile type="barter" label="Barter" icon={ArrowLeftRight} tint="#007AFF" />
-            <CategoryTile type="urgent" label="Təcili" icon={Zap} tint="#FF9500" />
+          <View style={[styles.categoryStrip, { borderBottomColor: colors.border }]}>
+            <CategoryTab type="cash" label="Nağd" icon={Wallet} />
+            <CategoryTab type="credit" label="Kredit" icon={Percent} />
+            <CategoryTab type="barter" label="Barter" icon={ArrowLeftRight} />
+            <CategoryTab type="urgent" label="Təcili" icon={Zap} />
           </View>
 
           {activeCompetition && (
@@ -908,6 +894,26 @@ export default function HomeScreen() {
           )}
         </View>
 
+        <View style={[styles.headerSegmented, { backgroundColor: isDark ? 'rgba(118,118,128,0.24)' : 'rgba(118,118,128,0.12)' }]}>
+          {(['transport', 'plates'] as const).map((tab) => {
+            const selected = activeTopTab === tab;
+            return (
+              <TouchableOpacity
+                key={tab}
+                style={[styles.segment, selected && [styles.segmentSelected, { backgroundColor: isDark ? '#636366' : '#FFFFFF' }]]}
+                onPress={() => setActiveTopTab(tab)}
+                activeOpacity={0.8}
+                accessibilityRole="tab"
+                accessibilityState={{ selected }}
+              >
+                <Text style={[styles.segmentText, { color: colors.text }, selected && styles.segmentTextSelected]}>
+                  {tab === 'transport' ? 'Nəqliyyat' : 'Nömrələr'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
         <View style={styles.headerActions}>
           <TouchableOpacity
             onPress={toggleTheme}
@@ -1027,13 +1033,12 @@ const styles = StyleSheet.create({
   },
 
   // Segmented control
-  segmented: {
+  headerSegmented: {
     flexDirection: 'row',
-    marginHorizontal: 20,
-    marginBottom: 14,
     padding: 2,
-    borderRadius: 10,
-    height: 36,
+    borderRadius: 9,
+    height: 32,
+    width: 196,
   },
   segment: {
     flex: 1,
@@ -1045,7 +1050,7 @@ const styles = StyleSheet.create({
     boxShadow: '0px 3px 8px rgba(0, 0, 0, 0.12), 0px 1px 1px rgba(0, 0, 0, 0.04)',
   },
   segmentText: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: 'RethinkSans_500Medium',
   },
   segmentTextSelected: {
@@ -1141,32 +1146,31 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
-  // Category tiles
-  quickFiltersContainer: {
+  // Category strip
+  categoryStrip: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 8,
+    marginHorizontal: 20,
     marginBottom: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  categoryTile: {
+  categoryTab: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingTop: 6,
     gap: 6,
-    paddingVertical: 10,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  categoryIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   categoryLabel: {
-    fontSize: 13,
+    fontSize: 12,
+    fontFamily: 'RethinkSans_500Medium',
+  },
+  categoryLabelActive: {
     fontFamily: 'RethinkSans_700Bold',
+  },
+  categoryUnderline: {
+    height: 2,
+    width: 32,
+    borderRadius: 1,
+    marginTop: 4,
   },
 
   sectionHeader: {

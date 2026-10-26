@@ -11,6 +11,7 @@ import { decode } from 'base64-arraybuffer';
 import { compressImage } from '../../utils/imageOptimizer';
 import { AppSetting } from '../../types';
 import { Image } from 'expo-image';
+import { useScreenTopPadding } from '../../hooks/useScreenTopPadding';
 
 const InputField = ({ item, colors, onChange }: { item: AppSetting, colors: any, onChange: (key: string, value: string) => void }) => {
     return (
@@ -53,6 +54,7 @@ const ImageUploader = ({ item, icon: Icon, colors, onUpload, onRemove, uploading
 export default function BannersScreen() {
     const router = useRouter();
     const { colors } = useTheme();
+    const headerTop = useScreenTopPadding();
     const { showToast } = useToast();
     const { refreshSettings } = useSettings();
     const [settings, setSettings] = useState<AppSetting[]>([]);
@@ -128,7 +130,7 @@ export default function BannersScreen() {
     return (
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <View style={[styles.container, { backgroundColor: colors.background }]}>
-                <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+                <View style={[styles.header, { paddingTop: headerTop, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
                     <TouchableOpacity onPress={() => router.back()} style={styles.backButton}><ArrowLeft size={24} color={colors.text} /></TouchableOpacity>
                     <Text style={[styles.title, { color: colors.text }]}>Reklam İdarəetməsi</Text>
                     <TouchableOpacity onPress={handleSave} disabled={saving} style={styles.saveButton}>{saving ? <ActivityIndicator color="#FFF" size="small" /> : <Save size={20} color="#FFF" />}</TouchableOpacity>
@@ -179,7 +181,7 @@ export default function BannersScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: Platform.OS === 'web' ? 20 : Platform.OS === 'ios' ? 60 : 40, borderBottomWidth: 1 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1 },
     backButton: { padding: 8, borderRadius: 12 },
     title: { fontSize: 18, fontFamily: 'RethinkSans_700Bold' },
     saveButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FF3B30', borderRadius: 20 },

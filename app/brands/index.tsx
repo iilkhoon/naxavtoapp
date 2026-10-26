@@ -19,10 +19,12 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { MotiView } from 'moti';
 import LoadingAnimation from '../../components/LoadingAnimation';
+import { useScreenTopPadding } from '../../hooks/useScreenTopPadding';
 
 export default function BrandsScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const headerTop = useScreenTopPadding();
 
   const [brands, setBrands] = useState<any[]>([]);
   const [filteredBrands, setFilteredBrands] = useState<any[]>([]);
@@ -160,7 +162,7 @@ export default function BrandsScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { paddingTop: headerTop, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ArrowLeft size={24} color={colors.text} />
         </TouchableOpacity>
@@ -228,7 +230,7 @@ export default function BrandsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40, borderBottomWidth: 1 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1 },
   backButton: { padding: 4 },
   title: { fontSize: 18, fontWeight: 'bold' },
   searchSection: { padding: 16, paddingBottom: 8 },

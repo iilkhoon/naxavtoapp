@@ -12,22 +12,22 @@ export default function TabLayout() {
   return (
     <NativeTabs tintColor={tint} minimizeBehavior="onScrollDown">
       <NativeTabs.Trigger name="index" disableTransparentOnScrollEdge>
-        <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} />
+        <NativeTabs.Trigger.Icon sf="house" />
         <NativeTabs.Trigger.Label>Ana səhifə</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="favorites" disableTransparentOnScrollEdge>
-        <NativeTabs.Trigger.Icon sf={{ default: 'heart', selected: 'heart.fill' }} />
+        <NativeTabs.Trigger.Icon sf="heart" />
         <NativeTabs.Trigger.Label>Seçilmişlər</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="credit" disableTransparentOnScrollEdge>
-        <NativeTabs.Trigger.Icon sf={{ default: 'creditcard', selected: 'creditcard.fill' }} />
+        <NativeTabs.Trigger.Icon sf="creditcard" />
         <NativeTabs.Trigger.Label>Kredit</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="contact" disableTransparentOnScrollEdge>
-        <NativeTabs.Trigger.Icon sf={{ default: 'phone', selected: 'phone.fill' }} />
+        <NativeTabs.Trigger.Icon sf="phone" />
         <NativeTabs.Trigger.Label>Əlaqə</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
 

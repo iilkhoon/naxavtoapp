@@ -75,7 +75,7 @@ const SafeStorage = {
 // refresh request can hang before the network is ready, and every query waits
 // for it, so the app never loads until it is restarted. Abort slow requests
 // instead so the client can recover.
-const REQUEST_TIMEOUT_MS = 15000;
+const REQUEST_TIMEOUT_MS = 8000;
 // Image uploads on a slow mobile connection can legitimately take longer
 const UPLOAD_TIMEOUT_MS = 120000;
 

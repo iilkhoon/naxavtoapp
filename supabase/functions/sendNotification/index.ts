@@ -29,30 +29,32 @@ interface RequestBody { title?: string; body?: string; sound?: string }
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
-async function requireAuthenticated(req: Request): Promise<Response | null> {
+// Only admins may broadcast. The token is verified by Supabase Auth (getUser),
+// not just decoded: a decoded payload can be forged, and any signed-up user is
+// "authenticated", so role === 'authenticated' alone let anyone spam every device.
+async function requireAdmin(req: Request): Promise<Response | null> {
+  const unauthorized = (status: number, error: string) =>
+    new Response(JSON.stringify({ error }), {
+      status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+
   const authHeader = req.headers.get('Authorization') || '';
   const jwt = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!jwt) return unauthorized(401, 'Unauthorized');
 
-  if (!jwt) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
+  const { data: userData, error: userError } = await adminClient.auth.getUser(jwt);
+  if (userError || !userData?.user) return unauthorized(401, 'Invalid token');
 
-  try {
-    const payload = JSON.parse(atob(jwt.split('.')[1]));
-    const role = payload.role;
-    if (role !== 'authenticated' && role !== 'service_role') {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-    return null;
-  } catch {
-    return new Response(JSON.stringify({ error: 'Invalid token' }), {
-      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+  const { data: profile } = await adminClient
+    .from('profiles')
+    .select('role, is_superadmin')
+    .eq('id', userData.user.id)
+    .maybeSingle();
+
+  if (!profile || (profile.role !== 'admin' && !profile.is_superadmin)) {
+    return unauthorized(403, 'Admins only');
   }
+  return null;
 }
 
 console.info('sendNotification v12 started (Unlimited Pagination & Duplicate Filter)');
@@ -69,7 +71,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const authError = await requireAuthenticated(req);
+    const authError = await requireAdmin(req);
     if (authError) return authError;
 
     let payload: RequestBody;

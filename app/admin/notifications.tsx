@@ -19,12 +19,14 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useScreenTopPadding } from '../../hooks/useScreenTopPadding';
 
 const { width } = Dimensions.get('window');
 
 export default function SendNotificationScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const headerTop = useScreenTopPadding();
   const { showToast } = useToast();
 
   const [title, setTitle] = useState('');
@@ -112,7 +114,6 @@ export default function SendNotificationScreen() {
 
       setTitle('');
       setBody('');
-
     } catch (error: any) {
       console.error('[Notification] Unhandled error:', error);
       Alert.alert('Xəta', error.message ?? 'Bildiriş göndərilmədi. Yenidən cəhd edin.');
@@ -128,7 +129,7 @@ export default function SendNotificationScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <View style={[styles.header, { paddingTop: headerTop, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <ArrowLeft size={24} color={colors.text} />
           </TouchableOpacity>
@@ -274,7 +275,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    paddingTop: Platform.OS === 'web' ? 20 : Platform.OS === 'ios' ? 60 : 40,
+    
     borderBottomWidth: 1,
   },
   backButton: { padding: 4 },

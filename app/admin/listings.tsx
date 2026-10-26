@@ -11,6 +11,7 @@ import { PlateVisual } from '../../components/PlateVisual';
 import { Listing, Plate } from '../../types';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useScreenTopPadding } from '../../hooks/useScreenTopPadding';
 
 type Tab = 'cars' | 'plates';
 type Status = 'approved' | 'pending';
@@ -73,6 +74,7 @@ export default function AdminListingsScreen() {
   const router = useRouter();
   const { showToast } = useToast();
   const { colors, isDark } = useTheme();
+  const headerTop = useScreenTopPadding();
   const [activeTab, setActiveTab] = useState<Tab>('cars');
   const [activeStatus, setActiveStatus] = useState<Status>('approved');
   const [items, setItems] = useState<(Listing | Plate)[]>([]);
@@ -129,7 +131,7 @@ export default function AdminListingsScreen() {
 
   return (
     <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { paddingTop: headerTop, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}><ArrowLeft size={24} color={colors.text} /></TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Elan İdarəetməsi</Text>
         <TouchableOpacity onPress={fetchItems}><RefreshCw size={24} color={colors.primary} /></TouchableOpacity>
@@ -159,7 +161,7 @@ export default function AdminListingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40, borderBottomWidth: 1 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1 },
   backButton: { padding: 4 },
   headerTitle: { fontSize: 18, fontFamily: 'RethinkSans_700Bold' },
   tabContainer: { padding: 16, paddingBottom: 8 },
