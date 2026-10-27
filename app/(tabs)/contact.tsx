@@ -1,7 +1,7 @@
 import React from 'react';
 import Constants from 'expo-constants';
 import {
-  View, Text, StyleSheet, ScrollView, Linking, TouchableOpacity, Image,
+  View, Text, StyleSheet, ScrollView, Linking, TouchableOpacity, Image, Platform,
 } from 'react-native';
 import {
   Phone, Mail, MapPin, MessageCircle, Instagram, Video,
@@ -15,6 +15,16 @@ import { useSettings } from '../../contexts/SettingsContext';
 import { AdminExpensesSection } from '../../components/AdminExpensesSection';
 import { useTabBarPadding } from '../../hooks/useTabBarPadding';
 import { haptics } from '../../utils/haptics';
+import * as Updates from 'expo-updates';
+
+// Shows which JS bundle is running, so an OTA update can be confirmed on the device
+const bundleLabel = () => {
+  if (Platform.OS === 'web') return null;
+  if (__DEV__) return 'Development';
+  if (Updates.isEmbeddedLaunch || !Updates.updateId) return 'Daxili build';
+  const date = Updates.createdAt ? ` · ${Updates.createdAt.toLocaleDateString('az-AZ')}` : '';
+  return `OTA ${Updates.updateId.slice(0, 8)}${date}`;
+};
 
 const APP_ICON = require('../../icons/android-icon.png');
 
@@ -172,6 +182,9 @@ export default function ContactScreen() {
           © {new Date().getFullYear()} Naxçıvan Avto · Versiya {Constants.expoConfig?.version}
         </Text>
         <Text style={[styles.footerText, { color: colors.placeholder }]}>Created by İlkin Rzayev / Novo Media · +994 51 500 00 77</Text>
+        {!!bundleLabel() && (
+          <Text style={[styles.footerText, { color: colors.placeholder }]}>{bundleLabel()}</Text>
+        )}
       </TouchableOpacity>
     </ScrollView>
   );

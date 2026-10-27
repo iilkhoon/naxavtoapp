@@ -549,6 +549,7 @@ export default function HomeScreen() {
         </Text>
         <Text style={[styles.largeTitle, heroTextSize, { color: colors.text }]} numberOfLines={1}>tapmaq daha asan!</Text>
         <Text style={[styles.largeSubtitle, { color: colors.textSecondary }]}>
+          {activeTopTab === 'transport' && totalListings !== null && <Text style={{ color: '#34C759' }}>● </Text>}
           {activeTopTab === 'transport'
             ? totalListings !== null
               ? `${totalListings} aktiv elan · Naxçıvan`
