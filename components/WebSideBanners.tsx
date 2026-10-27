@@ -54,6 +54,7 @@ export const WebSideBanners = ({ side }: { side: 'left' | 'right' }) => {
                 >
                     <Image
                         source={{ uri: bannerUrl }}
+                        accessibilityLabel="Reklam banneri"
                         style={styles.image}
                         contentFit="contain"
                     />

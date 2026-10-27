@@ -608,7 +608,7 @@ export default function WebAddListingScreen() {
                                         onPress={submit}
                                         disabled={loading || uploading}
                                     >
-                                        <LinearGradient colors={['#FF3B30', '#FF6B35']} style={styles.submitBtnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                                        <LinearGradient colors={[colors.primary, colors.primary]} style={styles.submitBtnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
                                             {loading || uploading
                                                 ? <ActivityIndicator color="#FFF" />
                                                 : <>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Main pages. `npm run build:web` rewrites dist/sitemap.xml with every approved listing and plate as well. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://naxavto.com/</loc><changefreq>hourly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://naxavto.com/add-listing</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://naxavto.com/calculator</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://naxavto.com/compare</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://naxavto.com/favorites</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://naxavto.com/contact</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://naxavto.com/privacy</loc><changefreq>yearly</changefreq><priority>0.2</priority></url>
+</urlset>

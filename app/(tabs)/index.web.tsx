@@ -626,7 +626,7 @@ const styles = StyleSheet.create({
     },
     searchBarMobile: { flexDirection: 'column', alignItems: 'stretch', padding: 12, borderRadius: 16 },
     field: { flex: 1, minWidth: 0, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 6, cursor: 'pointer' as any },
-    fieldMobile: { flex: 0, paddingHorizontal: 4, paddingVertical: 10 },
+    fieldMobile: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', paddingHorizontal: 4, paddingVertical: 10 },
     fieldLabel: { fontSize: 12, fontFamily: FONT.semibold, marginBottom: 2 },
     fieldValue: { fontSize: 16, fontFamily: FONT.semibold },
     plateInput: { padding: 0, height: 24, outlineStyle: 'none' } as any,

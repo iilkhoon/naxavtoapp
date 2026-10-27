@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /novo
+Disallow: /menu
+Disallow: /my-loans
+Disallow: /chat
+Disallow: /select-option
+Disallow: /filter
+
+Sitemap: https://naxavto.com/sitemap.xml

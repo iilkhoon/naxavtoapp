@@ -94,7 +94,7 @@ export default function WebCalculatorScreen() {
                             </TouchableOpacity>
                         </View>
                         <View style={[styles.group, { backgroundColor: t.surface, borderColor: t.hairline, boxShadow: t.shadow } as any]}>
-                            <InputRow t={t} label="Avtomobilin qiyməti" suffix="₼" value={price} onChangeText={setPrice} />
+                            <InputRow t={t} label="Qiymət" suffix="₼" value={price} onChangeText={setPrice} />
                             {separator}
                             <InputRow t={t} label="İlkin ödəniş" suffix="₼" value={initialPayment} onChangeText={setInitialPayment} />
                             {separator}

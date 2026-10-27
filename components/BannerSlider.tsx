@@ -43,7 +43,7 @@ export const BannerSlider: React.FC<BannerSliderProps> = ({
         return () => clearInterval(interval);
     }, [validImages.length, autoPlayInterval, isAutoPlayPaused]);
 
-    const renderItem = ({ item }: { item: string }) => (
+    const renderItem = ({ item, index }: { item: string; index: number }) => (
         <View style={{ width, justifyContent: 'center', alignItems: 'center' }}>
             <Pressable
                 onPressIn={() => setIsAutoPlayPaused(true)}
@@ -52,6 +52,7 @@ export const BannerSlider: React.FC<BannerSliderProps> = ({
             >
                 <Image
                     source={{ uri: item }}
+                    accessibilityLabel={`Reklam banneri ${index + 1}`}
                     style={styles.image}
                     contentFit={contentFit}
                     transition={200}

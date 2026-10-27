@@ -410,7 +410,7 @@ export const CreditApplicationModal = ({
                   activeOpacity={0.85}
                 >
                   <LinearGradient
-                    colors={[colors.primary, '#FF9500']}
+                    colors={[colors.primary, colors.primary]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={styles.submitBtn}

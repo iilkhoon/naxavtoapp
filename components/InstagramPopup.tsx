@@ -66,6 +66,7 @@ export const InstagramPopup = () => {
                             <View style={styles.imageContainer}>
                                 <Image
                                     source={{ uri: imageUrl }}
+                                    accessibilityLabel={title || 'Kampaniya'}
                                     style={styles.popupImage}
                                     contentFit="cover"
                                 />
