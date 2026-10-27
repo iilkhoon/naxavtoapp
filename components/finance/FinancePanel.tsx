@@ -1,10 +1,10 @@
 // Finance section content shared by the web page and the app screen:
 // overview, cash book, car deals, debts, loans, and payroll.
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
-  Plus, Minus, Ban, Car, Wrench, Tag, Banknote, Percent, ChevronLeft, ChevronRight, Landmark, HandCoins, Wallet,
+  Plus, Minus, Ban, Car, Wrench, Tag, Banknote, Percent, ChevronLeft, ChevronRight, Landmark, HandCoins, Wallet, LayoutDashboard, Users,
 } from 'lucide-react-native';
 import { Segmented, Stat, Button, Badge, Card, useWebTokens, FONT, GroupCaption } from '../web/WebKit';
 import { Toolbar, SearchField, DataTable, CellText, IconAction } from '../web/AdminKit';
@@ -16,14 +16,44 @@ import { useToast } from '../../contexts/ToastContext';
 
 export type FinanceTab = 'overview' | 'cash' | 'cars' | 'debts' | 'loans' | 'payroll';
 
-export const FINANCE_TABS: { value: FinanceTab; label: string }[] = [
-  { value: 'overview', label: 'İcmal' },
-  { value: 'cash', label: 'Kassa' },
-  { value: 'cars', label: 'Alış-satış' },
-  { value: 'debts', label: 'Borclar' },
-  { value: 'loans', label: 'Kreditlər' },
-  { value: 'payroll', label: 'Maaşlar' },
+export const FINANCE_TABS: { value: FinanceTab; label: string; icon: any }[] = [
+  { value: 'overview', label: 'İcmal', icon: LayoutDashboard },
+  { value: 'cash', label: 'Kassa', icon: Wallet },
+  { value: 'cars', label: 'Alış-satış', icon: Car },
+  { value: 'debts', label: 'Borclar', icon: HandCoins },
+  { value: 'loans', label: 'Kreditlər', icon: Landmark },
+  { value: 'payroll', label: 'Maaşlar', icon: Users },
 ];
+
+// Section switcher: icon + label buttons that scroll sideways on narrow screens
+function TabBar({ value, onChange }: { value: FinanceTab; onChange: (t: FinanceTab) => void }) {
+  const t = useWebTokens();
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} style={{ flexGrow: 0 }}>
+      {FINANCE_TABS.map(({ value: v, label, icon: Icon }) => {
+        const active = v === value;
+        const fg = active ? '#FFFFFF' : t.text;
+        return (
+          <TouchableOpacity
+            key={v}
+            role="tab"
+            aria-selected={active}
+            activeOpacity={0.8}
+            onPress={() => onChange(v)}
+            style={[
+              styles.tab,
+              active ? { backgroundColor: t.accent, borderColor: t.accent } : { backgroundColor: t.surface, borderColor: t.hairline },
+              { cursor: 'pointer' } as any,
+            ]}
+          >
+            <Icon size={16} color={active ? fg : t.textSecondary} strokeWidth={2.2} />
+            <Text style={[styles.tabText, { color: fg }]} numberOfLines={1}>{label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
+  );
+}
 
 const plus = (v: number | string) => (Number(v) > 0 ? `+${money(v)}` : money(v));
 
@@ -91,11 +121,9 @@ export function FinancePanel({ tab, onTab }: { tab: FinanceTab; onTab: (t: Finan
   const bankRemaining = sum(f.bankLoans.filter((b) => b.status === 'active'), 'remaining');
   const salaryLeft = sum(f.payrollRows, 'remaining');
 
-  const tabs = FINANCE_TABS;
-
   return (
     <View style={{ gap: 20 }}>
-      <Segmented options={tabs} value={tab} onChange={onTab} style={{ flexWrap: 'wrap' }} />
+      <TabBar value={tab} onChange={onTab} />
 
       {tab === 'overview' && (
         <>
@@ -336,6 +364,9 @@ export function FinancePanel({ tab, onTab }: { tab: FinanceTab; onTab: (t: Finan
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  tabs: { flexDirection: 'row', gap: 8, paddingVertical: 2 },
+  tab: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 42, paddingHorizontal: 16, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth },
+  tabText: { fontSize: 14, fontFamily: FONT.semibold },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   amount: { fontSize: 14, fontFamily: FONT.bold },
   iconRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
