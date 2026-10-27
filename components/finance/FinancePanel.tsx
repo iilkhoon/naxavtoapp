@@ -1,10 +1,10 @@
 // Finance section content shared by the web page and the app screen:
-// overview, cash book, car deals, debts, loans, payroll and daily closing.
+// overview, cash book, car deals, debts, loans, and payroll.
 import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
-  Plus, Minus, Ban, Car, Wrench, Tag, Banknote, Percent, Lock, Unlock, ChevronLeft, ChevronRight, Landmark, HandCoins, Wallet,
+  Plus, Minus, Ban, Car, Wrench, Tag, Banknote, Percent, ChevronLeft, ChevronRight, Landmark, HandCoins, Wallet,
 } from 'lucide-react-native';
 import { Segmented, Stat, Button, Badge, Card, useWebTokens, FONT, GroupCaption } from '../web/WebKit';
 import { Toolbar, SearchField, DataTable, CellText, IconAction } from '../web/AdminKit';
@@ -14,7 +14,7 @@ import {
 } from '../../lib/finance';
 import { useToast } from '../../contexts/ToastContext';
 
-export type FinanceTab = 'overview' | 'cash' | 'cars' | 'debts' | 'loans' | 'payroll' | 'closing';
+export type FinanceTab = 'overview' | 'cash' | 'cars' | 'debts' | 'loans' | 'payroll';
 
 export const FINANCE_TABS: { value: FinanceTab; label: string }[] = [
   { value: 'overview', label: 'İcmal' },
@@ -23,8 +23,9 @@ export const FINANCE_TABS: { value: FinanceTab; label: string }[] = [
   { value: 'debts', label: 'Borclar' },
   { value: 'loans', label: 'Kreditlər' },
   { value: 'payroll', label: 'Maaşlar' },
-  { value: 'closing', label: 'Gün bağlama' },
 ];
+
+const plus = (v: number | string) => (Number(v) > 0 ? `+${money(v)}` : money(v));
 
 const Row = ({ children }: { children: React.ReactNode }) => <View style={styles.row}>{children}</View>;
 
@@ -100,8 +101,8 @@ export function FinancePanel({ tab, onTab }: { tab: FinanceTab; onTab: (t: Finan
         <>
           <Row>
             <Stat label="Kassa balansı" value={money(f.balance.balance)} hint={`Nağd ${money(f.balance.cash)} · Kart ${money(f.balance.card)} · Köçürmə ${money(f.balance.transfer)}`} />
-            <Stat label="Bu gün" value={`+${money(f.todaySum.total_in)}`} hint={`Xərc ${money(f.todaySum.total_out)}`} tone={t.success} />
-            <Stat label="Bu ay" value={`+${money(f.monthSum.total_in)}`} hint={`Xərc ${money(f.monthSum.total_out)}`} tone={t.success} />
+            <Stat label="Bu gün mədaxil" value={plus(f.todaySum.total_in)} hint={`Xərc ${money(f.todaySum.total_out)}`} tone={Number(f.todaySum.total_in) > 0 ? t.success : undefined} />
+            <Stat label="Bu ay mədaxil" value={plus(f.monthSum.total_in)} hint={`Xərc ${money(f.monthSum.total_out)}`} tone={Number(f.monthSum.total_in) > 0 ? t.success : undefined} />
           </Row>
           <Row>
             <Stat label="Anbarda maşın" value={String(stock.length)} hint={`Alış dəyəri ${money(sum(stock, 'buy_price'))}`} />
@@ -325,43 +326,6 @@ export function FinancePanel({ tab, onTab }: { tab: FinanceTab; onTab: (t: Finan
           <Text style={[styles.note, { color: t.textSecondary }]}>
             Avans və maaş kassadan çıxılır və ayın maaşından düşülür. Səhv yazılanı Kassa bölməsində ləğv edin. İşçinin adına basaraq maaşını və ya maaş gününü dəyişin.
           </Text>
-        </>
-      )}
-
-      {tab === 'closing' && (
-        <>
-          <Row>
-            <Stat label="Bu gün mədaxil" value={money(f.todaySum.total_in)} tone={t.success} />
-            <Stat label="Bu gün xərc" value={money(f.todaySum.total_out)} />
-            <Stat label="Gözlənilən qalıq" value={money(f.balance.balance)} />
-          </Row>
-          <Toolbar>
-            <Text style={[styles.note, { color: t.textSecondary, flex: 1 }]}>Gün sırayla bağlanır. Bağlanmış günə əməliyyat yazmaq və ya ləğv etmək olmur; yalnız son bağlanmış gün yenidən açıla bilər.</Text>
-            <Button size="sm" title="Günü bağla" icon={<Lock size={14} color="#FFF" />} onPress={() => open(f.forms.closeDay())} />
-          </Toolbar>
-          <DataTable
-            data={f.closings}
-            keyExtractor={(c) => c.day}
-            loading={f.loading}
-            emptyTitle="Bağlanmış gün yoxdur"
-            columns={[
-              { key: 'day', title: 'Gün', width: 100, render: (c) => <CellText title={dayLabel(c.day)} strong /> },
-              { key: 'open', title: 'Açılış', flex: 1, hideOnMobile: true, render: (c) => <CellText title={money(c.opening)} /> },
-              { key: 'in', title: 'Mədaxil', flex: 1, hideOnMobile: true, render: (c) => <CellText title={money(c.total_in)} /> },
-              { key: 'out', title: 'Xərc', flex: 1, hideOnMobile: true, render: (c) => <CellText title={money(c.total_out)} /> },
-              { key: 'exp', title: 'Gözlənilən', flex: 1, render: (c) => <CellText title={money(c.expected)} subtitle={`Sayılan ${money(c.counted)}`} /> },
-              {
-                key: 'diff', title: 'Fərq', width: 110, align: 'right', render: (c) => (
-                  <Text style={[styles.amount, { color: Number(c.difference) === 0 ? t.success : t.accent }]}>{Number(c.difference) > 0 ? '+' : ''}{money(c.difference)}</Text>
-                ),
-              },
-              {
-                key: 'act', title: '', width: 44, align: 'right', render: (c, i) => i === 0 ? (
-                  <IconAction icon={Unlock} label="Günü aç" onPress={() => f.reopenDay(c.day).then(() => { showToast('Gün açıldı', 'success'); reload(); }).catch((e: any) => showToast('Xəta: ' + e.message, 'error'))} />
-                ) : null,
-              },
-            ]}
-          />
         </>
       )}
 

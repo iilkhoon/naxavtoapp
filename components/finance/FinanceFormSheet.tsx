@@ -68,7 +68,7 @@ export function FinanceFormSheet({ form, onClose, onDone }: {
               <TextField
                 key={f.key}
                 label={f.label + (f.required ? ' *' : '')}
-                hint={f.hint || (f.type === 'date' ? 'İİİİ-AA-GG' : undefined)}
+                hint={f.hint}
                 value={values[f.key] || ''}
                 onChangeText={(v) => set(f.key, v)}
                 placeholder={f.placeholder || (f.type === 'date' ? '2026-10-27' : undefined)}

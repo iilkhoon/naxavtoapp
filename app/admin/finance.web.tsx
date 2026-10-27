@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Shield } from 'lucide-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
@@ -11,7 +11,11 @@ export default function AdminFinanceWeb() {
   const router = useRouter();
   const { isSuperAdmin, loading } = useAuth();
   const params = useLocalSearchParams<{ tab?: string }>();
-  const tab = (FINANCE_TABS.some((x) => x.value === params.tab) ? params.tab : 'overview') as FinanceTab;
+  // Local state keeps switching instant; the URL param only remembers the tab
+  const [tab, setTab] = useState<FinanceTab>(
+    (FINANCE_TABS.some((x) => x.value === params.tab) ? params.tab : 'overview') as FinanceTab,
+  );
+  const changeTab = (next: FinanceTab) => { setTab(next); router.setParams({ tab: next }); };
 
   if (!loading && !isSuperAdmin) {
     return (
@@ -23,7 +27,7 @@ export default function AdminFinanceWeb() {
 
   return (
     <AdminPage title="Finans" subtitle="Kassa, alış-satış, borclar, kreditlər və maaşlar">
-      {!loading && <FinancePanel tab={tab} onTab={(next) => router.setParams({ tab: next })} />}
+      {!loading && <FinancePanel tab={tab} onTab={changeTab} />}
     </AdminPage>
   );
 }

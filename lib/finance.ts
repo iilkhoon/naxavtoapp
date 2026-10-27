@@ -76,7 +76,7 @@ const str = (v?: string) => (v && v.trim() ? v.trim() : null);
 export function validateForm(form: FinanceForm, v: Record<string, string>) {
   for (const f of form.fields) {
     const raw = (v[f.key] || '').trim();
-    if (f.required && !raw) return `${f.label} daxil edin`;
+    if (f.required && !raw) return f.type === 'select' ? `${f.label} seçin` : `${f.label} daxil edin`;
     if (raw && (f.type === 'money' || f.type === 'number')) {
       const n = num(raw);
       if (n == null || Number.isNaN(n) || n < 0) return `${f.label}: düzgün rəqəm yazın`;
@@ -111,14 +111,13 @@ export function useFinance() {
   const [bankLoans, setBankLoans] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [payroll, setPayroll] = useState<any[]>([]);
-  const [closings, setClosings] = useState<any[]>([]);
   const [period, setPeriod] = useState(monthStart());
 
   const load = useCallback(async (p = period) => {
     try {
       await supabase.rpc('update_overdue_payments');
       const now = today();
-      const [cat, bal, daySum, mSum, tx, car, debt, bank, emp, pay, close] = await Promise.all([
+      const [cat, bal, daySum, mSum, tx, car, debt, bank, emp, pay] = await Promise.all([
         supabase.from('finance_categories').select('id, code, name, direction, sort').eq('is_active', true).order('sort'),
         supabase.from('cash_balance').select('*').single(),
         supabase.rpc('cash_summary', { p_from: now, p_to: now }),
@@ -129,9 +128,8 @@ export function useFinance() {
         supabase.from('bank_loan_balances').select('*').neq('status', 'cancelled').order('started_on', { ascending: false }),
         supabase.from('employees').select('*').order('full_name'),
         supabase.from('payroll_balances').select('*').eq('period', p),
-        supabase.from('cash_closings').select('*').order('day', { ascending: false }).limit(60),
       ]);
-      const failed = [cat, bal, daySum, mSum, tx, car, debt, bank, emp, pay, close].find((r) => r.error);
+      const failed = [cat, bal, daySum, mSum, tx, car, debt, bank, emp, pay].find((r) => r.error);
       if (failed?.error) throw failed.error;
       setCategories(cat.data || []);
       setBalance(bal.data || { balance: 0, cash: 0, card: 0, transfer: 0 });
@@ -143,7 +141,6 @@ export function useFinance() {
       setBankLoans(bank.data || []);
       setEmployees(emp.data || []);
       setPayroll(pay.data || []);
-      setClosings(close.data || []);
     } finally {
       setLoading(false);
     }
@@ -182,7 +179,13 @@ export function useFinance() {
         { key: 'counterparty', label: direction === 'in' ? 'Kimdən' : 'Kimə', type: 'text' },
         { key: 'description', label: 'Açıqlama', type: 'multiline' },
       ],
-      initial: { ...base(), category: direction === 'out' ? manualCategories('out').find((c) => c.code === 'utilities')?.id || '' : '' },
+      // Empty cash book: the first income is usually the opening balance
+      initial: {
+        ...base(),
+        category: direction === 'out'
+          ? manualCategories('out').find((c) => c.code === 'utilities')?.id || ''
+          : manualCategories('in').find((c) => c.code === (transactions.length ? 'other_in' : 'opening'))?.id || '',
+      },
       submit: async (v) => {
         const { error } = await supabase.from('cash_transactions').insert({
           direction, amount: num(v.amount), method: v.method, category_id: v.category, occurred_on: v.date,
@@ -394,25 +397,10 @@ export function useFinance() {
       }),
       success: kind === 'advance' ? 'Avans yazıldı' : 'Maaş yazıldı',
     }),
-
-    closeDay: (): FinanceForm => {
-      const last = closings[0]?.day;
-      return {
-        title: 'Günü bağla',
-        subtitle: `Kassadakı nağd pulu sayıb yazın. Bağlanmış günə yeni əməliyyat yazmaq olmur.${last ? ` Son bağlanmış gün: ${dayLabel(last)}.` : ''}`,
-        submitLabel: 'Bağla',
-        fields: [dateField('Gün'), { key: 'counted', label: 'Faktiki məbləğ (₼)', type: 'money', required: true }, noteField],
-        initial: { date: today(), counted: String(balance.balance) },
-        submit: (v) => rpc('close_cash_day', { p_day: v.date, p_counted: num(v.counted), p_note: str(v.note) }),
-        success: 'Gün bağlandı',
-      };
-    },
   };
-
-  const reopenDay = (day: string) => rpc('reopen_cash_day', { p_day: day });
 
   return {
     loading, load, categories, balance, todaySum, monthSum, transactions, cars, debts, bankLoans, employees, payroll,
-    payrollRows, closings, period, changePeriod, categoryName, categoryCode, forms, reopenDay,
+    payrollRows, period, changePeriod, categoryName, categoryCode, forms,
   };
 }
