@@ -3,7 +3,7 @@ import {
     View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, TextStyle,
     DeviceEventEmitter, StyleProp,
 } from 'react-native';
-import { Search, X, SlidersHorizontal, Plus } from 'lucide-react-native';
+import { Search, X, SlidersHorizontal, Plus, Wallet, Percent, ArrowLeftRight, Zap } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -74,6 +74,15 @@ const Typewriter = ({ words, color, style }: { words: string[], color: string, s
 };
 
 const TYPEWRITER_WORDS = ['avtomobili tap', 'nömrəni tap', 'qiyməti müqayisə et'];
+// Phone layout mirrors the app's two-line hero
+const MOBILE_TYPEWRITER_WORDS = ['avtomobili', 'nömrəni'];
+
+const CATEGORIES: { type: FilterType; label: string; icon: any }[] = [
+    { type: 'cash', label: 'Nağd', icon: Wallet },
+    { type: 'credit', label: 'Kredit', icon: Percent },
+    { type: 'barter', label: 'Barter', icon: ArrowLeftRight },
+    { type: 'urgent', label: 'Təcili', icon: Zap },
+];
 
 // Applies every filter app/filter.tsx can return (same as the mobile home screen)
 const applyAdvancedFilters = (query: any, f: Record<string, any>) => {
@@ -396,6 +405,9 @@ export default function WebHomeScreen() {
     const hasPlateSearch = !!(plateSearchRegion || plateSearchSeries || plateSearchNumber);
     const heroSize = isMobile ? { fontSize: 38, lineHeight: 44, letterSpacing: -1.2 } : width < 1024 ? { fontSize: 56, lineHeight: 62 } : null;
 
+    const mTitleFont = Math.max(22, Math.min(30, (width - 32) / 13.2));
+    const mTitleSize = { fontSize: mTitleFont, lineHeight: Math.round(mTitleFont * 1.2) };
+
     const divider = <View style={[isMobile ? styles.dividerH : styles.dividerV, { backgroundColor: t.hairline }]} />;
 
     return (
@@ -411,6 +423,77 @@ export default function WebHomeScreen() {
                 path="/"
             />
             {/* ═══ HERO ═══ */}
+            {isMobile ? (
+            <LavaHero style={styles.hero} contentStyle={styles.mHeroContent}>
+                <Segmented<TopTab>
+                    options={[{ value: 'transport', label: 'Nəqliyyat' }, { value: 'plates', label: 'Nömrələr' }]}
+                    value={activeTopTab}
+                    onChange={setActiveTopTab}
+                    style={{ marginBottom: 18 }}
+                    onDark
+                />
+                <Text role="heading" aria-level={1} style={[styles.mTitle, mTitleSize, { color: '#FFFFFF' }]} numberOfLines={1}>
+                    Xəyalındakı{' '}
+                    <Typewriter words={MOBILE_TYPEWRITER_WORDS} color="#FFB3A6" style={[styles.mTitle, mTitleSize]} />
+                </Text>
+                <Text style={[styles.mTitle, mTitleSize, { color: '#FFFFFF' }]} numberOfLines={1}>tapmaq daha asan!</Text>
+                <Text style={styles.mSub}>
+                    {isTransport
+                        ? totalCount != null ? `${totalCount.toLocaleString('az')} aktiv elan · Naxçıvan` : 'Naxçıvanda alqı-satqı elanları'
+                        : 'Qeydiyyat nişanı elanları'}
+                </Text>
+
+                <View style={[styles.mSearch, { backgroundColor: t.surface, borderColor: t.hairline }]}>
+                    {isTransport ? (
+                        <>
+                            <TouchableOpacity style={styles.mField} onPress={handleBrandSelect} activeOpacity={0.7}>
+                                <Text style={[styles.mFieldLabel, { color: t.textSecondary }]}>Marka</Text>
+                                <Text style={[styles.mFieldValue, { color: selectedBrand ? t.text : t.placeholder }]} numberOfLines={1}>{selectedBrand?.name || 'Hamısı'}</Text>
+                            </TouchableOpacity>
+                            <View style={[styles.mDivider, { backgroundColor: t.hairline }]} />
+                            <TouchableOpacity style={styles.mField} onPress={handleModelSelect} activeOpacity={0.7}>
+                                <Text style={[styles.mFieldLabel, { color: t.textSecondary }]}>Model</Text>
+                                <Text style={[styles.mFieldValue, { color: selectedModel ? t.text : t.placeholder }]} numberOfLines={1}>{selectedModel?.name || 'Hamısı'}</Text>
+                            </TouchableOpacity>
+                        </>
+                    ) : (
+                        <>
+                            <View style={[styles.mField, { flex: 0.8 }]}>
+                                <Text style={[styles.mFieldLabel, { color: t.textSecondary }]}>Region</Text>
+                                <TextInput value={plateSearchRegion} onChangeText={(v) => setPlateSearchRegion(v.replace(/\D/g, ''))} placeholder="90" placeholderTextColor={t.placeholder} keyboardType="number-pad" maxLength={2} style={[styles.mFieldValue, styles.plateInput, { color: t.text }]} />
+                            </View>
+                            <View style={[styles.mDivider, { backgroundColor: t.hairline }]} />
+                            <View style={[styles.mField, { flex: 0.8 }]}>
+                                <Text style={[styles.mFieldLabel, { color: t.textSecondary }]}>Seriya</Text>
+                                <TextInput value={plateSearchSeries} onChangeText={(v) => setPlateSearchSeries(v.toUpperCase())} placeholder="AA" placeholderTextColor={t.placeholder} autoCapitalize="characters" maxLength={2} style={[styles.mFieldValue, styles.plateInput, { color: t.text }]} />
+                            </View>
+                            <View style={[styles.mDivider, { backgroundColor: t.hairline }]} />
+                            <View style={styles.mField}>
+                                <Text style={[styles.mFieldLabel, { color: t.textSecondary }]}>Nömrə</Text>
+                                <TextInput value={plateSearchNumber} onChangeText={(v) => setPlateSearchNumber(v.replace(/\D/g, ''))} placeholder="000" placeholderTextColor={t.placeholder} keyboardType="number-pad" maxLength={3} style={[styles.mFieldValue, styles.plateInput, { color: t.text }]} />
+                            </View>
+                        </>
+                    )}
+                    {(isTransport ? hasSearch : hasPlateSearch) && (
+                        <TouchableOpacity onPress={isTransport ? handleResetSearch : handleResetPlateSearch} style={styles.mReset} accessibilityLabel="Axtarışı təmizlə">
+                            <X size={16} color={t.textSecondary} />
+                        </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                        onPress={isTransport ? handleFilterPress : () => { fetchPlates(); scrollToGrid(); }}
+                        style={[styles.mAction, { backgroundColor: isTransport ? t.text : t.accent }]}
+                        accessibilityLabel={isTransport ? 'Filtr' : 'Axtar'}
+                    >
+                        {isTransport
+                            ? <SlidersHorizontal size={18} color={t.bg} />
+                            : <Search size={18} color="#FFF" strokeWidth={2.4} />}
+                        {isTransport && activeFilterCount > 0 && (
+                            <View style={[styles.mBadge, { backgroundColor: t.accent }]}><Text style={styles.mBadgeText}>{activeFilterCount}</Text></View>
+                        )}
+                    </TouchableOpacity>
+                </View>
+            </LavaHero>
+            ) : (
             <LavaHero style={styles.hero} contentStyle={styles.heroContent}>
                 <Container style={[styles.heroInner, isMobile && { paddingTop: 36, paddingBottom: 32 }]}>
                     <Text style={[styles.eyebrow, { color: 'rgba(255,255,255,0.6)' }]}>Naxçıvan Avto</Text>
@@ -481,18 +564,37 @@ export default function WebHomeScreen() {
                     </Text>
                 </Container>
             </LavaHero>
+            )}
+
+            {/* Phone: the app's icon category strip replaces the segmented filter */}
+            {isMobile && isTransport && (
+                <View role="tablist" style={[styles.catStrip, { borderBottomColor: t.hairline }]}>
+                    {CATEGORIES.map(({ type, label, icon: Icon }) => {
+                        const active = activeFilterType === type;
+                        const tone = active ? t.text : t.textSecondary;
+                        return (
+                            <TouchableOpacity key={type} role="tab" aria-selected={active} style={styles.catTab} onPress={() => setActiveFilterType(type)} activeOpacity={0.6}>
+                                <Icon size={22} color={tone} strokeWidth={active ? 2 : 1.6} />
+                                <Text style={[styles.catLabel, { color: tone, fontFamily: active ? FONT.bold : FONT.medium }]} numberOfLines={1}>{label}</Text>
+                                <View style={[styles.catUnderline, { backgroundColor: active ? t.text : 'transparent' }]} />
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+            )}
 
             {width < 1024 && !!(settings.home_banner_url || settings.home_banner_url_2) && (
-                <Container style={{ marginTop: 24 }}>
+                // BannerSlider sizes its pages to the window, so it must not sit inside the padded Container
+                <View style={{ marginTop: isMobile ? 16 : 24 }}>
                     <BannerSlider
                         images={[settings.home_banner_url, settings.home_banner_url_2, settings.home_banner_url_3]}
                         height={isMobile ? 120 : 180}
                     />
-                </Container>
+                </View>
             )}
 
             {/* ═══ URGENT + VIP rails ═══ */}
-            {isTransport && [
+            {isTransport && !isMobile && [
                 { key: 'urgent', title: 'Təcili elanlar', subtitle: 'Sahibi tez satmaq istəyir', data: urgentListings },
                 { key: 'vip', title: 'VIP elanlar', subtitle: 'Seçilmiş premium elanlar', data: vipListings },
             ].filter(r => r.data.length > 0).map((rail) => (
@@ -515,12 +617,12 @@ export default function WebHomeScreen() {
             <View style={{ flexDirection: 'row', justifyContent: 'center', width: '100%' }}>
                 <WebSideBanners side="left" />
 
-                <Container style={{ flex: 1, marginTop: isMobile ? 32 : 56 }}>
+                <Container style={{ flex: 1, marginTop: isMobile ? 20 : 56 }}>
                     <View onLayout={(e) => { gridY.current = e.nativeEvent.layout.y; }}>
                         <SectionHeader
                             title={isTransport ? 'Son elanlar' : 'Qeydiyyat nişanları'}
                             subtitle={!loading ? `${items.length} ${isTransport ? 'elan' : 'nömrə'} göstərilir` : undefined}
-                            right={isTransport ? (
+                            right={isTransport && !isMobile ? (
                                 <Segmented<FilterType>
                                     options={[
                                         { value: 'cash', label: 'Hamısı' },
@@ -530,8 +632,6 @@ export default function WebHomeScreen() {
                                     ]}
                                     value={activeFilterType}
                                     onChange={setActiveFilterType}
-                                    fullWidth={isMobile}
-                                    style={isMobile ? { width: '100%' } : undefined}
                                 />
                             ) : undefined}
                         />
@@ -612,6 +712,22 @@ export default function WebHomeScreen() {
 const styles = StyleSheet.create({
     hero: { borderRadius: 0, borderWidth: 0 },
     heroContent: { padding: 0 },
+    mHeroContent: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 16 },
+    mTitle: { fontFamily: FONT.heavy, letterSpacing: -0.6 },
+    mSub: { fontSize: 15, fontFamily: FONT.medium, color: 'rgba(255,255,255,0.72)', marginTop: 8, marginBottom: 16 },
+    mSearch: { flexDirection: 'row', alignItems: 'center', height: 62, padding: 6, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, boxShadow: '0px 8px 24px rgba(0,0,0,0.25)' } as any,
+    mField: { flex: 1, minWidth: 0, justifyContent: 'center', paddingLeft: 12, cursor: 'pointer' as any },
+    mFieldLabel: { fontSize: 11, fontFamily: FONT.medium, marginBottom: 2 },
+    mFieldValue: { fontSize: 15, fontFamily: FONT.semibold },
+    mDivider: { width: StyleSheet.hairlineWidth, height: '50%', marginHorizontal: 8 },
+    mReset: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center', cursor: 'pointer' as any },
+    mAction: { width: 50, height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center', cursor: 'pointer' as any },
+    mBadge: { position: 'absolute', top: 6, right: 6, minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, justifyContent: 'center', alignItems: 'center' },
+    mBadgeText: { color: '#FFF', fontSize: 10, fontFamily: FONT.bold },
+    catStrip: { flexDirection: 'row', marginHorizontal: 16, marginTop: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+    catTab: { flex: 1, alignItems: 'center', paddingTop: 6, gap: 6, cursor: 'pointer' as any },
+    catLabel: { fontSize: 12 },
+    catUnderline: { height: 2, width: 32, borderRadius: 1, marginTop: 4 },
     heroInner: { alignItems: 'center', paddingTop: 72, paddingBottom: 56 },
     eyebrow: { fontSize: 15, fontFamily: FONT.semibold, marginBottom: 12 },
     heroTitle: { fontSize: 72, lineHeight: 78, fontFamily: FONT.heavy, letterSpacing: -2.4, textAlign: 'center' },

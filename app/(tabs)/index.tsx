@@ -36,7 +36,6 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { Listing, Plate, Brand, Model, AdvancedFilters } from '../../types';
 import { HapticRefreshControl } from '../../components/ui/HapticRefreshControl';
-import { LavaHero } from '../../components/LavaHero';
 
 const { width } = Dimensions.get('window');
 
@@ -113,7 +112,7 @@ export default function HomeScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const bottomPad = useTabBarPadding();
   // ~13 em is the width of the longest hero line, "Xəyalındakı avtomobili|"
-  const heroFont = Math.max(20, Math.min(30, (screenWidth - 72) / 13.2));
+  const heroFont = Math.max(22, Math.min(30, (screenWidth - 40) / 13.2));
   const heroTextSize = { fontSize: heroFont, lineHeight: Math.round(heroFont * 1.2) };
   const { showToast } = useToast();
   const { colors, toggleTheme, isDark } = useTheme();
@@ -542,21 +541,21 @@ export default function HomeScreen() {
   const renderHeader = () => (
     <>
       {/* Large animated title */}
-      <LavaHero style={styles.titleSection}>
+      <View style={styles.titleSection}>
         {/* Font size comes from the screen width so "Xəyalındakı avtomobili" always fits on one line (no re-wrap while typing) */}
-        <Text style={[styles.largeTitle, heroTextSize, { color: '#FFFFFF' }]} numberOfLines={1}>
+        <Text style={[styles.largeTitle, heroTextSize, { color: colors.text }]} numberOfLines={1}>
           Xəyalındakı{' '}
-          <Typewriter words={['avtomobili', 'nömrəni']} color="#FFB3A6" style={[styles.largeTitle, heroTextSize]} />
+          <Typewriter words={['avtomobili', 'nömrəni']} color={colors.primary} style={[styles.largeTitle, heroTextSize]} />
         </Text>
-        <Text style={[styles.largeTitle, heroTextSize, { color: '#FFFFFF' }]} numberOfLines={1}>tapmaq daha asan!</Text>
-        <Text style={[styles.largeSubtitle, { color: 'rgba(255,255,255,0.72)' }]}>
+        <Text style={[styles.largeTitle, heroTextSize, { color: colors.text }]} numberOfLines={1}>tapmaq daha asan!</Text>
+        <Text style={[styles.largeSubtitle, { color: colors.textSecondary }]}>
           {activeTopTab === 'transport'
             ? totalListings !== null
               ? `${totalListings} aktiv elan · Naxçıvan`
               : 'Naxçıvanda alqı-satqı elanları'
             : 'Qeydiyyat nişanı elanları'}
         </Text>
-      </LavaHero>
+      </View>
 
       {activeTopTab === 'transport' ? (
         <View style={[cardSurface, styles.unifiedSearchContainer]}>
@@ -1018,7 +1017,7 @@ const styles = StyleSheet.create({
 
   // Large title (iOS-style)
   titleSection: {
-    marginHorizontal: 16,
+    paddingHorizontal: 20,
     marginTop: 4,
     marginBottom: 16,
   },
