@@ -497,9 +497,14 @@ export default function HomeScreen() {
     router.push({ pathname: '/filter', params: { eventName, initialFilters: JSON.stringify(advancedFilters) } });
   };
 
+  const activeAdvancedCount = Object.values(advancedFilters).filter(Boolean).length;
+
+  // Clears brand/model and the advanced filters in one tap
   const handleResetSearch = () => {
+    haptics.tap();
     setSelectedBrand(null);
     setSelectedModel(null);
+    if (activeAdvancedCount > 0) setAdvancedFilters({});
   };
 
   const handleResetPlateSearch = () => {
@@ -580,9 +585,14 @@ export default function HomeScreen() {
             </View>
           </TouchableOpacity>
 
-          {(selectedBrand || selectedModel) && (
-            <TouchableOpacity onPress={handleResetSearch} style={styles.resetButton}>
-              <X size={16} color={colors.textSecondary} />
+          {(selectedBrand || selectedModel || activeAdvancedCount > 0) && (
+            <TouchableOpacity
+              onPress={handleResetSearch}
+              style={[styles.clearFiltersBtn, { backgroundColor: isDark ? '#2C2C2E' : '#F2F2F7' }]}
+              accessibilityLabel="Filtrləri sıfırla"
+              hitSlop={6}
+            >
+              <X size={16} color={colors.text} />
             </TouchableOpacity>
           )}
 
@@ -600,6 +610,11 @@ export default function HomeScreen() {
             accessibilityLabel="Ətraflı filtr"
           >
             <SlidersHorizontal size={18} color={colors.background} />
+            {activeAdvancedCount > 0 && (
+              <View style={[styles.filterBadge, { borderColor: colors.card }]}>
+                <Text style={styles.filterBadgeText}>{activeAdvancedCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
       ) : (
@@ -1102,6 +1117,28 @@ const styles = StyleSheet.create({
     padding: 8,
     marginRight: 4,
   },
+  clearFiltersBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 2,
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    borderWidth: 2,
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  filterBadgeText: { color: '#FFFFFF', fontSize: 10, fontFamily: 'RethinkSans_700Bold' },
   smallActionBtn: {
     width: 44,
     height: 44,
