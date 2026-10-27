@@ -31,6 +31,8 @@ export default function WebListingDetail() {
 
     const [listing, setListing] = useState<Listing | null>(null);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(false);
+    const [reloadKey, setReloadKey] = useState(0);
     const [isFavorite, setIsFavorite] = useState(false);
     const [activeImg, setActiveImg] = useState(0);
     const [featureCategories, setFeatureCategories] = useState<any[]>([]);
@@ -53,20 +55,29 @@ export default function WebListingDetail() {
 
     useEffect(() => {
         let cancelled = false;
+        setLoading(true);
+        setLoadError(false);
         (async () => {
             try {
                 const cleanId = String(listingId || '').trim();
                 const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
 
-                const timeout = new Promise<{ data: null; error: Error }>((resolve) => setTimeout(() => resolve({ data: null, error: new Error('Request timeout') }), 10000));
-                const { data } = (await Promise.race([
+                // 10 s per attempt, one retry: the first request after a cold start can stall
+                const loadOnce = () => Promise.race([
                     supabase
                         .from('listings')
                         .select('*')
                         .eq(isUuid ? 'id' : 'short_id', cleanId)
                         .maybeSingle(),
-                    timeout,
-                ])) as any;
+                    new Promise<{ data: null; error: Error }>((resolve) => setTimeout(() => resolve({ data: null, error: new Error('Request timeout') }), 10000)),
+                ]) as Promise<any>;
+                let { data, error } = await loadOnce();
+                if (error) {
+                    await new Promise((resolve) => setTimeout(resolve, 800));
+                    ({ data, error } = await loadOnce());
+                }
+                if (cancelled) return;
+                if (error && !data) throw error;
 
                 let result = data;
                 if (!result && !isUuid) {
@@ -97,6 +108,7 @@ export default function WebListingDetail() {
                 }
             } catch (e) {
                 console.error('Web listing fetch error:', e);
+                if (!cancelled) setLoadError(true);
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -104,7 +116,7 @@ export default function WebListingDetail() {
         return () => {
             cancelled = true;
         };
-    }, [listingId]);
+    }, [listingId, reloadKey]);
 
     const galleryImages = useMemo(() => {
         if (!listing) return [];
@@ -153,6 +165,8 @@ export default function WebListingDetail() {
                 <WebScreen footer={<WebFooter />}>
                     {loading ? (
                         <Loading />
+                    ) : loadError ? (
+                        <EmptyState title="Bağlantı alınmadı" subtitle="İnternet bağlantınızı yoxlayıb yenidən cəhd edin." action={<Button title="Yenidən cəhd et" onPress={() => setReloadKey((k) => k + 1)} />} />
                     ) : (
                         <>
                             <SeoHead title="Elan tapılmadı" />

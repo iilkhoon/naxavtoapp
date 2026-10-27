@@ -151,17 +151,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     initializeAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event: any, newSession: Session | null) => {
+    // The callback runs while supabase-js holds its auth lock. Awaiting a query in
+    // here deadlocks every request on a cold start with a stored session (the app
+    // only worked after a restart), so the profile load is deferred out of it.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, newSession: Session | null) => {
       if (!active) return;
       setSession(newSession);
       if (newSession?.user) {
-        await fetchProfile(newSession.user.id, newSession.user);
+        const user = newSession.user;
+        setTimeout(() => {
+          if (!active) return;
+          fetchProfile(user.id, user).finally(() => active && setLoading(false));
+        }, 0);
       } else {
         setProfile(null);
         setIsAdmin(false);
         setIsSuperAdmin(false);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => {

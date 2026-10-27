@@ -119,18 +119,19 @@ export default function ListingDetailScreen() {
             const cleanId = String(listingId).trim();
             const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
 
-            // Timeout promise (10s)
-            const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
-                setTimeout(() => resolve({ data: null, error: new Error('Request timeout') }), 10000)
-            );
+            // 10 s per attempt, one retry: the first request after a cold start can stall
+            const loadOnce = () => Promise.race([
+                supabase.from('listings').select('*').eq(isUuid ? 'id' : 'short_id', cleanId).maybeSingle(),
+                new Promise<{ data: null; error: Error }>((resolve) =>
+                    setTimeout(() => resolve({ data: null, error: new Error('Request timeout') }), 10000)
+                ),
+            ]) as Promise<any>;
 
-            const mainQuery = supabase
-                .from('listings')
-                .select('*')
-                .eq(isUuid ? 'id' : 'short_id', cleanId)
-                .maybeSingle();
-
-            const { data, error } = (await Promise.race([mainQuery, timeoutPromise])) as any;
+            let { data, error } = await loadOnce();
+            if (error) {
+                await new Promise((resolve) => setTimeout(resolve, 800));
+                ({ data, error } = await loadOnce());
+            }
 
             let resultData = data;
             // Fallback: If not found by short_id, try by id (or vice versa)
