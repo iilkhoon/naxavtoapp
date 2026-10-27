@@ -67,8 +67,8 @@ export default function ContactScreen() {
   const { colors, isDark } = useTheme();
   const { isAdmin, isSuperAdmin } = useAuth();
   const { settings, refreshSettings } = useSettings();
-  // Root ScrollView: iOS insets it for the tab bar already
-  const bottomPad = useTabBarPadding({ autoInset: true });
+  // iOS doesn't auto-inset this ScrollView for the native tab bar, so pad manually
+  const bottomPad = useTabBarPadding();
 
   // Settings are already loaded app-wide; refresh quietly when the tab gains focus
   useFocusEffect(
