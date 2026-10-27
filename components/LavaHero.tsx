@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Image, StyleProp, ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, RadialGradient, Stop, Circle } from 'react-native-svg';
@@ -34,7 +34,7 @@ const BLOBS: Blob[] = [
 ];
 
 // One soft radial "lava" blob drifting back and forth
-function LavaBlob({ blob, reduceMotion }: { blob: Blob; reduceMotion: boolean }) {
+function LavaBlob({ blob, reduceMotion, k }: { blob: Blob; reduceMotion: boolean; k: number }) {
   const t = useSharedValue(0);
 
   useEffect(() => {
@@ -44,8 +44,8 @@ function LavaBlob({ blob, reduceMotion }: { blob: Blob; reduceMotion: boolean })
 
   const animated = useAnimatedStyle(() => ({
     transform: [
-      { translateX: blob.dx * t.value },
-      { translateY: blob.dy * t.value },
+      { translateX: blob.dx * k * t.value },
+      { translateY: blob.dy * k * t.value },
       { scale: 1 + (blob.scale - 1) * t.value },
     ],
   }));
@@ -55,7 +55,7 @@ function LavaBlob({ blob, reduceMotion }: { blob: Blob; reduceMotion: boolean })
       pointerEvents="none"
       style={[
         styles.blob,
-        { width: blob.size, height: blob.size, left: `${blob.x * 100}%`, top: `${blob.y * 100}%` },
+        { width: blob.size * k, height: blob.size * k, left: `${blob.x * 100}%`, top: `${blob.y * 100}%` },
         animated,
       ]}
     >
@@ -74,14 +74,16 @@ function LavaBlob({ blob, reduceMotion }: { blob: Blob; reduceMotion: boolean })
 }
 
 // Dark card with slowly moving red/black lava blobs and a film-grain overlay
-export function LavaHero({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+// Blob sizes are tuned for a ~360px phone card and grow (sub-linearly, so dark gaps remain) on wider containers
+export function LavaHero({ children, style, contentStyle }: { children: React.ReactNode; style?: StyleProp<ViewStyle>; contentStyle?: StyleProp<ViewStyle> }) {
   const reduceMotion = useReducedMotion();
+  const [k, setK] = useState(1);
 
   return (
-    <View style={[styles.card, style]}>
+    <View style={[styles.card, style]} onLayout={(e) => setK(Math.max(1, Math.sqrt(e.nativeEvent.layout.width / 360)))}>
       <LinearGradient colors={['#0A0A0A', '#1A0202', '#050505']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
       {BLOBS.map((b) => (
-        <LavaBlob key={b.id} blob={b} reduceMotion={reduceMotion} />
+        <LavaBlob key={b.id} blob={b} reduceMotion={reduceMotion} k={k} />
       ))}
       {/* Darkens the bottom so the subtitle stays readable */}
       <LinearGradient
@@ -92,7 +94,7 @@ export function LavaHero({ children, style }: { children: React.ReactNode; style
         pointerEvents="none"
       />
       <Image source={GRAIN} resizeMode="repeat" style={[StyleSheet.absoluteFill, styles.grain]} pointerEvents="none" />
-      <View style={styles.content}>{children}</View>
+      <View style={[styles.content, contentStyle]}>{children}</View>
     </View>
   );
 }

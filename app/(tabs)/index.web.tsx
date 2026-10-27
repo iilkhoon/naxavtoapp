@@ -22,6 +22,7 @@ import {
     useWebTokens, useBreakpoints, Container, SectionHeader, Segmented, Card, Button, WebGrid,
     HoverLift, EmptyState, Loading, FONT, HEADER_HEIGHT, carCardProps, WebTokens,
 } from '../../components/web/WebKit';
+import { LavaHero } from '../../components/LavaHero';
 
 type FilterType = 'cash' | 'credit' | 'barter' | 'urgent';
 type TopTab = 'transport' | 'plates';
@@ -410,14 +411,14 @@ export default function WebHomeScreen() {
                 path="/"
             />
             {/* ═══ HERO ═══ */}
-            <View style={[styles.hero, { backgroundColor: t.surface, borderBottomColor: t.hairline }]}>
+            <LavaHero style={styles.hero} contentStyle={styles.heroContent}>
                 <Container style={[styles.heroInner, isMobile && { paddingTop: 36, paddingBottom: 32 }]}>
-                    <Text style={[styles.eyebrow, { color: t.textSecondary }]}>Naxçıvan Avto</Text>
-                    <Text role="heading" aria-level={1} style={[styles.heroTitle, { color: t.text }, heroSize]}>
+                    <Text style={[styles.eyebrow, { color: 'rgba(255,255,255,0.6)' }]}>Naxçıvan Avto</Text>
+                    <Text role="heading" aria-level={1} style={[styles.heroTitle, { color: '#FFFFFF' }, heroSize]}>
                         Xəyalındakı{'\n'}
-                        <Typewriter words={TYPEWRITER_WORDS} color={t.accent} style={[styles.heroTitle, heroSize]} />
+                        <Typewriter words={TYPEWRITER_WORDS} color="#FFB3A6" style={[styles.heroTitle, heroSize]} />
                     </Text>
-                    <Text style={[styles.heroSub, { color: t.textSecondary }, isMobile && { fontSize: 16, lineHeight: 24 }]}>
+                    <Text style={[styles.heroSub, { color: 'rgba(255,255,255,0.72)' }, isMobile && { fontSize: 16, lineHeight: 24 }]}>
                         Avtomobil və qeydiyyat nişanı elanları — şəffaf qiymət, kredit və barter imkanı ilə.
                     </Text>
 
@@ -426,6 +427,7 @@ export default function WebHomeScreen() {
                         value={activeTopTab}
                         onChange={setActiveTopTab}
                         style={{ alignSelf: 'center', marginBottom: 20 }}
+                        onDark
                     />
 
                     <View style={[styles.searchBar, { backgroundColor: t.surface, borderColor: t.hairlineStrong, boxShadow: t.shadow } as any, isMobile && styles.searchBarMobile]}>
@@ -473,12 +475,12 @@ export default function WebHomeScreen() {
                         </View>
                     </View>
 
-                    <Text style={[styles.heroMeta, { color: t.textSecondary }]}>
-                        {totalCount != null && <><Text style={{ color: t.text, fontFamily: FONT.semibold }}>{totalCount.toLocaleString('az')}</Text> aktiv elan · </>}
-                        bu gün <Text style={{ color: t.text, fontFamily: FONT.semibold }}>+{todayCount}</Text> yeni
+                    <Text style={[styles.heroMeta, { color: 'rgba(255,255,255,0.65)' }]}>
+                        {totalCount != null && <><Text style={{ color: '#FFFFFF', fontFamily: FONT.semibold }}>{totalCount.toLocaleString('az')}</Text> aktiv elan · </>}
+                        bu gün <Text style={{ color: '#FFFFFF', fontFamily: FONT.semibold }}>+{todayCount}</Text> yeni
                     </Text>
                 </Container>
-            </View>
+            </LavaHero>
 
             {width < 1024 && !!(settings.home_banner_url || settings.home_banner_url_2) && (
                 <Container style={{ marginTop: 24 }}>
@@ -608,7 +610,8 @@ export default function WebHomeScreen() {
 }
 
 const styles = StyleSheet.create({
-    hero: { borderBottomWidth: StyleSheet.hairlineWidth },
+    hero: { borderRadius: 0, borderWidth: 0 },
+    heroContent: { padding: 0 },
     heroInner: { alignItems: 'center', paddingTop: 72, paddingBottom: 56 },
     eyebrow: { fontSize: 15, fontFamily: FONT.semibold, marginBottom: 12 },
     heroTitle: { fontSize: 72, lineHeight: 78, fontFamily: FONT.heavy, letterSpacing: -2.4, textAlign: 'center' },

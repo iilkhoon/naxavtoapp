@@ -190,18 +190,22 @@ export function HoverLift({ children, style }: { children: React.ReactNode; styl
 
 /* ─── Controls ────────────────────────────────────────────── */
 
-export function Segmented<T extends string>({ options, value, onChange, style, fullWidth }: {
+// onDark keeps the control legible on an always-dark surface (the lava hero) in light mode too
+export function Segmented<T extends string>({ options, value, onChange, style, fullWidth, onDark }: {
   options: { value: T; label: string; count?: number }[];
   value: T;
   onChange: (value: T) => void;
   style?: StyleProp<ViewStyle>;
   fullWidth?: boolean;
+  onDark?: boolean;
 }) {
   const t = useWebTokens();
+  const dark = onDark || t.isDark;
+  const textColor = onDark ? '#F5F5F7' : t.text;
   return (
     <View
       role="tablist"
-      style={[styles.segTrack, { backgroundColor: t.fill }, fullWidth ? { alignSelf: 'stretch' } : { alignSelf: 'flex-start' }, style]}
+      style={[styles.segTrack, { backgroundColor: onDark ? 'rgba(255,255,255,0.14)' : t.fill }, fullWidth ? { alignSelf: 'stretch' } : { alignSelf: 'flex-start' }, style]}
     >
       {options.map((opt) => {
         const active = opt.value === value;
@@ -215,11 +219,11 @@ export function Segmented<T extends string>({ options, value, onChange, style, f
             style={[
               styles.segItem,
               fullWidth && { flex: 1 },
-              active && { backgroundColor: t.isDark ? '#636366' : '#FFFFFF', boxShadow: '0px 3px 8px rgba(0,0,0,0.12), 0px 3px 1px rgba(0,0,0,0.04)' },
+              active && { backgroundColor: dark ? '#636366' : '#FFFFFF', boxShadow: '0px 3px 8px rgba(0,0,0,0.12), 0px 3px 1px rgba(0,0,0,0.04)' },
               web({ cursor: 'pointer', transition: 'background-color 150ms ease' }),
             ]}
           >
-            <Text style={[styles.segText, { color: t.text, fontFamily: active ? FONT.semibold : FONT.medium }]} numberOfLines={1}>
+            <Text style={[styles.segText, { color: textColor, fontFamily: active ? FONT.semibold : FONT.medium }]} numberOfLines={1}>
               {opt.label}
               {opt.count != null && <Text style={{ color: t.textSecondary }}> {opt.count}</Text>}
             </Text>
