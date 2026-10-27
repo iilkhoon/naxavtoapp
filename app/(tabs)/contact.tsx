@@ -5,14 +5,13 @@ import {
 } from 'react-native';
 import {
   Phone, Mail, MapPin, MessageCircle, Instagram, Video,
-  Globe, ChevronRight, Shield, MessagesSquare,
+  Globe, ChevronRight, Shield, MessagesSquare, Wallet, CreditCard,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../contexts/SettingsContext';
-import { AdminExpensesSection } from '../../components/AdminExpensesSection';
 import { useTabBarPadding } from '../../hooks/useTabBarPadding';
 import { haptics } from '../../utils/haptics';
 import * as Updates from 'expo-updates';
@@ -65,7 +64,7 @@ export default function ContactScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
-  const { isAdmin, isSuperAdmin } = useAuth();
+  const { isSuperAdmin } = useAuth();
   const { settings, refreshSettings } = useSettings();
   // iOS doesn't auto-inset this ScrollView for the native tab bar, so pad manually
   const bottomPad = useTabBarPadding();
@@ -98,7 +97,16 @@ export default function ContactScreen() {
       contentContainerStyle={[styles.content, { paddingTop: insets.top + 24, paddingBottom: bottomPad }]}
       showsVerticalScrollIndicator={false}
     >
-      {isAdmin && isSuperAdmin && <AdminExpensesSection />}
+      {/* Superadmin shortcuts to the finance and loan screens (the web panel has the same) */}
+      {isSuperAdmin && (
+        <>
+          <Text style={[styles.groupTitle, { color: colors.textSecondary }]}>Finans</Text>
+          <View style={[group, { marginBottom: 24 }]}>
+            <ListRow icon={Wallet} tint="#34C759" title="Finans" value="Kassa, xərclər, alış-satış, borclar, maaşlar" onPress={() => router.push('/admin/finance' as any)} colors={colors} />
+            <ListRow icon={CreditCard} tint="#00C7BE" title="Kredit paneli" value="Müştəri kreditləri və ödənişlər" onPress={() => router.push('/admin/loans' as any)} colors={colors} last />
+          </View>
+        </>
+      )}
 
       {/* Identity */}
       <View style={styles.identity}>

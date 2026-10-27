@@ -1,6 +1,6 @@
 import {
   PieChart, CreditCard, FileText, MessageSquare, LayoutList, Crown, Zap, Bell, Image as ImageIcon,
-  Gift, Settings, Users, CarFront, Layers, Palette,
+  Gift, Settings, Users, CarFront, Layers, Palette, Wallet,
 } from 'lucide-react-native';
 
 export type AdminMenuItem = {
@@ -34,8 +34,9 @@ export const ADMIN_MENU: { group: string; items: AdminMenuItem[] }[] = [
     ],
   },
   {
-    group: 'Kredit',
+    group: 'Finans',
     items: [
+      { title: 'Finans', desc: 'Kassa, alış-satış, borclar, maaşlar', path: '/admin/finance', icon: Wallet, tint: '#34C759', superAdminOnly: true },
       { title: 'Kredit paneli', desc: 'Kredit və nağd satışlar', path: '/admin/loans', icon: CreditCard, tint: '#00C7BE', superAdminOnly: true },
       { title: 'Kredit müraciətləri', desc: 'Müştəri müraciətləri', path: '/admin/applications', icon: FileText, tint: '#FF9500', badge: 'pendingApplications' },
     ],

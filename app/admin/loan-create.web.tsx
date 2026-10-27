@@ -233,6 +233,12 @@ export default function LoanCreate() {
         }
       }
 
+      // Down payment / cash sale price goes into the cash book (Finans → Kassa)
+      if (saleType === 'cash' || Number(downPayment) > 0) {
+        const { error: cashError } = await supabase.rpc('post_loan_sale_to_cash', { p_loan_id: loan.id });
+        if (cashError) showToast('Kredit yaradıldı, amma kassaya yazılmadı: ' + cashError.message, 'error');
+      }
+
       showToast(`${saleType === 'credit' ? 'Kredit' : 'Nağd satış'} uğurla yaradıldı! ID: ${loan.customer_unique_id}`, 'success');
       router.back();
     } catch (e: any) {

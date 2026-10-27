@@ -33,7 +33,7 @@ export default function LoanDetail() {
     totalPaid, totalRemaining, paidCount, overdueCount, nextPayment,
     showPaymentModal, setShowPaymentModal, selectedInstallment, setSelectedInstallment,
     paymentType, setPaymentType, customInstallment, setCustomInstallment,
-    payAmount, setPayAmount, payMethod, setPayMethod, payNote, setPayNote,
+    payAmount, setPayAmount, payMethod, setPayMethod, payNote, setPayNote, payPenalty, setPayPenalty,
     saving, confirmDelete, setConfirmDelete,
     getOutofSchedulePreview, handlePayment, handleDeleteLoan,
   } = useLoanDetail();
@@ -244,6 +244,13 @@ export default function LoanDetail() {
                 keyboardType="decimal-pad"
                 placeholder="₼"
               />
+              <FieldRow
+                label="Cərimə"
+                value={payPenalty}
+                onChangeText={(v) => setPayPenalty(v.replace(/[^0-9.]/g, ''))}
+                keyboardType="decimal-pad"
+                placeholder="₼ (istəyə bağlı)"
+              />
               <FieldRow label="Qeyd" value={payNote} onChangeText={setPayNote} placeholder="İstəyə bağlı" />
             </Group>
 
@@ -263,7 +270,7 @@ export default function LoanDetail() {
       <ConfirmModal
         visible={confirmDelete}
         title="Krediti silmək?"
-        message="Kredit, ödəniş cədvəli və bütün ödənişlər birdəfəlik silinəcək."
+        message="Kredit, ödəniş cədvəli və ödənişlər silinəcək. Kassadakı ödəniş yazıları qalır; pul geri qaytarılıbsa onları Finans → Kassa-da ləğv edin."
         onConfirm={handleDeleteLoan}
         onCancel={() => setConfirmDelete(false)}
         confirmText="Sil"

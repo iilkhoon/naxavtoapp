@@ -31,6 +31,8 @@ export function useLoanDetail() {
   const [payAmount, setPayAmount] = useState('');
   const [payMethod, setPayMethod] = useState<'cash' | 'card' | 'transfer'>('cash');
   const [payNote, setPayNote] = useState('');
+  // Late fee entered by hand; posted to the cash book as its own row
+  const [payPenalty, setPayPenalty] = useState('');
   const [saving, setSaving] = useState(false);
 
   const fetchData = useCallback(async () => {
@@ -91,148 +93,31 @@ export function useLoanDetail() {
       showToast('Məbləğ daxil edin', 'error');
       return;
     }
+    const target = paymentType === 'schedule'
+      ? schedule.find((s: any) => s.status !== 'paid')
+      : paymentType === 'any_date' ? customInstallment : null;
+    if (paymentType !== 'out_of_schedule' && !target) {
+      showToast('Ödəniş ediləcək ödənilməmiş hissə tapılmadı', 'error');
+      return;
+    }
 
     setSaving(true);
     try {
+      // Payment, instalment(s), loan status and the cash book in one transaction
+      const { error } = await supabase.rpc('record_loan_payment', {
+        p_loan_id: id,
+        p_amount: Number(payAmount),
+        p_mode: paymentType,
+        p_schedule_id: paymentType === 'any_date' ? target.id : null,
+        p_method: payMethod,
+        p_penalty: Number(payPenalty.replace(',', '.')) || 0,
+        p_note: payNote || null,
+      });
+      if (error) throw error;
+
       if (paymentType === 'out_of_schedule') {
-        const unpaid = schedule.filter((s: any) => s.status !== 'paid');
-        const N = unpaid.length;
-        if (N === 0) {
-          showToast('Hesablanacaq ödənilməmiş hissə tapılmadı', 'error');
-          setSaving(false);
-          return;
-        }
-
-        const P_remaining = unpaid.reduce((sum: number, s: any) => sum + Number(s.principal || 0), 0);
-        const O = Number(payAmount);
-
-        if (O > P_remaining) {
-          showToast(`Ödənilən məbləğ qalan əsas borcdan (${P_remaining} ₼) çox ola bilməz.`, 'error');
-          setSaving(false);
-          return;
-        }
-
-        const P_new = Math.max(0, P_remaining - O);
-        const NewInterest = P_new * (Number(loan.interest_rate) / 100) * (N / 12);
-        const NewMonthlyPayment = Math.round(((P_new + NewInterest) / N) * 100) / 100;
-
-        const richNote = `[CƏDVƏLDƏN KƏNAR] Yeni aylıq: ${NewMonthlyPayment} ₼. Qalan əsas borc: ${P_new.toFixed(2)} ₼. Yeni faiz: ${NewInterest.toFixed(2)} ₼.${payNote ? ' Qeyd: ' + payNote : ''}`;
-
-        // 1. Create payment record
-        const { data: payment, error: payError } = await supabase
-          .from('loan_payments')
-          .insert({
-            loan_id: id,
-            amount: O,
-            payment_date: new Date().toISOString().split('T')[0],
-            status: 'paid',
-            payment_method: payMethod,
-            note: richNote,
-            paid_at: new Date().toISOString(),
-          })
-          .select()
-          .single();
-
-        if (payError) throw payError;
-
-        // 2. Update loan account's monthly payment
-        const { error: loanUpdateError } = await supabase
-          .from('loan_accounts')
-          .update({
-            monthly_payment: NewMonthlyPayment,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', id);
-
-        if (loanUpdateError) throw loanUpdateError;
-
-        // 3. Update future installments in loan_schedule
-        const newPrincipalPerMonth = Math.round((P_new / N) * 100) / 100;
-        const newInterestPerMonth = Math.round((NewInterest / N) * 100) / 100;
-
-        for (let s of unpaid) {
-          const { error: sError } = await supabase
-            .from('loan_schedule')
-            .update({
-              amount: NewMonthlyPayment,
-              principal: newPrincipalPerMonth,
-              interest: newInterestPerMonth,
-              paid_amount: 0,
-              status: 'pending',
-              paid_at: null,
-            })
-            .eq('id', s.id);
-          
-          if (sError) throw sError;
-        }
-
-        if (P_new <= 0) {
-          await supabase
-            .from('loan_accounts')
-            .update({ status: 'completed', updated_at: new Date().toISOString() })
-            .eq('id', id);
-        }
-
         showToast('Cədvəldən kənar ödəniş uğurla tamamlandı və gələcək faizlər yenidən hesablandı!', 'success');
       } else {
-        let targetInstallment = null;
-        if (paymentType === 'schedule') {
-          targetInstallment = schedule.find((s: any) => s.status !== 'paid');
-        } else {
-          targetInstallment = customInstallment;
-        }
-
-        if (!targetInstallment) {
-          showToast('Ödəniş ediləcək ödənilməmiş hissə tapılmadı', 'error');
-          setSaving(false);
-          return;
-        }
-
-        // Create payment record
-        const { data: payment, error: payError } = await supabase
-          .from('loan_payments')
-          .insert({
-            loan_id: id,
-            amount: Number(payAmount),
-            payment_date: new Date().toISOString().split('T')[0],
-            due_date: targetInstallment.due_date,
-            status: 'paid',
-            payment_method: payMethod,
-            note: payNote || null,
-            paid_at: new Date().toISOString(),
-          })
-          .select()
-          .single();
-
-        if (payError) throw payError;
-
-        const newPaidAmount = Number(targetInstallment.paid_amount || 0) + Number(payAmount);
-        const isFullyPaid = newPaidAmount >= Number(targetInstallment.amount);
-
-        const { error: scheduleError } = await supabase
-          .from('loan_schedule')
-          .update({
-            status: isFullyPaid ? 'paid' : 'partial',
-            paid_amount: newPaidAmount,
-            paid_at: isFullyPaid ? new Date().toISOString() : null,
-            payment_id: payment.id,
-          })
-          .eq('id', targetInstallment.id);
-        if (scheduleError) throw scheduleError;
-
-        const { data: remaining } = await supabase
-          .from('loan_schedule')
-          .select('id')
-          .eq('loan_id', id)
-          .in('status', ['pending', 'overdue', 'partial']);
-
-        if (!remaining || remaining.length === 0) {
-          await supabase
-            .from('loan_accounts')
-            .update({ status: 'completed', updated_at: new Date().toISOString() })
-            .eq('id', id);
-        }
-
         const pushTokenMatch = loan.notes?.match(/\[PUSH_TOKEN:(ExponentPushToken\[.*?\])\]/);
         if (pushTokenMatch && pushTokenMatch[1]) {
           try {
@@ -254,13 +139,13 @@ export function useLoanDetail() {
             console.error("Failed to send push:", pushErr);
           }
         }
-
-        showToast(`Ödəniş Hissə #${targetInstallment.installment_number} üçün uğurla qeydə alındı!`, 'success');
+        showToast(`Ödəniş Hissə #${target.installment_number} üçün uğurla qeydə alındı!`, 'success');
       }
 
       haptics.success();
       setShowPaymentModal(false);
       setPayAmount('');
+      setPayPenalty('');
       setPayNote('');
       setSelectedInstallment(null);
       setCustomInstallment(null);
@@ -277,8 +162,14 @@ export function useLoanDetail() {
     setConfirmDelete(false);
     setSaving(true);
     try {
-      await supabase.from('loan_payments').delete().eq('loan_id', id);
-      await supabase.from('loan_schedule').delete().eq('loan_id', id);
+      // Instalments point at payments, so unlink before deleting; cash book rows stay
+      const steps = [
+        await supabase.from('loan_schedule').update({ payment_id: null }).eq('loan_id', id),
+        await supabase.from('loan_payments').delete().eq('loan_id', id),
+        await supabase.from('loan_schedule').delete().eq('loan_id', id),
+      ];
+      const failed = steps.find((r) => r.error);
+      if (failed?.error) throw failed.error;
       const { error } = await supabase.from('loan_accounts').delete().eq('id', id);
       
       if (error) throw error;
@@ -299,7 +190,7 @@ export function useLoanDetail() {
     totalPaid, totalRemaining, paidCount, overdueCount, nextPayment,
     showPaymentModal, setShowPaymentModal, selectedInstallment, setSelectedInstallment,
     paymentType, setPaymentType, customInstallment, setCustomInstallment,
-    payAmount, setPayAmount, payMethod, setPayMethod, payNote, setPayNote,
+    payAmount, setPayAmount, payMethod, setPayMethod, payNote, setPayNote, payPenalty, setPayPenalty,
     saving, confirmDelete, setConfirmDelete,
     getOutofSchedulePreview, handlePayment, handleDeleteLoan,
   };
