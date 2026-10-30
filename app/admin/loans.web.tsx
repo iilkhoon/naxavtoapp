@@ -56,7 +56,8 @@ export default function AdminLoansWeb() {
   const t = useWebTokens();
   const { isTablet } = useBreakpoints();
   const { showToast } = useToast();
-  const { isSuperAdmin, loading: authLoading } = useAuth();
+  const { hasModule, loading: authLoading } = useAuth();
+  const isSuperAdmin = hasModule('finance');
 
   const [loading, setLoading] = useState(true);
   const [loans, setLoans] = useState<LoanAccount[]>([]);
@@ -109,7 +110,7 @@ export default function AdminLoansWeb() {
   if (!authLoading && !isSuperAdmin) {
     return (
       <AdminPage title="Kredit paneli">
-        <Card><EmptyState icon={<Shield size={28} color={t.textSecondary} />} title="Giriş yoxdur" subtitle="Kredit panelinə yalnız superadminlər daxil ola bilər." /></Card>
+        <Card><EmptyState icon={<Shield size={28} color={t.textSecondary} />} title="Giriş yoxdur" subtitle="Kredit panelinə icazəniz yoxdur." /></Card>
       </AdminPage>
     );
   }

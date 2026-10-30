@@ -1,0 +1,3 @@
+__d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{value:!0}),Object.defineProperty(e,"default",{enumerable:!0,get:function(){return u}});var t=r(d[0]),n=r(d[1]);function u(){const{id:u}=(0,t.useLocalSearchParams)();return(0,n.jsx)(t.Redirect,{href:`/listing/${u}`})}},4308,[983,227]);
+//# sourceMappingURL=/_expo/static/js/web/[id]-e8130378acb708bf7dac6695a52e4261.js.map
+//# debugId=30bb9750-478a-4342-8d5e-2446f2773352

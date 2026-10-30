@@ -1,0 +1,3 @@
+__d(function(g,r,i,a,m,_e,d){"use strict";function e(e){return e&&e.__esModule?e:{default:e}}Object.defineProperty(_e,'__esModule',{value:!0}),Object.defineProperty(_e,"default",{enumerable:!0,get:function(){return l}});var t=r(d[0]),n=r(d[1]),u=e(r(d[2])),c=e(r(d[3])),f=r(d[4]);function l(){const e=(0,t.useRouter)();return(0,n.useEffect)(()=>{const t=setTimeout(()=>{e.replace('/')},0);return()=>clearTimeout(t)},[]),(0,f.jsx)(u.default,{style:{flex:1,justifyContent:'center',alignItems:'center'},children:(0,f.jsx)(c.default,{})})}},3608,[983,50,4548,4657,227]);
+//# sourceMappingURL=/_expo/static/js/web/add-b6ce59b0eef0263bcd468cd28c0e1640.js.map
+//# debugId=510d8b49-2249-4648-91ec-8bd402a5b95f

@@ -9,6 +9,8 @@ type AuthContextType = {
   isAdmin: boolean;
   isSuperAdmin: boolean;
   profile: any;
+  /** Superadmins and admins without a module list have every module */
+  hasModule: (module: string) => boolean;
   signIn: (email: string, password: string) => Promise<{
     success: boolean;
     error?: string;
@@ -27,6 +29,7 @@ const AuthContext = createContext<AuthContextType>({
   isAdmin: false,
   isSuperAdmin: false,
   profile: null,
+  hasModule: () => false,
   signIn: async () => ({ success: false, error: 'Auth not initialized' }),
   signOut: async () => {},
   refreshProfile: async () => null,
@@ -240,6 +243,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return null;
   };
 
+  const hasModule = (module: string) => {
+    if (isSuperAdmin) return true;
+    if (!isAdmin) return false;
+    const modules = profile?.modules;
+    return !Array.isArray(modules) || modules.includes(module);
+  };
+
   const value = {
     session,
     user: session?.user ?? null,
@@ -247,6 +257,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     isAdmin,
     isSuperAdmin,
     profile,
+    hasModule,
     signIn,
     signOut,
     refreshProfile,

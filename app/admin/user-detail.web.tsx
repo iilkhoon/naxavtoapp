@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
-import { Car, Hash, CreditCard, Shield, ChevronLeft } from 'lucide-react-native';
+import { Car, Hash, CreditCard, ChevronLeft } from 'lucide-react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
@@ -8,8 +8,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { formatDate } from '../../lib/utils';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import {
-    Segmented, Button, Badge, Card, EmptyState, Loading, GroupCaption, useWebTokens, useBreakpoints, FONT, formatMoney,
+    Segmented, Button, Badge, Card, EmptyState, Loading, GroupCaption, Checkbox, useWebTokens, useBreakpoints, FONT, formatMoney,
 } from '../../components/web/WebKit';
+import { ADMIN_MODULES, AdminModule } from '../../constants/adminMenu';
+import { accessLabel } from '../../components/admin/ModulePicker';
 import { AdminPage, DataTable, CellText } from '../../components/web/AdminKit';
 
 type TabType = 'listings' | 'plates' | 'loans';
@@ -38,6 +40,7 @@ export default function UserDetailWeb() {
     const [activeTab, setActiveTab] = useState<TabType>('listings');
     const [actionLoading, setActionLoading] = useState(false);
     const [confirmRevoke, setConfirmRevoke] = useState(false);
+    const [modules, setModules] = useState<AdminModule[]>([]);
 
     useEffect(() => {
         if (!userId) return;
@@ -56,6 +59,7 @@ export default function UserDetailWeb() {
                 ]);
                 if (cancelled) return;
                 setProfile(p);
+                setModules(Array.isArray(p.modules) ? p.modules : ADMIN_MODULES.map((m) => m.key));
                 setListings(l.data || []);
                 setPlates(pl.data || []);
                 setLoans(lo.data || []);
@@ -68,29 +72,34 @@ export default function UserDetailWeb() {
         return () => { cancelled = true; };
     }, [userId, showToast]);
 
-    const toggleSuperAdmin = async () => {
+    const saveModules = async () => {
+        if (modules.length === 0) {
+            showToast('Ən azı bir bölmə seçin', 'error');
+            return;
+        }
         setActionLoading(true);
-        const next = !profile.is_superadmin;
-        const { error } = await supabase.from('profiles').update({ is_superadmin: next }).eq('id', userId);
+        const { error } = await supabase.rpc('admin_save_user', {
+            p_user_id: userId, p_email: profile.email, p_full_name: profile.full_name || '', p_modules: modules,
+        });
         setActionLoading(false);
         if (error) {
             showToast('Xəta: ' + error.message, 'error');
             return;
         }
-        setProfile((prev: any) => ({ ...prev, is_superadmin: next }));
-        showToast(next ? 'Superadmin statusu verildi' : 'Superadmin statusu götürüldü', 'success');
+        setProfile((prev: any) => ({ ...prev, modules }));
+        showToast('İcazələr yadda saxlanıldı', 'success');
     };
 
     const revokeAdmin = async () => {
         setConfirmRevoke(false);
         setActionLoading(true);
-        const { error } = await supabase.from('profiles').update({ role: 'user', is_superadmin: false }).eq('id', userId);
+        const { error } = await supabase.from('profiles').update({ role: 'user', is_superadmin: false, modules: null }).eq('id', userId);
         setActionLoading(false);
         if (error) {
             showToast('Xəta: ' + error.message, 'error');
             return;
         }
-        showToast('Admin icazəsi ləğv edildi', 'success');
+        showToast('Giriş bağlandı', 'success');
         router.back();
     };
 
@@ -125,7 +134,7 @@ export default function UserDetailWeb() {
                             <View style={[styles.avatar, { backgroundColor: t.fill }]}>
                                 <Text style={[styles.avatarText, { color: t.text }]}>{(profile.full_name?.charAt(0) || profile.email?.charAt(0) || 'U').toUpperCase()}</Text>
                             </View>
-                            {profile.is_superadmin ? <Badge label="Superadmin" tone="blue" /> : isAdminProfile ? <Badge label="Admin" tone="accent" /> : <Badge label="İstifadəçi" />}
+                            {profile.is_superadmin || isAdminProfile ? <Badge label={accessLabel(profile)} tone={profile.is_superadmin ? 'blue' : 'accent'} /> : <Badge label="İstifadəçi" />}
                         </View>
                         {[
                             { l: 'Email', v: profile.email || '—' },
@@ -140,19 +149,23 @@ export default function UserDetailWeb() {
                         ))}
                     </Card>
 
-                    {isSuperAdmin && isAdminProfile && !isSelf && (
+                    {isSuperAdmin && isAdminProfile && !profile.is_superadmin && !isSelf && (
                         <View>
-                            <GroupCaption>İdarəetmə</GroupCaption>
-                            <View style={{ gap: 8 }}>
-                                <Button
-                                    variant="secondary"
-                                    title={profile.is_superadmin ? 'Superadmin statusunu götür' : 'Superadmin et'}
-                                    icon={<Shield size={15} color={t.text} />}
-                                    loading={actionLoading}
-                                    onPress={toggleSuperAdmin}
-                                    fullWidth
-                                />
-                                <Button variant="destructive" title="Admin icazəsini ləğv et" onPress={() => setConfirmRevoke(true)} disabled={actionLoading} fullWidth />
+                            <GroupCaption>Açıq bölmələr</GroupCaption>
+                            <Card style={{ gap: 14 }}>
+                                {ADMIN_MODULES.map((m) => (
+                                    <Checkbox
+                                        key={m.key}
+                                        checked={modules.includes(m.key)}
+                                        onChange={(on) => setModules((prev) => (on ? [...prev, m.key] : prev.filter((x) => x !== m.key)))}
+                                        label={m.title}
+                                        description={m.desc}
+                                    />
+                                ))}
+                            </Card>
+                            <View style={{ gap: 8, marginTop: 12 }}>
+                                <Button title="İcazələri yadda saxla" loading={actionLoading} onPress={saveModules} fullWidth />
+                                <Button variant="destructive" title="Admin panelə girişi bağla" onPress={() => setConfirmRevoke(true)} disabled={actionLoading} fullWidth />
                             </View>
                         </View>
                     )}
@@ -163,7 +176,8 @@ export default function UserDetailWeb() {
                         options={[
                             { value: 'listings', label: 'Avtomobillər', count: listings.length },
                             { value: 'plates', label: 'Nömrələr', count: plates.length },
-                            { value: 'loans', label: 'Kreditlər', count: loans.length },
+                            // Loan tables are superadmin-only under RLS
+                            ...(isSuperAdmin ? [{ value: 'loans' as TabType, label: 'Kreditlər', count: loans.length }] : []),
                         ]}
                         value={activeTab}
                         onChange={setActiveTab}
@@ -209,7 +223,7 @@ export default function UserDetailWeb() {
                         />
                     )}
 
-                    {activeTab === 'loans' && (
+                    {isSuperAdmin && activeTab === 'loans' && (
                         <DataTable
                             data={loans}
                             keyExtractor={(i) => i.id}
@@ -229,11 +243,11 @@ export default function UserDetailWeb() {
 
             <ConfirmModal
                 visible={confirmRevoke}
-                title="Admin icazəsini ləğv etmək?"
+                title="Girişi bağlamaq?"
                 message="İstifadəçi adi istifadəçiyə çevriləcək və admin panelə daxil ola bilməyəcək."
                 onConfirm={revokeAdmin}
                 onCancel={() => setConfirmRevoke(false)}
-                confirmText="Ləğv et"
+                confirmText="Bağla"
                 cancelText="İmtina"
                 isDestructive
             />

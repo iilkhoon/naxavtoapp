@@ -41,7 +41,18 @@ const DEFAULT_TAGS = [
   [/property="og:title"/i, `<meta property="og:title" content="${escapeAttr(TITLE)}"/>`],
   [/property="og:description"/i, `<meta property="og:description" content="${escapeAttr(DESCRIPTION)}"/>`],
   [/property="og:image"/i, `<meta property="og:image" content="${SITE_URL}/og-image.png"/>`],
-  [/name="twitter:card"/i, '<meta name="twitter:card" content="summary_large_image"/>'],
+  [/<meta\s+name="twitter:card"/i, '<meta name="twitter:card" content="summary_large_image"/>'],
+  [
+    /application\/ld\+json/i,
+    `<script type="application/ld+json">${JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'AutoDealer',
+      name: 'Naxçıvan Avto',
+      url: SITE_URL,
+      description: DESCRIPTION,
+      areaServed: { '@type': 'AdministrativeArea', name: 'Naxçıvan Muxtar Respublikası' },
+    })}</script>`,
+  ],
 ];
 
 const walk = (dir) =>

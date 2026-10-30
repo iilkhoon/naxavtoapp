@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { accessLabel } from '../../components/admin/ModulePicker';
 import { formatDate } from '../../lib/utils';
 import { Button, Badge, Segmented, EmptyState, Card, useWebTokens, FONT } from '../../components/web/WebKit';
 import { AdminPage, Toolbar, SearchField, DataTable, CellText } from '../../components/web/AdminKit';
@@ -28,7 +29,7 @@ export default function AdminUsersWeb() {
         (async () => {
             try {
                 let query = supabase.from('profiles').select('*').order('created_at', { ascending: false });
-                if (scope === 'admins') query = query.eq('role', 'admin');
+                if (scope === 'admins') query = query.or('role.eq.admin,is_superadmin.eq.true');
                 const { data, error } = await query;
                 if (error) throw error;
                 if (!cancelled) setUsers(data || []);
@@ -43,7 +44,7 @@ export default function AdminUsersWeb() {
 
     if (!authLoading && !isSuperAdmin) {
         return (
-            <AdminPage title="Admin istifadəçilər">
+            <AdminPage title="İstifadəçilər">
                 <Card>
                     <EmptyState icon={<Shield size={28} color={t.textSecondary} />} title="Giriş yoxdur" subtitle="Bu bölməyə yalnız superadminlər daxil ola bilər." />
                 </Card>
@@ -57,17 +58,17 @@ export default function AdminUsersWeb() {
         : users;
 
     const roleBadge = (u: any) =>
-        u.is_superadmin ? <Badge label="Superadmin" tone="blue" /> : u.role === 'admin' ? <Badge label="Admin" tone="accent" /> : <Badge label="İstifadəçi" />;
+        u.is_superadmin || u.role === 'admin' ? <Badge label={accessLabel(u)} tone={u.is_superadmin ? 'blue' : 'accent'} /> : <Badge label="İstifadəçi" />;
 
     return (
         <AdminPage
-            title="Admin istifadəçilər"
+            title="İstifadəçilər"
             subtitle={`${users.length} ${scope === 'admins' ? 'admin' : 'istifadəçi'}`}
-            actions={<Button size="sm" title="Yeni admin" icon={<UserPlus size={14} color="#FFF" />} onPress={() => router.push('/admin/add-user')} />}
+            actions={<Button size="sm" title="Yeni istifadəçi" icon={<UserPlus size={14} color="#FFF" />} onPress={() => router.push('/admin/add-user')} />}
         >
             <Toolbar>
                 <Segmented<Scope>
-                    options={[{ value: 'admins', label: 'Adminlər' }, { value: 'all', label: 'Hamısı' }]}
+                    options={[{ value: 'admins', label: 'Panel istifadəçiləri' }, { value: 'all', label: 'Hamısı' }]}
                     value={scope}
                     onChange={(v) => { setLoading(true); setScope(v); }}
                 />
@@ -99,7 +100,7 @@ export default function AdminUsersWeb() {
                             </View>
                         ),
                     },
-                    { key: 'role', title: 'Rol', flex: 1, render: roleBadge },
+                    { key: 'role', title: 'Giriş', flex: 1, render: roleBadge },
                     { key: 'created', title: 'Qeydiyyat', flex: 1, align: 'right', hideOnMobile: true, render: (u) => <CellText title={u.created_at ? formatDate(u.created_at) : '—'} /> },
                     { key: 'go', title: '', width: 16, align: 'right', render: () => <Text style={[styles.chevron, { color: t.textTertiary }]}>›</Text> },
                 ]}

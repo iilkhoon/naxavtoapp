@@ -6,12 +6,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { WebHeader } from '../../components/WebHeader.web';
 import { useWebTokens, useBreakpoints, Loading, HEADER_HEIGHT, FONT } from '../../components/web/WebKit';
-import { visibleAdminMenu, ADMIN_MENU } from '../../constants/adminMenu';
+import { visibleAdminMenu, ADMIN_MENU, accessForPath } from '../../constants/adminMenu';
 
 type Counters = { pendingApplications: number; pendingListings: number };
 
 export default function AdminLayoutWeb() {
-    const { session, loading, isAdmin, isSuperAdmin } = useAuth();
+    const { session, loading, isAdmin, isSuperAdmin, hasModule } = useAuth();
     const router = useRouter();
     const pathname = usePathname();
     const t = useWebTokens();
@@ -19,9 +19,14 @@ export default function AdminLayoutWeb() {
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [counters, setCounters] = useState<Counters>({ pendingApplications: 0, pendingListings: 0 });
 
+    // Sections the admin was not given (see "İstifadəçilər") send them back to the panel start
+    const access = accessForPath(pathname);
+    const allowed = !access || (access === 'superadmin' ? isSuperAdmin : hasModule(access));
+
     useEffect(() => {
         if (!loading && (!session || !isAdmin)) router.replace('/novo');
-    }, [session, loading, isAdmin, router]);
+        else if (!loading && !allowed) router.replace('/admin' as any);
+    }, [session, loading, isAdmin, allowed, router]);
 
     // Pending counts for the sidebar badges; refreshed on every page change
     useEffect(() => {
@@ -41,6 +46,33 @@ export default function AdminLayoutWeb() {
         return () => { cancelled = true; };
     }, [isAdmin, pathname]);
 
+    // Avtomatik baza təmizliyi: admin daxil olduqda boş çatları (0 mesaj) və artıq qeydləri səssizcə təmizləyir
+    useEffect(() => {
+        if (!isAdmin) return;
+        (async () => {
+            try {
+                await supabase.rpc('cleanup_database_and_storage');
+            } catch {
+                // RPC hələ işə salınmayıbsa client-side boş çatları sil
+            }
+            try {
+                const [{ data: ch }, { data: ms }] = await Promise.all([
+                    supabase.from('chats').select('id'),
+                    supabase.from('messages').select('chat_id'),
+                ]);
+                if (ch && ms) {
+                    const hasMsg = new Set(ms.map((m: any) => m.chat_id));
+                    const emptyIds = ch.filter((c: any) => !hasMsg.has(c.id)).map((c: any) => c.id);
+                    for (let i = 0; i < emptyIds.length; i += 50) {
+                        await supabase.from('chats').delete().in('id', emptyIds.slice(i, i + 50));
+                    }
+                }
+            } catch {
+                // ignore
+            }
+        })();
+    }, [isAdmin]);
+
     const handleLogout = async () => {
         await supabase.auth.signOut();
         router.replace('/novo');
@@ -57,7 +89,7 @@ export default function AdminLayoutWeb() {
 
     if (!session || !isAdmin) return null;
 
-    const groups = visibleAdminMenu(isSuperAdmin, 'web');
+    const groups = visibleAdminMenu(isSuperAdmin, 'web', hasModule);
     const current = ADMIN_MENU.flatMap((g) => g.items).find((i) => pathname.startsWith(i.path));
 
     const sidebar = (
@@ -126,7 +158,7 @@ export default function AdminLayoutWeb() {
                             </Text>
                         </TouchableOpacity>
                         <View style={{ flex: 1 }}>
-                            <Slot />
+                            {allowed && <Slot />}
                             {drawerOpen && (
                                 <>
                                     <TouchableOpacity style={styles.scrim} onPress={() => setDrawerOpen(false)} accessibilityLabel="Menyunu bağla" />
@@ -139,7 +171,7 @@ export default function AdminLayoutWeb() {
                     <View style={{ flex: 1, flexDirection: 'row' }}>
                         {sidebar}
                         <View style={{ flex: 1, overflow: 'hidden' }}>
-                            <Slot />
+                            {allowed && <Slot />}
                         </View>
                     </View>
                 )}

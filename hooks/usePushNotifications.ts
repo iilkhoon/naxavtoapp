@@ -6,6 +6,7 @@ import Constants from 'expo-constants';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { openTarget } from '../lib/links';
 
 // Configure how notifications behave when the app is foregrounded
 Notifications.setNotificationHandler({
@@ -18,12 +19,47 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// A listing push carries data.url ("/listing/<id>"); tapping it opens that page.
+// The id guard stops the cold-start response from opening twice.
+let lastOpened: string | undefined;
+const openFromNotification = (notification: Notifications.Notification) => {
+  const id = notification.request.identifier;
+  if (id && id === lastOpened) return;
+  lastOpened = id;
+  const url = notification.request.content.data?.url;
+  if (typeof url === 'string') openTarget(url);
+};
+
+/**
+ * Opens the page of a tapped notification, including the one that launched the
+ * app from a killed state. Mount once, in the root layout.
+ */
+export function useNotificationTapHandler() {
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    // Cold start: the router mounts with the root layout, so wait a moment before pushing
+    const timer = setTimeout(() => {
+      const last = Notifications.getLastNotificationResponse();
+      if (last) {
+        openFromNotification(last.notification);
+        Notifications.clearLastNotificationResponse();
+      }
+    }, 600);
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      openFromNotification(response.notification);
+    });
+    return () => {
+      clearTimeout(timer);
+      sub.remove();
+    };
+  }, []);
+}
+
 export function usePushNotifications(externalDeviceId?: string) {
   const [expoPushToken, setExpoPushToken] = useState<string | undefined>(undefined);
   const [notification, setNotification] = useState<Notifications.Notification | undefined>(undefined);
   const [internalDeviceId, setInternalDeviceId] = useState<string | undefined>(externalDeviceId);
   const notificationListener = useRef<Notifications.Subscription | undefined>(undefined);
-  const responseListener = useRef<Notifications.Subscription | undefined>(undefined);
   const { user } = useAuth();
 
   // Handle Internal Device ID persistence
@@ -69,14 +105,10 @@ export function usePushNotifications(externalDeviceId?: string) {
       setNotification(notification);
     });
 
-    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-      console.log(response);
-    });
 
     return () => {
       clearTimeout(timer);
       notificationListener.current?.remove();
-      responseListener.current?.remove();
     };
   }, [internalDeviceId]);
 

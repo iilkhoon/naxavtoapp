@@ -2,7 +2,7 @@ import React, { useState, useCallback, memo, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Trash2, Edit3, CheckCircle, Eye, LayoutList } from 'lucide-react-native';
+import { Trash2, Edit3, CheckCircle, Eye, LayoutList, Bell } from 'lucide-react-native';
 import { differenceInDays } from 'date-fns';
 import { supabase } from '../../lib/supabase';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -11,6 +11,9 @@ import { PlateVisual } from '../../components/PlateVisual';
 import { HapticRefreshControl } from '../../components/ui/HapticRefreshControl';
 import { Listing, Plate } from '../../types';
 import { haptics } from '../../utils/haptics';
+import { useAuth } from '../../contexts/AuthContext';
+import { pushHref } from '../../lib/push';
+import { deleteStorageImages } from '../../utils/imageOptimizer';
 import {
   AdminHeader, Segmented, SearchBar, EmptyView, LoadingView, Pill, useAdminColors, AdminColors, money, F,
 } from '../../components/admin/AdminUI';
@@ -36,9 +39,10 @@ const RowAction = ({ c, icon: Icon, label, onPress, tone }: { c: AdminColors; ic
   </TouchableOpacity>
 );
 
-const ItemRow = memo(({ item, isCar, pending, c, onView, onApprove, onEdit, onDelete }: {
+const ItemRow = memo(({ item, isCar, pending, c, onView, onApprove, onEdit, onDelete, onPush }: {
   item: any; isCar: boolean; pending: boolean; c: AdminColors;
   onView: (item: any) => void; onApprove: (id: string) => void; onEdit: (id: string) => void; onDelete: (id: string) => void;
+  onPush?: (item: any) => void;
 }) => {
   const cover = isCar ? ((Array.isArray(item.images) && item.images[0]) || item.image_url) : null;
   const oldPending = pending && differenceInDays(new Date(), new Date(item.created_at)) >= 7;
@@ -69,6 +73,7 @@ const ItemRow = memo(({ item, isCar, pending, c, onView, onApprove, onEdit, onDe
         {pending
           ? <RowAction c={c} icon={CheckCircle} label="Təsdiqlə" tone={c.success} onPress={() => onApprove(item.id)} />
           : <RowAction c={c} icon={Eye} label="Bax" onPress={() => onView(item)} />}
+        {!pending && onPush && <RowAction c={c} icon={Bell} label="Bildiriş göndər" tone="#FF2D55" onPress={() => onPush(item)} />}
         <RowAction c={c} icon={Edit3} label="Redaktə et" onPress={() => onEdit(item.id)} />
         <RowAction c={c} icon={Trash2} label="Sil" tone={c.primary} onPress={() => onDelete(item.id)} />
       </View>
@@ -95,7 +100,7 @@ export default function AdminListingsScreen() {
   const fetchItems = useCallback(async () => {
     try {
       const select = activeTab === 'cars'
-        ? 'id, short_id, title, price, currency, image_url, images, make, model, year, created_at, is_vip'
+        ? 'id, short_id, title, price, currency, image_url, images, make, model, year, created_at, is_vip, is_urgent'
         : 'id, short_id, region, series, number, price, created_at, is_vip';
       const { data, error } = await supabase.from(activeTab === 'cars' ? 'listings' : 'plates').select(select).eq('status', activeStatus).order('created_at', { ascending: false });
       if (error) throw error;
@@ -125,12 +130,16 @@ export default function AdminListingsScreen() {
   const performDelete = async () => {
     if (!itemToDelete) return;
     const id = itemToDelete;
+    const targetItem = items.find((i) => i.id === id) as Listing | undefined;
     setItemToDelete(null);
     const { error } = await supabase.from(table).delete().eq('id', id);
     if (error) {
       haptics.error();
       showToast('Xəta: ' + error.message, 'error');
       return;
+    }
+    if (activeTab === 'cars' && targetItem) {
+      await deleteStorageImages(supabase, [targetItem.image_url, ...(targetItem.images || [])]);
     }
     haptics.success();
     setItems((prev) => prev.filter((i) => i.id !== id));
@@ -151,6 +160,12 @@ export default function AdminListingsScreen() {
 
   const handleEdit = useCallback((id: string) => {
     router.push((activeTab === 'cars' ? `/admin/edit-listing/${id}` : `/admin/edit-plate/${id}`) as any);
+  }, [activeTab, router]);
+
+  const { hasModule } = useAuth();
+  const canPush = hasModule('notifications');
+  const handlePush = useCallback((item: any) => {
+    router.push(pushHref(item, activeTab === 'plates') as any);
   }, [activeTab, router]);
 
   const handleView = useCallback((item: any) => {
@@ -182,6 +197,7 @@ export default function AdminListingsScreen() {
               onApprove={performApprove}
               onEdit={handleEdit}
               onDelete={setItemToDelete}
+              onPush={canPush ? handlePush : undefined}
             />
           )}
           ListEmptyComponent={

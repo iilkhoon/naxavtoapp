@@ -33,9 +33,20 @@ export default function AdminChatsNative() {
     const [filterStatus, setFilterStatus] = useState<'open' | 'closed'>('open');
 
     const loadChats = useCallback(async () => {
-        const { data, error } = await supabase.from('chats').select('*').eq('status', filterStatus).order('updated_at', { ascending: false });
+        const [{ data, error }, { data: msgRows }] = await Promise.all([
+            supabase.from('chats').select('*').eq('status', filterStatus).order('updated_at', { ascending: false }),
+            supabase.from('messages').select('chat_id'),
+        ]);
         if (error) console.error('Error loading chats:', error);
-        else setChats(data || []);
+        else {
+            const hasMsg = new Set((msgRows || []).map((m: any) => m.chat_id));
+            const all = data || [];
+            const emptyIds = all.filter((ch) => !hasMsg.has(ch.id)).map((ch) => ch.id);
+            if (emptyIds.length > 0) {
+                supabase.from('chats').delete().in('id', emptyIds).then(() => {});
+            }
+            setChats(all.filter((ch) => hasMsg.has(ch.id)));
+        }
         setLoading(false);
         setRefreshing(false);
     }, [filterStatus]);

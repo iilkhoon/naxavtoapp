@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
-import { Heart, Share2, Phone, MapPin, Check, Crown, ChevronLeft, ChevronRight, ShieldCheck, Zap } from 'lucide-react-native';
+import { Heart, Share2, Phone, MapPin, Check, Crown, ChevronLeft, ChevronRight, ShieldCheck, Zap, MessageCircle } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { getFavorites, toggleFavorite } from '../../lib/favorites';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -158,6 +158,21 @@ export default function WebListingDetail() {
         showToast(newStatus ? 'Seçilmişlərə əlavə edildi' : 'Seçilmişlərdən silindi', 'success');
     };
 
+    useEffect(() => {
+        if (typeof window === 'undefined' || galleryImages.length <= 1) return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            const tag = (e.target as HTMLElement)?.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+            if (e.key === 'ArrowLeft') {
+                setActiveImg((i) => (i - 1 + galleryImages.length) % galleryImages.length);
+            } else if (e.key === 'ArrowRight') {
+                setActiveImg((i) => (i + 1) % galleryImages.length);
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [galleryImages.length]);
+
     if (loading || !listing) {
         return (
             <View style={{ flex: 1, backgroundColor: t.bg }}>
@@ -197,6 +212,14 @@ export default function WebListingDetail() {
         }
         await Clipboard.setStringAsync(text);
         showToast('Elan linki kopyalandı', 'success');
+    };
+
+    const whatsappPhone = (adminPhones[0] || listing.contact_phone || '').replace(/\D/g, '');
+    const handleWhatsApp = () => {
+        if (!whatsappPhone) return;
+        const normalizedPhone = whatsappPhone.startsWith('994') ? whatsappPhone : whatsappPhone.startsWith('0') ? `994${whatsappPhone.slice(1)}` : `994${whatsappPhone}`;
+        const msg = encodeURIComponent(`Salam, Naxçıvan Avto-dakı ${title} (${price}) elanı ilə maraqlanıram:\n${shareUrl}`);
+        Linking.openURL(`https://wa.me/${normalizedPhone}?text=${msg}`);
     };
 
     const specs = [
@@ -366,6 +389,18 @@ export default function WebListingDetail() {
                             fullWidth
                         />
                     ))}
+                    {!!whatsappPhone && (
+                        <TouchableOpacity
+                            onPress={handleWhatsApp}
+                            activeOpacity={0.85}
+                            style={styles.whatsappBtn}
+                            accessibilityRole="button"
+                            accessibilityLabel="WhatsApp-da yaz"
+                        >
+                            <MessageCircle size={16} color="#FFF" />
+                            <Text style={styles.whatsappBtnText}>WhatsApp-da yaz</Text>
+                        </TouchableOpacity>
+                    )}
                     {listing.is_credit && <Button variant="dark" title="Kreditə müraciət et" onPress={() => setShowApplication(true)} fullWidth />}
                 </View>
             </Card>
@@ -448,7 +483,7 @@ export default function WebListingDetail() {
                         {gallery}
                         {summary}
                         {specsCard}
-                        {listing.is_credit && <WebListingCalculator initialPrice={listing.price} />}
+                        {listing.is_credit && <WebListingCalculator initialPrice={listing.price} onApplyCredit={() => setShowApplication(true)} />}
                         {longContent}
                     </View>
                 ) : (
@@ -460,7 +495,7 @@ export default function WebListingDetail() {
                         <View style={[styles.sidebar, { position: 'sticky' as any, top: 88 }]}>
                             {summary}
                             {specsCard}
-                            {listing.is_credit && <WebListingCalculator initialPrice={listing.price} />}
+                            {listing.is_credit && <WebListingCalculator initialPrice={listing.price} onApplyCredit={() => setShowApplication(true)} />}
                         </View>
                     </View>
                 )}
@@ -522,4 +557,15 @@ const styles = StyleSheet.create({
     features: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     feature: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, height: 30, borderRadius: 8 },
     featureText: { fontSize: 13, fontFamily: FONT.medium },
+    whatsappBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        height: 44,
+        borderRadius: 12,
+        backgroundColor: '#25D366',
+        cursor: 'pointer' as any,
+    },
+    whatsappBtnText: { color: '#FFF', fontSize: 15, fontFamily: FONT.semibold },
 });

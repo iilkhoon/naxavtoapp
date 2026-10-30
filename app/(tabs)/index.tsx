@@ -412,8 +412,10 @@ export default function HomeScreen() {
       if (state === 'active' && listingsFailedRef.current) fetchListings(true);
     });
 
+    // Home tab pressed (tab bar on Android, NativeTabs listener on iOS): back to top and reload
     const sub = DeviceEventEmitter.addListener('scroll_to_top_home', () => {
       flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+      onRefreshRef.current();
     });
     return () => {
       sub.remove();
@@ -464,6 +466,8 @@ export default function HomeScreen() {
     loadFavorites();
     fetchActiveCompetition();
   }, [activeTopTab]);
+  const onRefreshRef = React.useRef(onRefresh);
+  onRefreshRef.current = onRefresh;
 
   const handleBrandSelect = () => {
     const eventName = 'select_brand_home';
@@ -698,7 +702,7 @@ export default function HomeScreen() {
                     </Text>
                   ) : null}
                   <Text style={[styles.competitionSubtitle, { color: colors.textSecondary, marginTop: 2, fontSize: 11 }]}>
-                    İştirakçı: {activeCompetition.max_participants || 0}
+                    İştirakçı: {competitionParticipantCount}{activeCompetition.max_participants ? ` / ${activeCompetition.max_participants}` : ''}
                   </Text>
                 </View>
                 <View style={[styles.competitionAction, { backgroundColor: colors.primary }]}>
@@ -714,6 +718,7 @@ export default function HomeScreen() {
               settings.home_banner_url_2,
               settings.home_banner_url_3
             ]}
+            links={[settings.home_banner_url_link, settings.home_banner_url_2_link, settings.home_banner_url_3_link]}
             height={120}
           />
         </View>
@@ -794,6 +799,7 @@ export default function HomeScreen() {
               settings.home_mid_banner_2,
               settings.home_mid_banner_3
             ]}
+            links={[settings.home_mid_banner_1_link, settings.home_mid_banner_2_link, settings.home_mid_banner_3_link]}
             height={120}
           />
         </View>

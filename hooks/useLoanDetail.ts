@@ -73,7 +73,8 @@ export function useLoanDetail() {
   const getOutofSchedulePreview = () => {
     const unpaid = schedule.filter((s: any) => s.status !== 'paid');
     const N = unpaid.length;
-    const P_remaining = unpaid.reduce((sum: number, s: any) => sum + Number(s.principal || 0), 0);
+    // Same as record_loan_payment: partial payments already reduce the principal
+    const P_remaining = unpaid.reduce((sum: number, s: any) => sum + Number(s.principal || 0) - Number(s.paid_amount || 0), 0);
     const O = Number(payAmount) || 0;
     const P_new = Math.max(0, P_remaining - O);
     const NewInterest = P_new * (Number(loan.interest_rate) / 100) * (N / 12);

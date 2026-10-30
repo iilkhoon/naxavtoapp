@@ -14,8 +14,11 @@ import { supabase } from '../lib/supabase';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { WebHeader } from '../components/WebHeader.web';
 import { WebFooter } from '../components/WebFooter.web';
+import { SeoHead } from '../components/web/SeoHead';
 import { SuccessModal } from '../components/SuccessModal';
+import { compressWebFile } from '../utils/imageOptimizer';
 
 type ListingType = 'car' | 'plate';
 
@@ -77,7 +80,7 @@ const Dropdown = ({ label, value, options, onChange, colors }: any) => {
 export default function WebAddListingScreen() {
     const router = useRouter();
     const { showToast } = useToast();
-    const { user } = useAuth();
+    const { isAdmin } = useAuth();
     const { colors, isDark } = useTheme();
     const { width } = useWindowDimensions();
     const isMobile = width < 768;
@@ -119,7 +122,7 @@ export default function WebAddListingScreen() {
     const [isBarter, setIsBarter] = useState(false);
     const [isUrgent, setIsUrgent] = useState(false);
     const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
-    const [selectedImages, setSelectedImages] = useState<{ uri: string; file: File }[]>([]);
+    const [selectedImages, setSelectedImages] = useState<{ uri: string; file: Blob }[]>([]);
 
     // Plate state
     const [plateRegion, setPlateRegion] = useState('');
@@ -129,6 +132,10 @@ export default function WebAddListingScreen() {
     const [plateDesc, setPlateDesc] = useState('');
     const [plateContact, setPlateContact] = useState('+994');
     const [plateSellerName, setPlateSellerName] = useState('');
+    const [plateIsVip, setPlateIsVip] = useState(false);
+
+    // Dynamic options from Supabase (fallback to OPTIONS)
+    const [dynOptions, setDynOptions] = useState(OPTIONS);
 
     const fileInputRef = useRef<any>(null);
 
@@ -145,6 +152,24 @@ export default function WebAddListingScreen() {
                 setDbFeatures(Object.keys(grouped).map(k => ({ title: k, items: grouped[k] })));
             }
         });
+        Promise.all([
+            supabase.from('body_types').select('name').order('name'),
+            supabase.from('colors').select('name').order('name'),
+            supabase.from('gearboxes').select('name').order('name'),
+            supabase.from('transmissions').select('name').order('name'),
+            supabase.from('markets').select('name').order('name'),
+            supabase.from('fuel_types').select('name').order('name'),
+        ]).then(([bt, col, gb, tr, mk, ft]) => {
+            setDynOptions((prev) => ({
+                ...prev,
+                bodyType: bt.data?.length ? bt.data.map((x: any) => x.name) : prev.bodyType,
+                color: col.data?.length ? col.data.map((x: any) => x.name) : prev.color,
+                gearbox: gb.data?.length ? gb.data.map((x: any) => x.name) : prev.gearbox,
+                transmission: tr.data?.length ? tr.data.map((x: any) => x.name) : prev.transmission,
+                market: mk.data?.length ? mk.data.map((x: any) => x.name) : prev.market,
+                fuelType: ft.data?.length ? ft.data.map((x: any) => x.name) : prev.fuelType,
+            }));
+        }).catch(() => {});
     }, []);
 
     useEffect(() => {
@@ -161,10 +186,16 @@ export default function WebAddListingScreen() {
         input.type = 'file';
         input.multiple = true;
         input.accept = 'image/*';
-        input.onchange = (e: any) => {
+        input.onchange = async (e: any) => {
             const files: File[] = Array.from(e.target.files || []);
-            const newImgs = files.slice(0, 15 - selectedImages.length).map(f => ({ uri: URL.createObjectURL(f), file: f }));
-            setSelectedImages(prev => [...prev, ...newImgs].slice(0, 15));
+            const slice = files.slice(0, 15 - selectedImages.length);
+            const compressed = await Promise.all(
+                slice.map(async (f) => {
+                    const res = await compressWebFile(f, 1024, 0.65);
+                    return { uri: res.uri, file: res.blob };
+                })
+            );
+            setSelectedImages(prev => [...prev, ...compressed].slice(0, 15));
         };
         input.click();
     };
@@ -174,8 +205,8 @@ export default function WebAddListingScreen() {
         setUploading(true);
         try {
             for (const img of selectedImages) {
-                const fname = `${Date.now()}_${Math.random().toString(36).slice(7)}.jpg`;
-                const { error } = await supabase.storage.from('images').upload(`listings/${fname}`, img.file, { contentType: img.file.type });
+                const fname = `${Date.now()}_${Math.random().toString(36).slice(7)}.webp`;
+                const { error } = await supabase.storage.from('images').upload(`listings/${fname}`, img.file, { contentType: 'image/webp' });
                 if (error) throw error;
                 const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(`listings/${fname}`);
                 urls.push(publicUrl);
@@ -209,17 +240,17 @@ export default function WebAddListingScreen() {
         setLoading(true);
         try {
             if (listingType === 'plate') {
-                const status = user ? 'approved' : 'pending';
+                const status = isAdmin ? 'approved' : 'pending';
                 const { data, error } = await supabase.from('plates').insert({
                     region: plateRegion, series: plateSeries.toUpperCase(), number: plateNumber,
                     price: parseFloat(platePrice) || 0, description: plateDesc, contact_phone: plateContact,
-                    seller_name: plateSellerName, status
+                    seller_name: plateSellerName, is_vip: isAdmin && plateIsVip, status
                 }).select().single();
                 if (error) throw error;
                 if (data?.short_id) setCreatedShortId(data.short_id);
             } else {
                 const urls = await uploadImages();
-                const status = user ? 'approved' : 'pending';
+                const status = isAdmin ? 'approved' : 'pending';
                 const { data, error } = await supabase.from('listings').insert({
                     make, model, year: parseInt(year) || 2020, price: parseFloat(price) || 0,
                     mileage: parseInt(mileage) || 0, engine: engine || '2.0', horsepower: parseInt(horsepower) || null, location,
@@ -287,6 +318,12 @@ export default function WebAddListingScreen() {
                     <TextInput style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]} placeholder="+994" placeholderTextColor={colors.textSecondary} value={plateContact} onChangeText={setPlateContact} keyboardType="phone-pad" />
                     <Text style={[styles.label, { color: colors.textSecondary, marginTop: 12 }]}>Qeydlər</Text>
                     <TextInput style={[styles.input, styles.textarea, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]} placeholder="Əlavə məlumat..." placeholderTextColor={colors.textSecondary} value={plateDesc} onChangeText={setPlateDesc} multiline textAlignVertical="top" />
+                    {isAdmin && (
+                        <View style={[styles.switchCard, { backgroundColor: colors.card, borderColor: '#FFD700', marginTop: 12 }]}>
+                            <Text style={[styles.switchLabel, { color: colors.text }]}>👑 VIP Nömrə?</Text>
+                            <Switch value={plateIsVip} onValueChange={setPlateIsVip} trackColor={{ false: '#555', true: '#FFD700' }} />
+                        </View>
+                    )}
                 </View>
             );
         }
@@ -370,11 +407,11 @@ export default function WebAddListingScreen() {
                                 <TextInput style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]} placeholder="2023" placeholderTextColor={colors.textSecondary} value={year} onChangeText={t => setYear(t.replace(/\D/g, ''))} maxLength={4} keyboardType="number-pad" />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Dropdown label="Ban növü" value={bodyType} options={OPTIONS.bodyType} onChange={setBodyType} colors={colors} />
+                                <Dropdown label="Ban növü" value={bodyType} options={dynOptions.bodyType} onChange={setBodyType} colors={colors} />
                             </View>
                         </View>
-                        <Dropdown label="Rəng" value={color} options={OPTIONS.color} onChange={setColor} colors={colors} />
-                        <Dropdown label="Bazar" value={market} options={OPTIONS.market} onChange={setMarket} colors={colors} />
+                        <Dropdown label="Rəng" value={color} options={dynOptions.color} onChange={setColor} colors={colors} />
+                        <Dropdown label="Bazar" value={market} options={dynOptions.market} onChange={setMarket} colors={colors} />
                     </View>
                 );
 
@@ -394,15 +431,15 @@ export default function WebAddListingScreen() {
                         </View>
                         <View style={styles.twoCol}>
                             <View style={{ flex: 1 }}>
-                                <Dropdown label="Yanacaq növü" value={fuelType} options={OPTIONS.fuelType} onChange={setFuelType} colors={colors} />
+                                <Dropdown label="Yanacaq növü" value={fuelType} options={dynOptions.fuelType} onChange={setFuelType} colors={colors} />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Dropdown label="Sürətlər qutusu" value={gearbox} options={OPTIONS.gearbox} onChange={setGearbox} colors={colors} />
+                                <Dropdown label="Sürətlər qutusu" value={gearbox} options={dynOptions.gearbox} onChange={setGearbox} colors={colors} />
                             </View>
                         </View>
                         <View style={styles.twoCol}>
                             <View style={{ flex: 1 }}>
-                                <Dropdown label="Ötürücü" value={transmission} options={OPTIONS.transmission} onChange={setTransmission} colors={colors} />
+                                <Dropdown label="Ötürücü" value={transmission} options={dynOptions.transmission} onChange={setTransmission} colors={colors} />
                             </View>
                             <View style={{ flex: 1 }} />
                         </View>
@@ -524,6 +561,12 @@ export default function WebAddListingScreen() {
 
     return (
         <View style={{ flex: 1, backgroundColor: colors.background, display: 'flex' as any, flexDirection: 'column', minHeight: '100vh' as any }}>
+            <SeoHead
+                title="Elan yerləşdir — Naxçıvan Avto"
+                description="Avtomobilinizi və ya qeydiyyat nişanınızı Naxçıvan Avto-da pulsuz yerləşdirin."
+                path="/add-listing"
+            />
+            <WebHeader />
             <ScrollView
                 style={{ flex: 1 }}
                 contentContainerStyle={{ paddingTop: isMobile ? 60 : 76, flexGrow: 1 }}

@@ -21,7 +21,7 @@ type Counters = { activeCars: number; activePlates: number; pendingListings: num
 export function AdminHub({ presentation }: { presentation: 'sheet' | 'screen' }) {
   const router = useRouter();
   const c = useAdminColors();
-  const { user, isAdmin, isSuperAdmin } = useAuth();
+  const { user, isAdmin, isSuperAdmin, hasModule } = useAuth();
   const { showToast } = useToast();
   const [counters, setCounters] = useState<Counters>({ activeCars: 0, activePlates: 0, pendingListings: 0, pendingApplications: 0 });
   const [refreshing, setRefreshing] = useState(false);
@@ -106,7 +106,7 @@ export function AdminHub({ presentation }: { presentation: 'sheet' | 'screen' })
               <StatTile label="Nömrə" value={counters.activePlates} />
             </View>
 
-            {visibleAdminMenu(isSuperAdmin, 'native').map((group) => (
+            {visibleAdminMenu(isSuperAdmin, 'native', hasModule).map((group) => (
               <Group key={group.group} title={group.group}>
                 {group.items.map((item) => (
                   <GroupRow

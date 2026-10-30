@@ -178,6 +178,7 @@ export default function CompareScreen() {
 
         <BannerSlider
           images={[settings.compare_banner_1, settings.compare_banner_2, settings.compare_banner_3]}
+          links={[settings.compare_banner_1_link, settings.compare_banner_2_link, settings.compare_banner_3_link]}
           height={120}
         />
 

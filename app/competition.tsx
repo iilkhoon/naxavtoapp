@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    TextInput, ActivityIndicator, Alert, Platform, Linking, Dimensions,
+    TextInput, ActivityIndicator, Platform, Linking, Dimensions,
     StatusBar, KeyboardAvoidingView
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -74,9 +74,47 @@ export default function CompetitionScreen() {
         }
     };
 
+    // Web has no file system: share the image via the Web Share API when the
+    // browser supports files (mobile Chrome/Safari), otherwise download it so
+    // the user can post it to their story manually.
+    const shareStoryOnWeb = async (imageUrl: string) => {
+        try {
+            setLoading(true);
+            const blob = await (await fetch(imageUrl)).blob();
+            const file = new File([blob], 'naxavto_story_share.jpg', { type: blob.type || 'image/jpeg' });
+            const nav: any = typeof navigator !== 'undefined' ? navigator : null;
+            if (nav?.canShare?.({ files: [file] })) {
+                await nav.share({ files: [file], title: 'Instagram Story-də Paylaş' });
+            } else {
+                const objectUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = objectUrl;
+                a.download = 'naxavto_story_share.jpg';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(objectUrl);
+                showToast('Şəkil yükləndi. Onu Instagram Story-də paylaşın.', 'info');
+            }
+            setIsShared(true);
+        } catch (error: any) {
+            if (error?.name === 'AbortError') return;
+            // CORS or fetch failure: open the image so it can be saved manually
+            Linking.openURL(imageUrl);
+            setIsShared(true);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const shareToInstagramStory = async () => {
         if (!competition?.story_image_url) {
-            Alert.alert('Xəta', 'Paylaşılacaq şəkil tapılmadı.');
+            showToast('Paylaşılacaq şəkil tapılmadı.', 'error');
+            return;
+        }
+
+        if (Platform.OS === 'web') {
+            await shareStoryOnWeb(competition.story_image_url);
             return;
         }
 
@@ -94,11 +132,11 @@ export default function CompetitionScreen() {
                 });
                 setIsShared(true);
             } else {
-                Alert.alert('Paylaşım İcazəsi', 'Bu cihazda paylaşım dəstəklənmir.');
+                showToast('Bu cihazda paylaşım dəstəklənmir.', 'error');
             }
         } catch (error: any) {
             console.log('Error sharing to IG Story:', error);
-            Alert.alert('Xəta', 'Şəkli paylaşmaq mümkün olmadı: ' + error.message);
+            showToast('Şəkli paylaşmaq mümkün olmadı: ' + error.message, 'error');
         } finally {
             setLoading(false);
         }
@@ -124,20 +162,20 @@ export default function CompetitionScreen() {
 
     const handleParticipate = async () => {
         if (!username.trim()) {
-            Alert.alert('XəbərdaTırlıq', 'Zəhmət olmasa Instagram adınızı daxil edin.');
+            showToast('Zəhmət olmasa Instagram adınızı daxil edin.', 'error');
             return;
         }
         if (!fullName.trim()) {
-            Alert.alert('XəbərdaTı', 'Zəhmət olmasa ad soyadınızı daxil edin.');
+            showToast('Zəhmət olmasa ad soyadınızı daxil edin.', 'error');
             return;
         }
         if (!phone.trim() || phone.length < 7) {
-            Alert.alert('XəbərdaTırlıq', 'Zəhmət olmasa əlaqə nömrənizi yazın.');
+            showToast('Zəhmət olmasa əlaqə nömrənizi yazın.', 'error');
             return;
         }
 
         if (!isFollowing || !isLiked || !isShared) {
-            Alert.alert('Diqqət', 'Yarışmaya qatılmaq üçün əvvəlcə yuxarıdakı 3 tapşırığı tamamladığınıza əmin olun!');
+            showToast('Yarışmaya qatılmaq üçün əvvəlcə yuxarıdakı 3 tapşırığı tamamlayın!', 'error');
             return;
         }
 
@@ -174,7 +212,7 @@ export default function CompetitionScreen() {
             const result = await response.json();
 
             if (response.status === 409 || result.error === 'already_participated') {
-                Alert.alert('Artıq Qatılmısınız', 'Siz bu yarışmaya artıq qatılmısınız.');
+                showToast('Siz bu yarışmaya artıq qatılmısınız.', 'info');
                 setAlreadyParticipated(true);
             } else if (!response.ok) {
                 throw new Error(result.error || 'Xəta baş verdi');
@@ -183,7 +221,7 @@ export default function CompetitionScreen() {
                 router.back();
             }
         } catch (err: any) {
-            Alert.alert('Xəta', 'Xəta baş verdi. Zəhmət olmasa təkrar cəhd edin.');
+            showToast('Xəta baş verdi. Zəhmət olmasa təkrar cəhd edin.', 'error');
             console.log(err);
         } finally {
             setSubmitting(false);

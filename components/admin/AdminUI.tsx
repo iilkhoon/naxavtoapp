@@ -413,8 +413,8 @@ export function LoadingView() {
   );
 }
 
-/** Unique storage path for an upload, e.g. `banners/home_1717171717_k3j9.jpg` */
-export const uploadPath = (prefix: string, ext = 'jpg') =>
+/** Unique storage path for an upload, e.g. `banners/home_1717171717_k3j9.webp` */
+export const uploadPath = (prefix: string, ext = 'webp') =>
   `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
 
 /** Whole days since an ISO date (0 for future dates) */

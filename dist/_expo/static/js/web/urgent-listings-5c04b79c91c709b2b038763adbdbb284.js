@@ -1,0 +1,3 @@
+__d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{value:!0}),Object.defineProperty(e,"default",{enumerable:!0,get:function(){return u}}),r(d[0]);var t=r(d[1]),l=r(d[2]),n=r(d[3]);function u(){return(0,n.jsx)(l.FlagListingsScreen,{flag:"is_urgent",title:"T\u0259cili elanlar",flagLabel:"T\u0259cili",onText:"Elan t\u0259cili edildi",offText:"T\u0259cili statusu g\xf6t\xfcr\xfcld\xfc",icon:t.Zap})}},4271,[50,1177,4272,227]);
+//# sourceMappingURL=/_expo/static/js/web/urgent-listings-5c04b79c91c709b2b038763adbdbb284.js.map
+//# debugId=042beceb-2ea9-4fea-9d4d-a10dfd1a4e00

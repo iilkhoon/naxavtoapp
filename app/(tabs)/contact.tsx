@@ -64,7 +64,7 @@ export default function ContactScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
-  const { isSuperAdmin } = useAuth();
+  const { hasModule } = useAuth();
   const { settings, refreshSettings } = useSettings();
   // iOS doesn't auto-inset this ScrollView for the native tab bar, so pad manually
   const bottomPad = useTabBarPadding();
@@ -97,8 +97,8 @@ export default function ContactScreen() {
       contentContainerStyle={[styles.content, { paddingTop: insets.top + 24, paddingBottom: bottomPad }]}
       showsVerticalScrollIndicator={false}
     >
-      {/* Superadmin shortcuts to the finance and loan screens (the web panel has the same) */}
-      {isSuperAdmin && (
+      {/* Shortcuts to the finance and loan screens for admins with the finance module (the web panel has the same) */}
+      {hasModule('finance') && (
         <>
           <Text style={[styles.groupTitle, { color: colors.textSecondary }]}>Finans</Text>
           <View style={[group, { marginBottom: 24 }]}>

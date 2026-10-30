@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
-import { Phone, Share2, ShieldCheck, Crown } from 'lucide-react-native';
+import { Phone, Share2, ShieldCheck, Crown, MessageCircle } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { supabase } from '../../lib/supabase';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -94,6 +94,14 @@ export default function WebPlateDetail() {
         }
         await Clipboard.setStringAsync(text);
         showToast('Elan linki kopyalandı', 'success');
+    };
+
+    const whatsappPhone = (phones[0] || plate.contact_phone || '').replace(/\D/g, '');
+    const handleWhatsApp = () => {
+        if (!whatsappPhone) return;
+        const normalizedPhone = whatsappPhone.startsWith('994') ? whatsappPhone : whatsappPhone.startsWith('0') ? `994${whatsappPhone.slice(1)}` : `994${whatsappPhone}`;
+        const msg = encodeURIComponent(`Salam, Naxçıvan Avto-dakı ${plateText} (${price}) nömrə elanı ilə maraqlanıram:\n${shareUrl}`);
+        Linking.openURL(`https://wa.me/${normalizedPhone}?text=${msg}`);
     };
 
     const jsonLd = {
@@ -206,6 +214,18 @@ export default function WebPlateDetail() {
                                         fullWidth
                                     />
                                 ))}
+                                {!!whatsappPhone && (
+                                    <TouchableOpacity
+                                        onPress={handleWhatsApp}
+                                        activeOpacity={0.85}
+                                        style={styles.whatsappBtn}
+                                        accessibilityRole="button"
+                                        accessibilityLabel="WhatsApp-da yaz"
+                                    >
+                                        <MessageCircle size={16} color="#FFF" />
+                                        <Text style={styles.whatsappBtnText}>WhatsApp-da yaz</Text>
+                                    </TouchableOpacity>
+                                )}
                             </View>
                         </Card>
                     </View>
@@ -234,4 +254,15 @@ const styles = StyleSheet.create({
     sellerName: { fontSize: 16, fontFamily: FONT.bold },
     verified: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
     verifiedText: { fontSize: 13, fontFamily: FONT.medium },
+    whatsappBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        height: 44,
+        borderRadius: 12,
+        backgroundColor: '#25D366',
+        cursor: 'pointer' as any,
+    },
+    whatsappBtnText: { color: '#FFF', fontSize: 15, fontFamily: FONT.semibold },
 });

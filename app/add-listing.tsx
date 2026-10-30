@@ -34,7 +34,7 @@ const TRANSITION_CONFIG = { type: 'timing', duration: 250 } as const;
 export default function AddListingScreen() {
   const router = useRouter();
   const { showToast } = useToast();
-  const { user } = useAuth();
+  const { isAdmin } = useAuth();
   const { colors, isDark } = useTheme();
   const headerTop = useScreenTopPadding(true);
   const insets = useSafeAreaInsets();
@@ -175,9 +175,9 @@ export default function AddListingScreen() {
     try {
       for (const img of selectedImages) {
         if (!img.base64) continue;
-        const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.webp`;
         const filePath = `listings/${fileName}`;
-        const { error } = await supabase.storage.from('images').upload(filePath, decode(img.base64), { contentType: 'image/jpeg' });
+        const { error } = await supabase.storage.from('images').upload(filePath, decode(img.base64), { contentType: 'image/webp' });
         if (error) throw error;
         const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(filePath);
         uploadedUrls.push(publicUrl);
@@ -214,7 +214,7 @@ export default function AddListingScreen() {
       let uploadedImageUrls: string[] = [];
       if (selectedImages.length > 0) uploadedImageUrls = await uploadImagesToSupabase();
       const mainImageUrl = uploadedImageUrls.length > 0 ? uploadedImageUrls[0] : null;
-      const status = user ? 'approved' : 'pending';
+      const status = isAdmin ? 'approved' : 'pending';
       const { data, error } = await supabase.from('listings').insert({
         make, model, year: parseInt(year) || 2020, price: parseFloat(price) || 0, mileage: parseInt(mileage) || 0, engine: engine || '2.0', horsepower: parseInt(horsepower) || null, location, image_url: mainImageUrl, images: uploadedImageUrls, is_credit: isCredit, is_barter: isBarter, is_urgent: isUrgent, title: `${make} ${model}`, currency: 'AZN', body_type: bodyType, color, gearbox, transmission, market, fuel_type: fuelType, is_new: isNew, description: description || '', contact_phone: contactPhone || '+994', seller_name: sellerName, vin_code: vinCode.toUpperCase(), status, features: selectedFeatures
       }).select().single();
@@ -228,9 +228,9 @@ export default function AddListingScreen() {
     if (!plateRegion || !plateSeries || !plateNumber || !platePrice || !plateContact || !plateSellerName) { showToast('Zəhmət olmasa bütün sahələri doldurun', 'error'); return; }
     setLoading(true);
     try {
-      const status = user ? 'approved' : 'pending';
+      const status = isAdmin ? 'approved' : 'pending';
       const { data, error } = await supabase.from('plates').insert({
-        region: plateRegion, series: plateSeries.toUpperCase(), number: plateNumber, price: parseFloat(platePrice) || 0, description: plateDesc || '', is_vip: plateIsVip, contact_phone: plateContact || '+994', seller_name: plateSellerName, status
+        region: plateRegion, series: plateSeries.toUpperCase(), number: plateNumber, price: parseFloat(platePrice) || 0, description: plateDesc || '', is_vip: isAdmin && plateIsVip, contact_phone: plateContact || '+994', seller_name: plateSellerName, status
       }).select().single();
       if (error) throw error;
       if (data && data.short_id) setCreatedShortId(data.short_id);
@@ -441,9 +441,11 @@ export default function AddListingScreen() {
                 </View>
                 <View style={styles.compactFormGroup}><Text style={[styles.label, { color: colors.textSecondary }]}>Əlaqə nömrəsi</Text><TextInput style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]} placeholder="+994" placeholderTextColor={colors.placeholder} keyboardType="phone-pad" value={plateContact} onChangeText={setPlateContact} /></View>
                 <View style={styles.compactFormGroup}><Text style={[styles.label, { color: colors.textSecondary }]}>Qeydlər</Text><TextInput style={[styles.input, styles.textArea, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]} placeholder="Əlavə məlumat..." placeholderTextColor={colors.placeholder} value={plateDesc} onChangeText={setPlateDesc} multiline textAlignVertical="top" scrollEnabled={true} /></View>
-                <View style={[styles.togglesContainer, { backgroundColor: colors.card }]}>
-                  <View style={[styles.toggleRow, { borderBottomWidth: 0 }]}><Text style={[styles.toggleLabel, { color: colors.text }]}>VIP Nömrə?</Text><Switch value={plateIsVip} onValueChange={setPlateIsVip} trackColor={{ false: '#333', true: '#FFD700' }} /></View>
-                </View>
+                {isAdmin && (
+                  <View style={[styles.togglesContainer, { backgroundColor: colors.card }]}>
+                    <View style={[styles.toggleRow, { borderBottomWidth: 0 }]}><Text style={[styles.toggleLabel, { color: colors.text }]}>VIP Nömrə?</Text><Switch value={plateIsVip} onValueChange={setPlateIsVip} trackColor={{ false: '#333', true: '#FFD700' }} /></View>
+                  </View>
+                )}
               </View>
             </MotiView>
           )}

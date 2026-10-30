@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
-import { View, Platform, useWindowDimensions, TouchableOpacity, StyleSheet, Linking } from 'react-native';
+import { View, Platform, useWindowDimensions, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSettings } from '../contexts/SettingsContext';
 import { Image } from 'expo-image';
+import { openTarget } from '../lib/links';
 
 export const WebSideBanners = ({ side }: { side: 'left' | 'right' }) => {
     const { settings } = useSettings();
@@ -14,14 +15,8 @@ export const WebSideBanners = ({ side }: { side: 'left' | 'right' }) => {
         return null;
     }
 
-    const handlePress = async (url?: string) => {
-        if (!url) return;
-        const formattedUrl = url.startsWith('http') ? url : `https://${url}`;
-        const canOpen = await Linking.canOpenURL(formattedUrl);
-        if (canOpen) {
-            Linking.openURL(formattedUrl);
-        }
-    };
+    // A listing opens in the app's router, a URL in a new tab
+    const handlePress = (target?: string) => openTarget(target);
 
     const hasBanner = side === 'left' ? !!settings.web_left_banner_url : !!settings.web_right_banner_url;
 

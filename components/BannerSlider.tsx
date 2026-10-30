@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, FlatList, useWindowDimensions, StyleSheet, Pressable } from 'react-native';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { openTarget } from '../lib/links';
 
 interface BannerSliderProps {
     images: string[];
+    /** Per-image target (listing or URL), same order as images; see lib/links */
+    links?: (string | undefined)[];
     height?: number;
     autoPlayInterval?: number;
     contentFit?: 'cover' | 'contain' | 'fill';
@@ -12,6 +14,7 @@ interface BannerSliderProps {
 
 export const BannerSlider: React.FC<BannerSliderProps> = ({
     images,
+    links = [],
     height = 160,
     autoPlayInterval = 3000,
     contentFit = 'cover'
@@ -23,8 +26,13 @@ export const BannerSlider: React.FC<BannerSliderProps> = ({
     const flatListRef = useRef<FlatList>(null);
     const [isAutoPlayPaused, setIsAutoPlayPaused] = useState(false);
 
-    // Use useMemo to prevent unnecessary re-calculations
-    const validImages = useMemo(() => images.filter(img => img && img.length > 0), [images]);
+    // Empty slots are dropped together with their link so the pairs stay aligned
+    const slides = useMemo(
+        () => images.map((image, i) => ({ image, link: links[i] })).filter((s) => s.image && s.image.length > 0),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [images.join('|'), links.join('|')],
+    );
+    const validImages = slides.map((s) => s.image);
 
     useEffect(() => {
         if (validImages.length <= 1 || isAutoPlayPaused) return;
@@ -43,11 +51,15 @@ export const BannerSlider: React.FC<BannerSliderProps> = ({
         return () => clearInterval(interval);
     }, [validImages.length, autoPlayInterval, isAutoPlayPaused]);
 
-    const renderItem = ({ item, index }: { item: string; index: number }) => (
+    const renderItem = ({ item, index }: { item: string; index: number }) => {
+        const link = slides[index]?.link;
+        return (
         <View style={{ width, justifyContent: 'center', alignItems: 'center' }}>
             <Pressable
                 onPressIn={() => setIsAutoPlayPaused(true)}
                 onPressOut={() => setIsAutoPlayPaused(false)}
+                onPress={link ? () => openTarget(link) : undefined}
+                accessibilityRole={link ? 'link' : undefined}
                 style={[styles.slide, { height, width: itemWidth }]}
             >
                 <Image
@@ -59,7 +71,8 @@ export const BannerSlider: React.FC<BannerSliderProps> = ({
                 />
             </Pressable>
         </View>
-    );
+        );
+    };
 
     const onMomentumScrollEnd = (event: any) => {
         const index = Math.round(event.nativeEvent.contentOffset.x / width);

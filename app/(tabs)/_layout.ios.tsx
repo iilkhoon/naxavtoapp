@@ -1,6 +1,6 @@
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { useRouter } from 'expo-router';
-import { DynamicColorIOS } from 'react-native';
+import { DynamicColorIOS, DeviceEventEmitter } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 // iOS uses the system tab bar (Liquid Glass on iOS 26+). Android keeps the custom
@@ -21,7 +21,11 @@ export default function TabLayout() {
 
   return (
     <NativeTabs tintColor={tint} minimizeBehavior="onScrollDown">
-      <NativeTabs.Trigger name="index" disableTransparentOnScrollEdge>
+      <NativeTabs.Trigger
+        name="index"
+        disableTransparentOnScrollEdge
+        listeners={{ tabPress: () => DeviceEventEmitter.emit('scroll_to_top_home') }}
+      >
         {icon('home-outline')}
         <NativeTabs.Trigger.Label>Ana səhifə</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>

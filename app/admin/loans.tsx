@@ -56,7 +56,8 @@ export default function AdminLoans() {
   const router = useRouter();
   const c = useAdminColors();
   const { showToast } = useToast();
-  const { isSuperAdmin, loading: authLoading } = useAuth();
+  const { hasModule, loading: authLoading } = useAuth();
+  const isSuperAdmin = hasModule('finance');
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -119,7 +120,7 @@ export default function AdminLoans() {
     return (
       <View style={{ flex: 1, backgroundColor: c.background }}>
         <AdminHeader title="Kredit paneli" backLabel="Admin" />
-        <EmptyView title="Giriş yoxdur" subtitle="Kredit panelinə yalnız superadminlər daxil ola bilər." />
+        <EmptyView title="Giriş yoxdur" subtitle="Kredit panelinə icazəniz yoxdur." />
       </View>
     );
   }

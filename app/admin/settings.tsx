@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { Image } from 'expo-image';
-import { Save, Image as ImageIcon, Users } from 'lucide-react-native';
+import { Save, Image as ImageIcon, Users, Zap, HardDrive, Trash2, CheckCircle2 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
@@ -9,11 +9,17 @@ import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { compressImage } from '../../utils/imageOptimizer';
+import { compressImage, deleteStorageImages } from '../../utils/imageOptimizer';
+import {
+    analyzeDatabaseAndStorage,
+    runFullWebpAndDatabaseOptimization,
+    StorageAuditReport,
+    OptimizationProgress,
+} from '../../utils/storageOptimizer';
 import { AppSetting } from '../../types';
 import { haptics } from '../../utils/haptics';
 import {
-    AdminHeader, AdminScroll, Group, GroupRow, FieldRow, TextArea, Segmented, HeaderAction, LoadingView, useAdminColors, AdminColors, F, uploadPath,
+    AdminHeader, AdminScroll, Group, GroupRow, FieldRow, TextArea, Segmented, AdminButton, HeaderAction, LoadingView, useAdminColors, AdminColors, F, uploadPath,
 } from '../../components/admin/AdminUI';
 
 const DEFAULT_KEYS = [
@@ -72,6 +78,51 @@ export default function SettingsScreen() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [uploadingKey, setUploadingKey] = useState<string | null>(null);
+    const [audit, setAudit] = useState<StorageAuditReport | null>(null);
+    const [auditLoading, setAuditLoading] = useState(true);
+    const [optimizing, setOptimizing] = useState(false);
+    const [optProgress, setOptProgress] = useState<OptimizationProgress | null>(null);
+    const cancelRef = useRef(false);
+
+    const loadAudit = async () => {
+        setAuditLoading(true);
+        try {
+            const res = await analyzeDatabaseAndStorage(supabase);
+            setAudit(res);
+        } catch {
+            // ignore
+        } finally {
+            setAuditLoading(false);
+        }
+    };
+
+    const handleRunOptimization = async () => {
+        if (optimizing) {
+            cancelRef.current = true;
+            return;
+        }
+        cancelRef.current = false;
+        setOptimizing(true);
+        try {
+            const finalState = await runFullWebpAndDatabaseOptimization(
+                supabase,
+                (p) => setOptProgress(p),
+                () => cancelRef.current
+            );
+            await refreshSettings();
+            await loadAudit();
+            haptics.success();
+            showToast(
+                `${finalState.convertedImages} şəkil WebP-ə çevrildi, ${finalState.deletedEmptyChats} boş çat silindi`,
+                'success'
+            );
+        } catch (err: any) {
+            haptics.error();
+            showToast('Optimizasiya xətası: ' + (err.message || ''), 'error');
+        } finally {
+            setOptimizing(false);
+        }
+    };
 
     useEffect(() => {
         let cancelled = false;
@@ -88,6 +139,7 @@ export default function SettingsScreen() {
                     if (!current.find((s) => s.key === def.key)) current.push({ key: def.key, value: '', label: def.label });
                 });
                 if (!cancelled) setSettings(current);
+                loadAudit();
             } catch (error: any) {
                 showToast('Xəta: ' + error.message, 'error');
             } finally {
@@ -106,14 +158,18 @@ export default function SettingsScreen() {
             const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 1 });
             if (result.canceled) return;
             setUploadingKey(key);
-            const compressed = await compressImage(result.assets[0].uri);
-            const fileName = uploadPath(`settings/${key}`);
-            const { error } = await supabase.storage.from('images').upload(fileName, decode(compressed.base64!), { contentType: 'image/jpeg', upsert: true });
+            const prevUrl = valueOf(key);
+            const compressed = await compressImage(result.assets[0].uri, 800, 0.72);
+            const fileName = uploadPath(`settings/${key}`, 'webp');
+            const { error } = await supabase.storage.from('images').upload(fileName, decode(compressed.base64!), { contentType: 'image/webp' });
             if (error) throw error;
             const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(fileName);
             updateSetting(key, publicUrl);
+            if (prevUrl && prevUrl !== publicUrl) {
+                await deleteStorageImages(supabase, [prevUrl]);
+            }
             haptics.success();
-            showToast('Şəkil yükləndi — yadda saxlamağı unutmayın', 'success');
+            showToast('Şəkil WebP formatında yükləndi — yadda saxlamağı unutmayın', 'success');
         } catch (error: any) {
             haptics.error();
             showToast('Yükləmə xətası: ' + error.message, 'error');
@@ -158,6 +214,95 @@ export default function SettingsScreen() {
             />
             {loading ? <LoadingView /> : (
                 <AdminScroll>
+                    <Group
+                        title="Baza və Şəkil Optimizasiyası (WebP)"
+                        footer="Bütün mövcud elan, reklam və ayar şəkillərini WebP formatına çevirib sıxır, silinmiş elanlardan qalan artıq şəkilləri və boş çatları bazadan təmizləyir."
+                    >
+                        <GroupRow
+                            icon={HardDrive}
+                            tint="#007AFF"
+                            title="Supabase Storage həcmi"
+                            subtitle={
+                                auditLoading
+                                    ? 'Analiz edilir...'
+                                    : audit
+                                    ? `WebP: ${audit.webpFiles} fayl • Köhnə JPG/PNG: ${audit.legacyFiles} fayl`
+                                    : 'Məlumat yoxdur'
+                            }
+                            value={audit ? `${audit.totalSizeMB} MB (${audit.totalFiles})` : '...'}
+                            chevron={false}
+                        />
+                        <GroupRow
+                            icon={Zap}
+                            tint="#FF9500"
+                            title="WebP-ə çevriləcək aktiv şəkillər"
+                            subtitle={
+                                audit
+                                    ? `${audit.listingsToConvert} elanda ${audit.listingImagesToConvert} foto, ${audit.settingsImagesToConvert + audit.competitionImagesToConvert} ayar/reklam fotosu`
+                                    : 'Yoxlanılır...'
+                            }
+                            value={
+                                audit
+                                    ? `${audit.listingImagesToConvert + audit.settingsImagesToConvert + audit.competitionImagesToConvert} ədəd`
+                                    : '...'
+                            }
+                            chevron={false}
+                        />
+                        <GroupRow
+                            icon={Trash2}
+                            tint="#FF3B30"
+                            title="Silinəcək lazımsız datalar"
+                            subtitle={
+                                audit
+                                    ? `${audit.orphanedFiles.length} istifadəsiz şəkil (${audit.orphanedSizeMB} MB) • ${audit.emptyChatsIds.length} boş çat`
+                                    : 'Yoxlanılır...'
+                            }
+                            value={audit ? `${audit.orphanedSizeMB} MB` : '...'}
+                            chevron={false}
+                        />
+                        {optProgress && (
+                            <View style={{ paddingHorizontal: 16, paddingVertical: 12, gap: 8 }}>
+                                <Text style={{ fontSize: 13, fontFamily: F.medium, color: c.text }}>
+                                    {optProgress.message}
+                                </Text>
+                                <View style={{ height: 6, borderRadius: 3, backgroundColor: c.fill, overflow: 'hidden' }}>
+                                    <View
+                                        style={{
+                                            height: '100%',
+                                            width: `${Math.min(100, Math.round((optProgress.current / Math.max(1, optProgress.total)) * 100))}%`,
+                                            backgroundColor: optProgress.phase === 'done' ? c.success : c.primary,
+                                        }}
+                                    />
+                                </View>
+                            </View>
+                        )}
+                        <View style={{ padding: 12 }}>
+                            <AdminButton
+                                title={
+                                    optimizing
+                                        ? 'Dayandır'
+                                        : audit &&
+                                          audit.listingImagesToConvert +
+                                              audit.settingsImagesToConvert +
+                                              audit.competitionImagesToConvert +
+                                              audit.orphanedFiles.length +
+                                              audit.emptyChatsIds.length ===
+                                              0
+                                        ? 'Bütün şəkillər WebP-dir və baza təmizdir ✓'
+                                        : 'Hamısını WebP-ə Çevir və Bazanı Təmizlə'
+                                }
+                                variant={optimizing ? 'destructive' : 'primary'}
+                                icon={
+                                    optimizing ? undefined : (
+                                        <CheckCircle2 size={18} color="#FFF" />
+                                    )
+                                }
+                                onPress={handleRunOptimization}
+                                disabled={auditLoading}
+                            />
+                        </View>
+                    </Group>
+
                     <Group title="Ümumi">
                         {GENERAL.map((key) => (
                             <FieldRow

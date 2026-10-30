@@ -1,0 +1,3 @@
+__d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{value:!0}),Object.defineProperty(e,"default",{enumerable:!0,get:function(){return l}});var t=r(d[0]),n=r(d[1]),u=r(d[2]),s=r(d[3]);function l(){const{isSuperAdmin:l,hasModule:c}=(0,n.useAuth)(),o=(0,u.visibleAdminMenu)(l,'web',c)[0]?.items[0]?.path,f=c('listings')?'/admin/listings':null;return(0,s.jsx)(t.Redirect,{href:f||o||'/'})}},4252,[983,3606,4227,227]);
+//# sourceMappingURL=/_expo/static/js/web/index-a90c38469c7a006bdb6d4b7f075e4cf0.js.map
+//# debugId=c962cab0-9099-44c4-857e-8cbe73f1ebb5

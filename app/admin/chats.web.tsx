@@ -51,9 +51,20 @@ export default function AdminChatsWeb() {
     const loadChats = useCallback(async () => {
         let query = supabase.from('chats').select('*').order('updated_at', { ascending: false });
         if (filterStatus !== 'all') query = query.eq('status', filterStatus);
-        const { data, error } = await query;
+        const [{ data, error }, { data: msgRows }] = await Promise.all([
+            query,
+            supabase.from('messages').select('chat_id'),
+        ]);
         if (error) console.error('Error loading chats:', error);
-        else setChats(data || []);
+        else {
+            const hasMsg = new Set((msgRows || []).map((m: any) => m.chat_id));
+            const all = data || [];
+            const emptyIds = all.filter((ch) => !hasMsg.has(ch.id)).map((ch) => ch.id);
+            if (emptyIds.length > 0) {
+                supabase.from('chats').delete().in('id', emptyIds).then(() => {});
+            }
+            setChats(all.filter((ch) => hasMsg.has(ch.id)));
+        }
         setLoadingChats(false);
     }, [filterStatus]);
 

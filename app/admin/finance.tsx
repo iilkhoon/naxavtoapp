@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 export default function AdminFinance() {
   const c = useAdminColors();
   const router = useRouter();
-  const { isSuperAdmin, loading } = useAuth();
+  const { hasModule, loading } = useAuth();
   const params = useLocalSearchParams<{ tab?: string }>();
   // Local state keeps switching instant; the URL param only remembers the tab
   const [tab, setTab] = useState<FinanceTab>(
@@ -22,8 +22,8 @@ export default function AdminFinance() {
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
       <AdminHeader title="Finans" />
-      {!loading && !isSuperAdmin ? (
-        <EmptyView title="Giriş yoxdur" subtitle="Finans bölməsinə yalnız superadmin daxil ola bilər." />
+      {!loading && !hasModule('finance') ? (
+        <EmptyView title="Giriş yoxdur" subtitle="Finans bölməsinə icazəniz yoxdur." />
       ) : (
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: bottom + 24 }} keyboardShouldPersistTaps="handled">
           {!loading && <FinancePanel tab={tab} onTab={changeTab} />}

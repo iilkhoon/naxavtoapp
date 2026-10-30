@@ -9,7 +9,7 @@ import { FinancePanel, FinanceTab, FINANCE_TABS } from '../../components/finance
 export default function AdminFinanceWeb() {
   const t = useWebTokens();
   const router = useRouter();
-  const { isSuperAdmin, loading } = useAuth();
+  const { hasModule, loading } = useAuth();
   const params = useLocalSearchParams<{ tab?: string }>();
   // Local state keeps switching instant; the URL param only remembers the tab
   const [tab, setTab] = useState<FinanceTab>(
@@ -17,10 +17,10 @@ export default function AdminFinanceWeb() {
   );
   const changeTab = (next: FinanceTab) => { setTab(next); router.setParams({ tab: next }); };
 
-  if (!loading && !isSuperAdmin) {
+  if (!loading && !hasModule('finance')) {
     return (
       <AdminPage title="Finans">
-        <Card><EmptyState icon={<Shield size={28} color={t.textSecondary} />} title="Giriş yoxdur" subtitle="Finans bölməsinə yalnız superadmin daxil ola bilər." /></Card>
+        <Card><EmptyState icon={<Shield size={28} color={t.textSecondary} />} title="Giriş yoxdur" subtitle="Finans bölməsinə icazəniz yoxdur." /></Card>
       </AdminPage>
     );
   }

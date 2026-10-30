@@ -1,0 +1,3 @@
+__d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{value:!0}),Object.defineProperty(e,"default",{enumerable:!0,get:function(){return u}}),r(d[0]);var t=r(d[1]),n=r(d[2]),l=r(d[3]);function u(){return(0,l.jsx)(n.FlagListingsScreen,{flag:"is_vip",title:"VIP elanlar",flagLabel:"VIP",onText:"Elan VIP edildi",offText:"VIP statusu g\xf6t\xfcr\xfcld\xfc",icon:t.Crown})}},4277,[50,1177,4272,227]);
+//# sourceMappingURL=/_expo/static/js/web/vip-listings-14663b7a06e72a89a10e3316d3f8dc6a.js.map
+//# debugId=cb0eb8b3-f2d7-43ea-9fac-a1dab97a02c4

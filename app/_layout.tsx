@@ -23,7 +23,7 @@ import {
   RethinkSans_700Bold,
   RethinkSans_800ExtraBold
 } from '@expo-google-fonts/rethink-sans';
-import { usePushNotifications } from '../hooks/usePushNotifications';
+import { usePushNotifications, useNotificationTapHandler } from '../hooks/usePushNotifications';
 import { InstagramPopup } from '../components/InstagramPopup';
 import { WebSideBanners } from '../components/WebSideBanners';
 
@@ -48,6 +48,7 @@ function compareVersions(v1: string, v2: string): number {
 function RootLayoutNav() {
   const { colors, isDark } = useTheme();
   usePushNotifications(); // Register push token
+  useNotificationTapHandler(); // Open the listing a tapped push points to
   const { settings, loading } = useSettings();
 
   // Global Smooth Transition Configuration

@@ -180,7 +180,7 @@ export default function LoanDetail() {
             {payments.map((p: any) => (
               <GroupRow
                 key={p.id}
-                title={`+${money2(Number(p.amount))}`}
+                title={p.voided_at ? `${money2(Number(p.amount))} · Ləğv edilib` : `+${money2(Number(p.amount))}`}
                 subtitle={[formatDate(p.paid_at || p.created_at), p.payment_method === 'cash' ? 'Nağd' : p.payment_method === 'card' ? 'Kart' : 'Köçürmə', p.note && p.note.replace('[CƏDVƏLDƏN KƏNAR] ', 'Yenidən hesablama · ')].filter(Boolean).join(' · ')}
               />
             ))}

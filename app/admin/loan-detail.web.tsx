@@ -98,7 +98,7 @@ export default function LoanDetail() {
     </Card>
   );
 
-  const recalcLog = payments.filter((p: any) => p.note && p.note.includes('[CƏDVƏLDƏN KƏNAR]'));
+  const recalcLog = payments.filter((p: any) => !p.voided_at && p.note && p.note.includes('[CƏDVƏLDƏN KƏNAR]'));
   const methodLabel = (m: string) => (m === 'cash' ? 'Nağd' : m === 'card' ? 'Kart' : 'Köçürmə');
 
   return (
@@ -221,10 +221,12 @@ export default function LoanDetail() {
                 data={payments}
                 keyExtractor={(p) => p.id}
                 columns={[
-                  { key: 'amount', title: 'Məbləğ', flex: 1, render: (p) => <Text style={[styles.paid, { color: t.success }]}>+{money2(Number(p.amount))}</Text> },
+                  { key: 'amount', title: 'Məbləğ', flex: 1, render: (p) => p.voided_at
+                    ? <Text style={[styles.paid, { color: t.textTertiary, textDecorationLine: 'line-through' }]}>{money2(Number(p.amount))}</Text>
+                    : <Text style={[styles.paid, { color: t.success }]}>+{money2(Number(p.amount))}</Text> },
                   { key: 'date', title: 'Tarix', flex: 1, render: (p) => <CellText title={formatDate(p.paid_at || p.created_at)} /> },
                   { key: 'method', title: 'Üsul', flex: 0.8, hideOnMobile: true, render: (p) => <CellText title={methodLabel(p.payment_method)} /> },
-                  { key: 'note', title: 'Qeyd', flex: 2, hideOnMobile: true, render: (p) => <CellText title={(p.note || '—').replace('[CƏDVƏLDƏN KƏNAR] ', 'Yenidən hesablama · ')} /> },
+                  { key: 'note', title: 'Qeyd', flex: 2, hideOnMobile: true, render: (p) => <CellText title={(p.voided_at ? 'Ləğv edilib · ' : '') + (p.note || '—').replace('[CƏDVƏLDƏN KƏNAR] ', 'Yenidən hesablama · ')} /> },
                 ]}
               />
             </View>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Shield, Car, Hash, CreditCard, Phone, Calendar, Mail } from 'lucide-react-native';
+import { Car, Hash, CreditCard, Phone, Calendar, Mail } from 'lucide-react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
@@ -8,8 +8,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { formatDate } from '../../lib/utils';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { haptics } from '../../utils/haptics';
+import { ADMIN_MODULES, AdminModule } from '../../constants/adminMenu';
+import { ModulePicker, accessLabel } from '../../components/admin/ModulePicker';
 import {
-    AdminHeader, AdminScroll, Group, GroupRow, Pill, EmptyView, LoadingView, useAdminColors, F,
+    AdminHeader, AdminScroll, Group, GroupRow, Pill, EmptyView, LoadingView, AdminButton, useAdminColors, F,
 } from '../../components/admin/AdminUI';
 
 export default function UserDetailMobile() {
@@ -24,6 +26,7 @@ export default function UserDetailMobile() {
     const [actionLoading, setActionLoading] = useState(false);
     const [confirmRevoke, setConfirmRevoke] = useState(false);
     const [profile, setProfile] = useState<any>(null);
+    const [modules, setModules] = useState<AdminModule[]>([]);
     const [stats, setStats] = useState({ listings: 0, plates: 0, loans: 0 });
 
     useEffect(() => {
@@ -49,6 +52,7 @@ export default function UserDetailMobile() {
                 ]);
                 if (cancelled) return;
                 setProfile(p);
+                setModules(Array.isArray(p.modules) ? p.modules : ADMIN_MODULES.map((m) => m.key));
                 setStats({ listings: l.count || 0, plates: pl.count || 0, loans: lo.count || 0 });
             } catch (e: any) {
                 showToast('Xəta: ' + e.message, 'error');
@@ -59,10 +63,16 @@ export default function UserDetailMobile() {
         return () => { cancelled = true; };
     }, [userId, isSuperAdmin, authLoading, router, showToast]);
 
-    const toggleSuperAdmin = async () => {
+    const saveModules = async () => {
+        if (modules.length === 0) {
+            haptics.error();
+            showToast('Ən azı bir bölmə seçin', 'error');
+            return;
+        }
         setActionLoading(true);
-        const next = !profile.is_superadmin;
-        const { error } = await supabase.from('profiles').update({ is_superadmin: next }).eq('id', userId);
+        const { error } = await supabase.rpc('admin_save_user', {
+            p_user_id: userId, p_email: profile.email, p_full_name: profile.full_name || '', p_modules: modules,
+        });
         setActionLoading(false);
         if (error) {
             haptics.error();
@@ -70,14 +80,14 @@ export default function UserDetailMobile() {
             return;
         }
         haptics.success();
-        setProfile((prev: any) => ({ ...prev, is_superadmin: next }));
-        showToast(next ? 'Superadmin statusu verildi' : 'Superadmin statusu götürüldü', 'success');
+        setProfile((prev: any) => ({ ...prev, modules }));
+        showToast('İcazələr yadda saxlanıldı', 'success');
     };
 
     const revokeAdmin = async () => {
         setConfirmRevoke(false);
         setActionLoading(true);
-        const { error } = await supabase.from('profiles').update({ role: 'user', is_superadmin: false }).eq('id', userId);
+        const { error } = await supabase.from('profiles').update({ role: 'user', is_superadmin: false, modules: null }).eq('id', userId);
         setActionLoading(false);
         if (error) {
             haptics.error();
@@ -85,7 +95,7 @@ export default function UserDetailMobile() {
             return;
         }
         haptics.success();
-        showToast('Admin icazəsi ləğv edildi', 'success');
+        showToast('Giriş bağlandı', 'success');
         router.back();
     };
 
@@ -117,7 +127,7 @@ export default function UserDetailMobile() {
                     <View style={[styles.avatar, { backgroundColor: c.fill }]}>
                         <Text style={[styles.avatarText, { color: c.text }]}>{(profile.full_name?.charAt(0) || profile.email?.charAt(0) || 'U').toUpperCase()}</Text>
                     </View>
-                    {profile.is_superadmin ? <Pill label="Superadmin" tone="blue" /> : <Pill label="Admin" tone="accent" />}
+                    <Pill label={accessLabel(profile)} tone={profile.is_superadmin ? 'blue' : 'accent'} />
                 </View>
 
                 <Group title="Əlaqə">
@@ -132,32 +142,29 @@ export default function UserDetailMobile() {
                     <GroupRow icon={CreditCard} tint="#00C7BE" title="Kreditlər" value={String(stats.loans)} />
                 </Group>
 
-                {!isSelf && (
-                    <Group title="İdarəetmə" footer="Superadmin kredit panelini və admin istifadəçiləri idarə edə bilir.">
-                        <GroupRow
-                            icon={Shield}
-                            tint="#5856D6"
-                            title={profile.is_superadmin ? 'Superadmin statusunu götür' : 'Superadmin et'}
-                            onPress={actionLoading ? undefined : toggleSuperAdmin}
-                            chevron={false}
-                        />
-                        <GroupRow
-                            title="Admin icazəsini ləğv et"
-                            destructive
-                            chevron={false}
-                            onPress={actionLoading ? undefined : () => setConfirmRevoke(true)}
-                        />
-                    </Group>
+                {!isSelf && !profile.is_superadmin && profile.role === 'admin' && (
+                    <>
+                        <ModulePicker value={modules} onChange={setModules} disabled={actionLoading} />
+                        <AdminButton title="İcazələri yadda saxla" onPress={saveModules} loading={actionLoading} style={{ marginBottom: 24 }} />
+                        <Group>
+                            <GroupRow
+                                title="Admin panelə girişi bağla"
+                                destructive
+                                chevron={false}
+                                onPress={actionLoading ? undefined : () => setConfirmRevoke(true)}
+                            />
+                        </Group>
+                    </>
                 )}
             </AdminScroll>
 
             <ConfirmModal
                 visible={confirmRevoke}
-                title="Admin icazəsini ləğv etmək?"
+                title="Girişi bağlamaq?"
                 message="İstifadəçi adi istifadəçiyə çevriləcək və admin panelə daxil ola bilməyəcək."
                 onConfirm={revokeAdmin}
                 onCancel={() => setConfirmRevoke(false)}
-                confirmText="Ləğv et"
+                confirmText="Bağla"
                 cancelText="İmtina"
                 isDestructive
             />

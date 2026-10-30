@@ -54,12 +54,10 @@ export const CustomTabBar = ({ state, emitter, navigateToTab }: TabBarProps) => 
               canPreventDefault: true,
             });
 
-            if (isFocused) {
-              if (route.name === 'index') {
-                DeviceEventEmitter.emit('scroll_to_top_home');
-              }
-            } else if (!event.defaultPrevented) {
-              navigateToTab(route.key);
+            if (!isFocused && !event.defaultPrevented) navigateToTab(route.key);
+            // Every press on "Ana səhifə" scrolls it to the top and reloads the listings
+            if (route.name === 'index' && !event.defaultPrevented) {
+              DeviceEventEmitter.emit('scroll_to_top_home');
             }
           };
 

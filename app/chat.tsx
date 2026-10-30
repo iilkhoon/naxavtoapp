@@ -58,6 +58,7 @@ export default function ChatScreen() {
     const { expoPushToken } = usePushNotifications(deviceId || undefined);
 
     const flatListRef = useRef<FlatList>(null);
+    const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
     // Initialize Chat
     useEffect(() => {
@@ -91,27 +92,6 @@ export default function ChatScreen() {
                             .from('chats')
                             .update({ app_version: appVersion })
                             .eq('id', currentChatId);
-                    }
-                } else {
-                    // 3. Or create a new chat
-                    const appVersion = Constants.expoConfig?.version || 'Unknown';
-                    const { data: newChat, error: insertError } = await supabase
-                        .from('chats')
-                        .insert([
-                            {
-                                device_id: savedDeviceId,
-                                user_id: session?.user?.id || null, // Link if logged in
-                                status: 'open',
-                                app_version: appVersion
-                            },
-                        ])
-                        .select()
-                        .single();
-
-                    if (insertError) {
-                        console.error('Error creating chat:', insertError);
-                    } else if (newChat) {
-                        currentChatId = newChat.id;
                     }
                 }
 
@@ -149,7 +129,10 @@ export default function ChatScreen() {
                 }
             };
             setNotWatching();
-            supabase.removeAllChannels();
+            if (channelRef.current) {
+                supabase.removeChannel(channelRef.current);
+                channelRef.current = null;
+            }
         };
     }, []);
 
@@ -169,7 +152,8 @@ export default function ChatScreen() {
     };
 
     const subscribeToMessages = (cId: string) => {
-        supabase
+        if (channelRef.current) supabase.removeChannel(channelRef.current);
+        channelRef.current = supabase
             .channel(`chat_${cId}`)
             .on(
                 'postgres_changes',
@@ -182,7 +166,10 @@ export default function ChatScreen() {
                 (payload) => {
                     const newMsg = payload.new as Message;
                     setMessages((prev) => {
-                        if (prev.find((m) => m.id === newMsg.id || (m.content === newMsg.content && m.sender_type === newMsg.sender_type))) return prev;
+                        if (prev.some((m) => m.id === newMsg.id)) return prev;
+                        // Replace our optimistic copy instead of dropping repeated texts
+                        const temp = prev.findIndex((m) => m.id.startsWith('temp-') && m.sender_type === newMsg.sender_type && m.content === newMsg.content);
+                        if (temp >= 0) return prev.map((m, i) => (i === temp ? newMsg : m));
                         return [...prev, newMsg];
                     });
 
@@ -199,12 +186,50 @@ export default function ChatScreen() {
 
     const handleSend = async () => {
         const text = inputText.trim();
-        if (!text || !chatId) return;
+        if (!text) return;
 
-        const tempId = generateUUID();
+        let activeChatId = chatId;
+        if (!activeChatId) {
+            let currentDeviceId = deviceId;
+            if (!currentDeviceId) {
+                currentDeviceId = (await AsyncStorage.getItem('device_id')) || generateUUID();
+                await AsyncStorage.setItem('device_id', currentDeviceId);
+                setDeviceId(currentDeviceId);
+            }
+            const appVersion = Constants.expoConfig?.version || 'Unknown';
+            const { data: newChat, error: createError } = await supabase
+                .from('chats')
+                .insert([
+                    {
+                        device_id: currentDeviceId,
+                        user_id: session?.user?.id || null,
+                        status: 'open',
+                        app_version: appVersion,
+                    },
+                ])
+                .select()
+                .single();
+
+            if (createError || !newChat) {
+                console.error('Error creating chat:', createError);
+                return;
+            }
+            activeChatId = newChat.id;
+            setChatId(activeChatId);
+            subscribeToMessages(activeChatId!);
+            const pushToken = await AsyncStorage.getItem('expo_push_token');
+            if (pushToken) {
+                await supabase
+                    .from('push_tokens')
+                    .update({ is_watching_chat: true, active_chat_id: activeChatId })
+                    .eq('token', pushToken);
+            }
+        }
+
+        const tempId = `temp-${generateUUID()}`;
         const tempMsg: Message = {
             id: tempId,
-            chat_id: chatId,
+            chat_id: activeChatId!,
             sender_type: 'user',
             content: text,
             created_at: new Date().toISOString(),
@@ -222,7 +247,7 @@ export default function ChatScreen() {
         try {
             const { error: insertError } = await supabase.from('messages').insert([
                 {
-                    chat_id: chatId,
+                    chat_id: activeChatId,
                     sender_type: 'user',
                     content: text,
                 },

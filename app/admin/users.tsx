@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { accessLabel } from '../../components/admin/ModulePicker';
 import {
     AdminHeader, AdminScroll, Group, GroupRow, HeaderAction, SearchBar, Pill, EmptyView, LoadingView, useAdminColors, F,
 } from '../../components/admin/AdminUI';
@@ -21,7 +22,7 @@ export default function AdminUsers() {
     const [searchQuery, setSearchQuery] = useState('');
 
     const fetchUsers = useCallback(async () => {
-        const { data, error } = await supabase.from('profiles').select('*').eq('role', 'admin').order('created_at', { ascending: false });
+        const { data, error } = await supabase.from('profiles').select('*').or('role.eq.admin,is_superadmin.eq.true').order('created_at', { ascending: false });
         if (error) showToast('İstifadəçilər yüklənmədi: ' + error.message, 'error');
         else setUsers(data || []);
         setLoading(false);
@@ -45,16 +46,16 @@ export default function AdminUsers() {
     return (
         <View style={{ flex: 1, backgroundColor: c.background }}>
             <AdminHeader
-                title="Admin istifadəçilər"
-                subtitle={loading ? undefined : `${users.length} admin`}
+                title="İstifadəçilər"
+                subtitle={loading ? undefined : `${users.length} istifadəçi`}
                 backLabel="Admin"
-                right={<HeaderAction icon={UserPlus} label="Yeni admin" onPress={() => router.push('/admin/add-user')} />}
+                right={<HeaderAction icon={UserPlus} label="Yeni istifadəçi" onPress={() => router.push('/admin/add-user')} />}
             />
             {loading ? <LoadingView /> : (
                 <AdminScroll refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchUsers(); }}>
                     <SearchBar value={searchQuery} onChangeText={setSearchQuery} placeholder="Ad və ya email" style={{ marginBottom: 16 }} />
                     {filtered.length === 0 ? (
-                        <EmptyView icon={Users} title="Admin tapılmadı" subtitle={q ? 'Axtarışı dəyişin.' : 'Yeni admin əlavə etmək üçün yuxarıdakı düyməyə toxunun.'} />
+                        <EmptyView icon={Users} title="İstifadəçi tapılmadı" subtitle={q ? 'Axtarışı dəyişin.' : 'Yeni istifadəçi əlavə etmək üçün yuxarıdakı düyməyə toxunun.'} />
                     ) : (
                         <Group>
                             {filtered.map((u) => (
@@ -65,7 +66,7 @@ export default function AdminUsers() {
                                     )}
                                     title={u.full_name || 'Adsız istifadəçi'}
                                     subtitle={u.email}
-                                    right={u.is_superadmin ? <Pill label="Superadmin" tone="blue" /> : <Pill label="Admin" tone="accent" />}
+                                    right={<Pill label={accessLabel(u)} tone={u.is_superadmin ? 'blue' : 'accent'} />}
                                     onPress={() => router.push(`/admin/user-detail?id=${u.id}` as any)}
                                 />
                             ))}

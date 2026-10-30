@@ -107,6 +107,7 @@ export default function FavoritesScreen() {
         <>
           <BannerSlider
             images={[settings.favorite_banner_1, settings.favorite_banner_2, settings.favorite_banner_3]}
+            links={[settings.favorite_banner_1_link, settings.favorite_banner_2_link, settings.favorite_banner_3_link]}
             height={120}
           />
           <View style={styles.grid}>

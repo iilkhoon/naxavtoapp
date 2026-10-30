@@ -1,0 +1,42 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "expo",
+        "start",
+        "--web",
+        "--port",
+        "8081"
+      ],
+      "port": 8081
+    },
+    {
+      "name": "dist",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "--yes",
+        "serve@14.2.4",
+        "dist",
+        "-l",
+        "5055"
+      ],
+      "port": 5055
+    },
+    {
+      "name": "finance-test",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "--yes",
+        "serve@14.2.4",
+        "C:/Users/rzyv0/AppData/Local/Temp/claude/C--Users-rzyv0-Desktop-naxavtoapp/cdaa95b4-d266-4098-aa19-1ca47f3f9fb2/scratchpad/webout",
+        "-l",
+        "5066",
+        "-s"
+      ],
+      "port": 5066
+    }
+  ]
+}

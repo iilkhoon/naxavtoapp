@@ -3,7 +3,7 @@ import {
     View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, TextStyle,
     DeviceEventEmitter, StyleProp,
 } from 'react-native';
-import { Search, X, SlidersHorizontal, Plus, Wallet, Percent, ArrowLeftRight, Zap } from 'lucide-react-native';
+import { Search, X, SlidersHorizontal, Plus, Wallet, Percent, ArrowLeftRight, Zap, ArrowUpDown } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -16,6 +16,7 @@ import { WebSideBanners } from '../../components/WebSideBanners';
 import { Pagination } from '../../components/Pagination';
 import { CarCard } from '../../components/CarCard';
 import { PlateCard } from '../../components/PlateCard';
+import { PlateVisual } from '../../components/PlateVisual';
 import { WebFooter } from '../../components/WebFooter.web';
 import { SeoHead } from '../../components/web/SeoHead';
 import {
@@ -26,6 +27,24 @@ import { LavaHero } from '../../components/LavaHero';
 
 type FilterType = 'cash' | 'credit' | 'barter' | 'urgent';
 type TopTab = 'transport' | 'plates';
+type SortOption = 'newest' | 'price_asc' | 'price_desc' | 'year_desc' | 'mileage_asc';
+
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+    { value: 'newest', label: 'Ən yeni' },
+    { value: 'price_asc', label: 'Ucuzdan bahaya' },
+    { value: 'price_desc', label: 'Bahadan ucuza' },
+    { value: 'year_desc', label: 'İli təzə' },
+    { value: 'mileage_asc', label: 'Yürüşü az' },
+];
+
+const QUICK_CHIPS: { key: string; label: string; field: string; val: any }[] = [
+    { key: 'new', label: '✨ Yeni', field: 'isNew', val: true },
+    { key: 'under15k', label: '15 000 ₼-dək', field: 'maxPrice', val: '15000' },
+    { key: 'suv', label: 'SUV', field: 'bodyType', val: 'SUV' },
+    { key: 'sedan', label: 'Sedan', field: 'bodyType', val: 'Sedan' },
+    { key: 'auto', label: 'Avtomat', field: 'gearbox', val: 'Avtomat' },
+    { key: 'hybrid', label: 'Hibrid', field: 'fuelType', val: 'Hibrid' },
+];
 
 const HOME_LISTINGS_CACHE_KEY = 'home_listings_cache';
 const HOME_PLATES_CACHE_KEY = 'home_plates_cache';
@@ -179,13 +198,14 @@ export default function WebHomeScreen() {
     const [totalPlatesPages, setTotalPlatesPages] = useState(1);
 
     const [activeFilterType, setActiveFilterType] = useState<FilterType>('cash');
+    const [sortBy, setSortBy] = useState<SortOption>('newest');
     const [todayCount, setTodayCount] = useState<number>(0);
     const [selectedBrand, setSelectedBrand] = useState<any>(null);
     const [selectedModel, setSelectedModel] = useState<any>(null);
     const [advancedFilters, setAdvancedFilters] = useState<Record<string, any>>({});
 
     // Page numbers reset to 1 whenever the query they belong to changes
-    const listingsKey = JSON.stringify([activeFilterType, selectedBrand?.id, selectedModel?.id, advancedFilters]);
+    const listingsKey = JSON.stringify([activeFilterType, sortBy, selectedBrand?.id, selectedModel?.id, advancedFilters]);
     const [pageState, setPageState] = useState({ key: listingsKey, page: 1 });
     const page = pageState.key === listingsKey ? pageState.page : 1;
     const setPage = (p: number) => setPageState({ key: listingsKey, page: p });
@@ -237,6 +257,19 @@ export default function WebHomeScreen() {
         setSelectedBrand(null);
         setSelectedModel(null);
         setAdvancedFilters({});
+        setSortBy('newest');
+    };
+
+    const toggleQuickChip = (field: string, val: any) => {
+        setAdvancedFilters((prev) => {
+            const next = { ...prev };
+            if (next[field] === val) {
+                delete next[field];
+            } else {
+                next[field] = val;
+            }
+            return next;
+        });
     };
 
     const handleResetPlateSearch = () => {
@@ -259,15 +292,18 @@ export default function WebHomeScreen() {
                 let query = supabase
                     .from('listings')
                     .select(LISTING_COLUMNS, { count: 'exact' })
-                    .eq('status', 'approved')
-                    .order('is_vip', { ascending: false })
-                    .order('created_at', { ascending: false });
+                    .eq('status', 'approved');
                 if (activeFilterType === 'credit') query = query.eq('is_credit', true);
                 if (activeFilterType === 'barter') query = query.eq('is_barter', true);
                 if (activeFilterType === 'urgent') query = query.eq('is_urgent', true);
                 if (selectedBrand) query = query.eq('make', selectedBrand.name);
                 if (selectedModel) query = query.eq('model', selectedModel.name);
                 query = applyAdvancedFilters(query, advancedFilters);
+                if (sortBy === 'price_asc') query = query.order('price', { ascending: true });
+                else if (sortBy === 'price_desc') query = query.order('price', { ascending: false });
+                else if (sortBy === 'year_desc') query = query.order('year', { ascending: false });
+                else if (sortBy === 'mileage_asc') query = query.order('mileage', { ascending: true });
+                else query = query.order('is_vip', { ascending: false }).order('created_at', { ascending: false });
                 return query.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
             });
 
@@ -280,7 +316,7 @@ export default function WebHomeScreen() {
                 setTotalPages(Math.max(1, Math.ceil(count / PAGE_SIZE)));
             }
 
-            const isDefaultFeed = page === 1 && !selectedBrand && !selectedModel && activeFilterType === 'cash' && Object.keys(advancedFilters).length === 0;
+            const isDefaultFeed = page === 1 && sortBy === 'newest' && !selectedBrand && !selectedModel && activeFilterType === 'cash' && Object.keys(advancedFilters).length === 0;
             if (isDefaultFeed) {
                 setVipListings(rows.filter(l => l.is_vip).slice(0, 8));
                 setUrgentListings(rows.filter(l => l.is_urgent).slice(0, 8));
@@ -292,7 +328,7 @@ export default function WebHomeScreen() {
         } finally {
             setLoading(false);
         }
-    }, [activeFilterType, selectedBrand, selectedModel, advancedFilters, page]);
+    }, [activeFilterType, sortBy, selectedBrand, selectedModel, advancedFilters, page]);
 
     const fetchPlates = useCallback(async () => {
         if (!hasPlates.current) setLoading(true);
@@ -558,6 +594,18 @@ export default function WebHomeScreen() {
                         </View>
                     </View>
 
+                    {!isTransport && (
+                        <View style={styles.platePreviewWrap}>
+                            <View style={{ transform: [{ scale: 0.72 }] }}>
+                                <PlateVisual
+                                    region={plateSearchRegion || '75'}
+                                    series={plateSearchSeries || 'AA'}
+                                    number={plateSearchNumber || '000'}
+                                />
+                            </View>
+                        </View>
+                    )}
+
                     <Text style={[styles.heroMeta, { color: 'rgba(255,255,255,0.65)' }]}>
                         {totalCount != null && <><Text style={{ color: '#FFFFFF', fontFamily: FONT.semibold }}>{totalCount.toLocaleString('az')}</Text> aktiv elan · </>}
                         bu gün <Text style={{ color: '#FFFFFF', fontFamily: FONT.semibold }}>+{todayCount}</Text> yeni
@@ -588,6 +636,7 @@ export default function WebHomeScreen() {
                 <View style={{ marginTop: isMobile ? 16 : 24 }}>
                     <BannerSlider
                         images={[settings.home_banner_url, settings.home_banner_url_2, settings.home_banner_url_3]}
+                        links={[settings.home_banner_url_link, settings.home_banner_url_2_link, settings.home_banner_url_3_link]}
                         height={isMobile ? 120 : 180}
                     />
                 </View>
@@ -635,6 +684,82 @@ export default function WebHomeScreen() {
                                 />
                             ) : undefined}
                         />
+                        {isTransport && (
+                            <View style={[styles.toolbarRow, isMobile && { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={styles.quickChipsRow}
+                                >
+                                    {QUICK_CHIPS.map((chip) => {
+                                        const active = advancedFilters[chip.field] === chip.val;
+                                        return (
+                                            <TouchableOpacity
+                                                key={chip.key}
+                                                onPress={() => toggleQuickChip(chip.field, chip.val)}
+                                                activeOpacity={0.75}
+                                                style={[
+                                                    styles.quickChip,
+                                                    {
+                                                        backgroundColor: active ? t.text : t.surface,
+                                                        borderColor: active ? t.text : t.hairlineStrong,
+                                                    },
+                                                ]}
+                                            >
+                                                <Text
+                                                    style={[
+                                                        styles.quickChipText,
+                                                        { color: active ? t.bg : t.text },
+                                                    ]}
+                                                >
+                                                    {chip.label}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </ScrollView>
+
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={styles.sortRow}
+                                >
+                                    <View style={styles.sortLabelWrap}>
+                                        <ArrowUpDown size={13} color={t.textSecondary} />
+                                        <Text style={[styles.sortLabel, { color: t.textSecondary }]}>Sırala:</Text>
+                                    </View>
+                                    {SORT_OPTIONS.map((opt) => {
+                                        const active = sortBy === opt.value;
+                                        return (
+                                            <TouchableOpacity
+                                                key={opt.value}
+                                                onPress={() => setSortBy(opt.value)}
+                                                activeOpacity={0.75}
+                                                style={[
+                                                    styles.sortChip,
+                                                    {
+                                                        backgroundColor: active ? t.accentSoft : 'transparent',
+                                                        borderColor: active ? t.accent : t.hairline,
+                                                    },
+                                                ]}
+                                            >
+                                                <Text
+                                                    style={[
+                                                        styles.sortChipText,
+                                                        {
+                                                            color: active ? t.accent : t.textSecondary,
+                                                            fontFamily: active ? FONT.bold : FONT.medium,
+                                                        },
+                                                    ]}
+                                                >
+                                                    {opt.label}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </ScrollView>
+                            </View>
+                        )}
                     </View>
 
                     {loading ? (
@@ -754,6 +879,39 @@ const styles = StyleSheet.create({
     searchActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     clearBtn: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', cursor: 'pointer' as any },
     heroMeta: { fontSize: 14, fontFamily: FONT.regular, marginTop: 18 },
+    platePreviewWrap: { marginTop: 14, marginBottom: -6, alignItems: 'center', justifyContent: 'center' },
+    toolbarRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        marginBottom: 18,
+        marginTop: -6,
+    },
+    quickChipsRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 },
+    quickChip: {
+        height: 32,
+        paddingHorizontal: 12,
+        borderRadius: 999,
+        borderWidth: StyleSheet.hairlineWidth,
+        justifyContent: 'center',
+        alignItems: 'center',
+        cursor: 'pointer' as any,
+    },
+    quickChipText: { fontSize: 13, fontFamily: FONT.semibold },
+    sortRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 2 },
+    sortLabelWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: 4 },
+    sortLabel: { fontSize: 12, fontFamily: FONT.semibold },
+    sortChip: {
+        height: 30,
+        paddingHorizontal: 10,
+        borderRadius: 8,
+        borderWidth: StyleSheet.hairlineWidth,
+        justifyContent: 'center',
+        alignItems: 'center',
+        cursor: 'pointer' as any,
+    },
+    sortChipText: { fontSize: 12 },
     cta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 20 },
     ctaTitle: { fontSize: 28, fontFamily: FONT.heavy, letterSpacing: -0.6 },
     ctaSub: { fontSize: 16, fontFamily: FONT.regular },

@@ -25,7 +25,10 @@ function isValidExpoToken(token: string): boolean {
   );
 }
 
-interface RequestBody { title?: string; body?: string; sound?: string }
+interface RequestBody { title?: string; body?: string; sound?: string; url?: string }
+
+// What a tap opens in the app; only our own listing / plate pages are allowed
+const SAFE_URL = /^\/(listing|plate)\/[A-Za-z0-9_-]{1,64}$/;
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
@@ -47,17 +50,20 @@ async function requireAdmin(req: Request): Promise<Response | null> {
 
   const { data: profile } = await adminClient
     .from('profiles')
-    .select('role, is_superadmin')
+    .select('role, is_superadmin, modules')
     .eq('id', userData.user.id)
     .maybeSingle();
 
-  if (!profile || (profile.role !== 'admin' && !profile.is_superadmin)) {
+  // Admins need the "notifications" module (modules = null means full access)
+  const allowed = profile && (profile.is_superadmin || (profile.role === 'admin' &&
+    (!Array.isArray(profile.modules) || profile.modules.includes('notifications'))));
+  if (!allowed) {
     return unauthorized(403, 'Admins only');
   }
   return null;
 }
 
-console.info('sendNotification v12 started (Unlimited Pagination & Duplicate Filter)');
+console.info('sendNotification v13 started (deep links, module check)');
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -86,6 +92,7 @@ Deno.serve(async (req: Request) => {
     const title = (payload.title ?? '').toString();
     const body = (payload.body ?? '').toString();
     const sound = payload.sound || 'default';
+    const url = typeof payload.url === 'string' && SAFE_URL.test(payload.url) ? payload.url : undefined;
 
     if (!title || !body) {
       return new Response(JSON.stringify({ error: 'Missing title or body' }), {
@@ -145,6 +152,7 @@ Deno.serve(async (req: Request) => {
         sound,
         priority: 'high',
         channelId: 'default',
+        ...(url ? { data: { url } } : {}),
         _displayInForeground: true
       }));
 

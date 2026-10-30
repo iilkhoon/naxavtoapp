@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from '../../../lib/supabase';
 import { useToast } from '../../../contexts/ToastContext';
-import { compressImage } from '../../../utils/imageOptimizer';
+import { compressImage, deleteStorageImages } from '../../../utils/imageOptimizer';
 import { haptics } from '../../../utils/haptics';
 import {
   AdminHeader, AdminScroll, Group, GroupRow, FieldRow, SelectRow, TextArea, AdminButton, HeaderAction, PickerSheet, LoadingView,
@@ -70,6 +70,7 @@ export default function EditListingScreen() {
 
   // Image State
   const [images, setImages] = useState<SelectedImage[]>([]);
+  const [initialImageUrls, setInitialImageUrls] = useState<string[]>([]);
 
 
   const fetchInitialData = async () => {
@@ -127,8 +128,10 @@ export default function EditListingScreen() {
       // Populate Images
       if (listing.images && Array.isArray(listing.images)) {
         setImages(listing.images.map((url: string) => ({ uri: url, isNew: false })));
+        setInitialImageUrls(listing.images);
       } else if (listing.image_url) {
         setImages([{ uri: listing.image_url, isNew: false }]);
+        setInitialImageUrls([listing.image_url]);
       }
 
       // 4. Fetch Models for the selected brand
@@ -220,13 +223,13 @@ export default function EditListingScreen() {
     const uploadedUrls: string[] = [];
 
     for (const img of newImagesToUpload) {
-        const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.webp`;
         const filePath = `listings/${fileName}`;
 
         const { error } = await supabase.storage
           .from('images')
           .upload(filePath, decode(img.base64!), {
-            contentType: 'image/jpeg',
+            contentType: 'image/webp',
           });
 
         if (error) throw error;
@@ -282,6 +285,12 @@ export default function EditListingScreen() {
         .eq('id', listingId);
 
       if (error) throw error;
+
+      // Silinmiş köhnə şəkilləri Storage-dən də təmizlə
+      const removedUrls = initialImageUrls.filter((u) => !finalImages.includes(u));
+      if (removedUrls.length > 0) {
+        await deleteStorageImages(supabase, removedUrls);
+      }
 
       haptics.success();
       showToast('Elan yeniləndi', 'success');

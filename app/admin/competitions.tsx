@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
 import { formatDate } from '../../lib/utils';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { compressImage, deleteStorageImages } from '../../utils/imageOptimizer';
 import { haptics } from '../../utils/haptics';
 import {
     AdminHeader, AdminScroll, Group, GroupRow, FieldRow, TextArea, AdminButton, HeaderAction, Pill, EmptyView, LoadingView, useAdminColors, F, uploadPath,
@@ -125,16 +126,21 @@ export default function AdminCompetitionsScreen() {
 
     const pickImage = async (field: 'prize_image_url' | 'story_image_url') => {
         try {
-            const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.8, base64: true });
-            if (result.canceled || !result.assets?.[0]?.base64) return;
+            const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.85, base64: false });
+            if (result.canceled || !result.assets?.[0]?.uri) return;
             setUploadingField(field);
+            const prevUrl = form[field];
             const asset = result.assets[0];
-            const ext = (asset.uri.split('.').pop() || 'jpg').toLowerCase();
-            const path = uploadPath('competitions/img', ext);
-            const { error } = await supabase.storage.from('images').upload(path, decode(asset.base64!), { contentType: `image/${ext === 'png' ? 'png' : 'jpeg'}` });
+            const compressed = await compressImage(asset.uri, 1080, 0.68);
+            if (!compressed.base64) throw new Error('Şəkil sıxıla bilmədi');
+            const path = uploadPath('competitions/img', 'webp');
+            const { error } = await supabase.storage.from('images').upload(path, decode(compressed.base64), { contentType: 'image/webp' });
             if (error) throw error;
             const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(path);
             set(field, publicUrl);
+            if (prevUrl && prevUrl !== publicUrl) {
+                await deleteStorageImages(supabase, [prevUrl]);
+            }
             haptics.success();
         } catch (error: any) {
             fail(error.message || 'Şəkil yüklənmədi');
@@ -216,6 +222,7 @@ export default function AdminCompetitionsScreen() {
         run: async () => {
             const { error } = await supabase.from('competitions').delete().eq('id', comp.id);
             if (error) return fail('Silinmədi: ' + error.message);
+            await deleteStorageImages(supabase, [comp.prize_image_url, comp.story_image_url]);
             haptics.success();
             showToast('Yarışma silindi', 'success');
             fetchCompetitions();
